@@ -24,8 +24,10 @@ src/
   app.setup.ts       Cross-cutting HTTP setup (CORS, ValidationPipe, shutdown hooks) — reused by e2e tests
   app.module.ts      Root module: ConfigModule + feature modules
   config/            Env schema (Zod) and helpers; the only place that reads raw env vars
+  common/errors/     AppException, ApiExceptionFilter (uniform error body), validation errors
   database/          Global DatabaseModule exposing PrismaService
-  health/            GET /health
+  auth/              Register/login/logout/me, sessions, Argon2id passwords, global SessionAuthGuard
+  health/            GET /health (public)
   generated/prisma/  Prisma client output (git-ignored, created by `prisma generate`)
 prisma/
   schema.prisma      Multi-tenant domain model (see docs/database-design.md)
@@ -37,7 +39,9 @@ test/database/       Database integration tests against the test database
 ```
 
 - **Configuration**: `ConfigModule` loads the repository-root `.env` and validates it with the Zod schema in `config/env.ts`. The app refuses to start with invalid config. Read values with `ConfigService<Env, true>` and `{ infer: true }`.
-- **Request validation**: global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`). DTOs use `class-validator` decorators.
+- **Request validation**: global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`). DTOs use `class-validator` decorators. Failures become `400 VALIDATION_ERROR` with per-field `details`.
+- **Errors**: every error response has the shape `{ statusCode, code, message, details? }` (`ApiErrorBody` in `@app/shared`), produced by `ApiExceptionFilter`.
+- **Authentication**: a global `SessionAuthGuard` requires a valid session cookie on every route not marked `@Public()`. See [authentication.md](authentication.md).
 - **Database**: `PrismaService` extends the generated `PrismaClient` using the `@prisma/adapter-pg` driver adapter (Prisma 7). It connects lazily, so the API still starts when PostgreSQL is down. The schema, tenancy model, and constraints are described in [database-design.md](database-design.md).
 - **Feature modules**: one folder per domain (`src/<domain>/`) containing its module, controller, service, DTOs, and tests.
 
@@ -66,9 +70,9 @@ src/
   hooks/             TanStack Query hooks wrapping api/ functions
   components/ui/     Design-system primitives (Button, Input, Card, ...)
   components/layout/ Page-structure primitives (Container, PageHeader, BrandMark)
-  layouts/           Route layouts (AppShell)
+  layouts/           Route layouts (AppShell for the app, AuthLayout for sign-in/register)
   pages/             Route components
-  routes/            Route table (router.tsx) and path constants (paths.ts)
+  routes/            Route table (router.tsx), path constants (paths.ts), RequireAuth/RequireGuest guards
   lib/               Framework-agnostic helpers (cn, env, app-config)
   styles/            globals.css: Tailwind entry + design tokens
   test/              Test setup and render helpers
@@ -88,15 +92,17 @@ apiRequest (api/http-client.ts)  base URL from env, JSON, timeout, ApiError
 backend
 ```
 
-Components never call `fetch`. The API base URL comes only from `VITE_API_BASE_URL` via `lib/env.ts`.
+Components never call `fetch`. The API base URL comes only from `VITE_API_BASE_URL` via `lib/env.ts`. Every request is sent with `credentials: 'include'`, so the browser attaches the HttpOnly session cookie. Authentication state is the `['auth', 'me']` query (`hooks/use-auth.ts`).
 
-### Routes (Phase 1)
+### Routes
 
-| Path            | Page                                      |
-| --------------- | ----------------------------------------- |
-| `/`             | Project foundation overview               |
-| `/health-check` | Technical frontend → API → database check |
-| `*`             | 404                                       |
+| Path            | Access        | Page                                      |
+| --------------- | ------------- | ----------------------------------------- |
+| `/`             | authenticated | Minimal signed-in landing page            |
+| `/login`        | guest only    | Sign in                                   |
+| `/register`     | guest only    | Create account                            |
+| `/health-check` | public        | Technical frontend → API → database check |
+| `*`             | public        | 404                                       |
 
 ## Environment
 

@@ -80,10 +80,35 @@ model User {
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   memberships    OrganizationMember[]
+  sessions       Session[]
   stockMovements StockMovement[]
   activityLogs   ActivityLog[]
 
   @@map("users")
+}
+
+/// A signed-in browser session. The raw token lives only in the HttpOnly cookie;
+/// the database stores its SHA-256 hash. See docs/authentication.md.
+model Session {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  /// Lowercase hex SHA-256 of the session token (format enforced by a CHECK constraint).
+  tokenHash  String    @unique @map("token_hash") @db.Char(64)
+  /// Absolute expiry; the session is invalid afterwards even if the cookie still exists.
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Last authenticated request (updated at most every few minutes).
+  lastSeenAt DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  /// Set on logout; revoked sessions are rejected.
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// A user's sessions (e.g. "sign out everywhere"); also backs the cascade from users.
+  @@index([userId])
+  /// Cleanup of expired sessions.
+  @@index([expiresAt])
+  @@map("sessions")
 }
 
 /// A tenant: one business/company. Owns all business data.

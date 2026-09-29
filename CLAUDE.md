@@ -12,7 +12,8 @@ Work is delivered in explicit phases. **Only implement what the current phase as
 
 - **Phase 1 (done): foundation.** Monorepo, NestJS API with `GET /health`, React app with `/` and `/health-check`, design-system primitives, API client, Prisma + PostgreSQL connectivity, tooling, tests, CI.
 - **Phase 2 (done): database & domain model.** Prisma models and migration for User, Organization, OrganizationMember, Category, Product, Warehouse, Inventory, StockMovement, Customer, Order, OrderItem, and ActivityLog; CHECK constraints; dev seed; database integration tests. **Schema only: no services, APIs, or UI for these domains yet.**
-- **Later phases:** authentication, RBAC enforcement, and the APIs/UI for products, warehouses, inventory, customers, orders, dashboard/reporting, and activity logs. Do not add these, or placeholder routes or modules, until asked.
+- **Phase 3 (done): authentication.** Register/login/logout/me, Argon2id passwords, database-backed sessions (`Session` model) in an HttpOnly cookie, global auth guard, rate limiting, standard error responses, login/register UI, protected and guest routes, authenticated landing page. See [docs/authentication.md](docs/authentication.md).
+- **Later phases:** organization creation/switching, RBAC enforcement, and the APIs/UI for products, warehouses, inventory, customers, orders, dashboard/reporting, and activity logs. Password reset, email verification, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
 
 Environment constraints: **local development only. No Docker, no Docker Compose, no WSL.** PostgreSQL runs natively on the Windows host.
 
@@ -52,7 +53,11 @@ npm run db:seed      # idempotent demo data
 - Do **not** convert DI constructor parameters to `import type`, because Nest needs the runtime class for `emitDecoratorMetadata`.
 - One folder per feature module under `src/<feature>/`: `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`, and `*.spec.ts` next to the code. HTTP-level tests go in `test/*.e2e-spec.ts` using `configureApp()` so they run the real pipeline.
 - Configuration: add new env vars to the Zod schema in `src/config/env.ts` **and** to `.env.example` (documented). Read them via `ConfigService<Env, true>` with `{ infer: true }`, never `process.env`.
-- Cross-cutting HTTP setup (pipes, CORS, and so on) goes in `src/app.setup.ts`.
+- Cross-cutting HTTP setup (pipes, CORS, cookies, error filter) goes in `src/app.setup.ts`.
+- **Authentication is secure by default:** `SessionAuthGuard` is a global guard, so every new route requires a session. Mark intentionally public routes with `@Public()` (from `src/auth/decorators.ts`). Get the user with `@CurrentUser()`. Authorization/RBAC does not exist yet; don't add ad-hoc role checks.
+- **Errors:** throw `AppException(status, code, message)` (codes are `ApiErrorCode` in `@app/shared`) for anything the client should read. Messages of other exceptions are replaced with generic text by `ApiExceptionFilter`, and 5xx never leak details.
+- **Never log** passwords, password hashes, session tokens, cookies, or email addresses; log user IDs. Never select `passwordHash` into anything returned to a client.
+- Passwords: only via `PasswordService` (Argon2id). Never trim or normalize them. Emails: always `normalizeEmail()` before queries (the DB enforces lowercase + trimmed).
 - Database: inject `PrismaService` (global `DatabaseModule`). Prisma 7 specifics:
   - Client is generated into `src/generated/prisma` (git-ignored). Import from `../generated/prisma/client.js`.
   - Connection URL is built from `DB_*` vars in `prisma.config.ts` (CLI) and `prisma.service.ts` (runtime), not from `DATABASE_URL`.
@@ -77,7 +82,10 @@ Read [docs/database-design.md](docs/database-design.md) before changing the sche
 - Import alias `@/` maps to `src/`.
 - **Data flow:** page/component → hook in `src/hooks` (TanStack Query) → endpoint function in `src/api/<resource>.ts` → `apiRequest` in `src/api/http-client.ts`. **Never call `fetch` in components.** Query keys live next to their endpoint functions.
 - Env vars: only via `src/lib/env.ts` (add the type to `src/vite-env.d.ts`). Browser-exposed vars must be prefixed `VITE_`.
-- Routes: add paths to `src/routes/paths.ts` and the route table in `src/routes/router.tsx`. Pages live in `src/pages`, render inside `AppShell`, start with `<PageHeader>`, and set `<title>{pageTitle('…')}</title>`.
+- Routes: add paths to `src/routes/paths.ts` and the route table in `src/routes/router.tsx`. Pages live in `src/pages`, render inside `AppShell`, start with `<PageHeader>`, and set `<title>{pageTitle('…')}</title>`. App pages go under the `RequireAuth` branch unless explicitly public. Guest-only pages go under `RequireGuest` → `AuthLayout`.
+- **Auth state** comes only from `useAuth()` (TanStack Query on `GET /auth/me`). Never store tokens or user data in localStorage/sessionStorage/context. `apiRequest` always sends `credentials: 'include'`; the HttpOnly cookie is handled by the browser. After login/register, `setQueryData(authQueryKeys.me, user)`; any 401 resets it to `null` (see `app/query-client.ts`).
+- Forms: use `FormField` (label/hint/error wiring) with `Input` / `PasswordInput`. Validate on the client with `AUTH_LIMITS` from `@app/shared`, and treat the server as authoritative.
+- Frontend tests that need routing/auth: `renderApp(path)` (real route table) + `mockApi({ 'GET /auth/me': … })` from `src/test/`.
 - `RouterProvider` is imported from `react-router/dom`, everything else from `react-router` (v8; there is no `react-router-dom`).
 - Styling: follow [docs/design-system.md](docs/design-system.md). Use semantic tokens (`bg-surface`, `text-muted-foreground`, `border-border`, `bg-primary`), never raw palette colors (`bg-white`, `text-slate-500`) in components. Compose with `cn()`. Reuse primitives from `src/components/ui` and `src/components/layout`.
 - Keep cva variant definitions in a separate non-component file when exported (for example `button-variants.ts`) so Fast Refresh keeps working.
@@ -92,3 +100,7 @@ Read [docs/database-design.md](docs/database-design.md) before changing the sche
 - On Windows, a refused connection to `localhost` can take about 2 seconds to fail, so the health-check page may show loading briefly when the API is down.
 - Prisma 7 errors: the raw PostgreSQL error is in `error.meta.driverAdapterError.cause` (`originalCode` SQLSTATE, `originalMessage` with the constraint name). CHECK violations are Prisma `P2039`; `ON DELETE RESTRICT` violations are SQLSTATE `23001` (not `23503`).
 - `psql` is not on PATH on the dev machine: use `"C:\Program Files\PostgreSQL\18\bin\psql.exe"`.
+- Open the web app at `http://localhost:5173` (not `127.0.0.1`), or the session cookie will not be sent to the API.
+- Auth rate limits are in-memory, per API process. Each HTTP test creates a fresh app (`createHttpApp()`), which resets the counters.
+- Dev-only demo login: `owner@demo-trading.example` / `demo-password-2026` (after `npm run db:seed`).
+- In dev, React StrictMode mounts twice, so you'll see an aborted duplicate `GET /auth/me` in the network tab. That's expected.

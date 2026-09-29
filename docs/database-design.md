@@ -51,6 +51,7 @@ erDiagram
 
 | Model (table)                                 | Purpose                                                                                                                                                                                                                                  |
 | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Session` (`sessions`)                        | A signed-in browser session: SHA-256 `token_hash` (unique), `expires_at`, `last_seen_at`, `revoked_at`. Cascades with its user. See [authentication.md](authentication.md#session-model).                                                |
 | `User` (`users`)                              | A person who can sign in. Global, not owned by a tenant. `email` is globally unique. `password_hash` is nullable because a user can exist before a credential is set (invites, SSO, seed data). Passwords are never stored in plaintext. |
 | `Organization` (`organizations`)              | A tenant (one business). Owns all business data. `slug` is globally unique and URL-safe.                                                                                                                                                 |
 | `OrganizationMember` (`organization_members`) | Joins users and organizations, with a `role` (`OWNER`, `ADMIN`, `STAFF`). The role is data only; RBAC enforcement comes in a later phase.                                                                                                |
@@ -144,6 +145,7 @@ Principle: **business records are retired, not deleted.** The database blocks de
 | `organizations` → all business tables                                    | **RESTRICT** | Closing a tenant must be a deliberate offboarding process (export, retention), never a side effect.                                                             |
 | `organizations` → `organization_members`                                 | CASCADE      | Memberships are pure join rows. (Only reachable when the organization has no business data left.)                                                               |
 | `users` → `organization_members`                                         | CASCADE      | Same: a deleted user has no memberships.                                                                                                                        |
+| `users` → `sessions`                                                     | CASCADE      | Sessions are meaningless without their user.                                                                                                                    |
 | `users` → `stock_movements.actor_user_id`, `activity_logs.actor_user_id` | **SET NULL** | History survives user deletion; the actor becomes "unknown/system".                                                                                             |
 | `categories` → `products`                                                | RESTRICT     | Reassign products (`category_id = NULL`) before deleting a category. A composite key can't use `SET NULL` without also nulling `organization_id`.               |
 | `products` → `inventory`, `stock_movements`, `order_items`               | RESTRICT     | Products with history are **archived** (`status = ARCHIVED`), not deleted.                                                                                      |
@@ -167,6 +169,8 @@ Indexes follow expected query patterns, and every foreign key has a supporting i
 | `organizations (slug)` UNIQUE                                                                 | Resolve tenant from URL                                                              |
 | `organization_members (organization_id, user_id)` UNIQUE                                      | Membership check ("is user U in org O?"); member list per org                        |
 | `organization_members (user_id)`                                                              | "Which organizations does this user belong to?" (org switcher)                       |
+| `sessions (token_hash)` UNIQUE                                                                | Per-request session lookup by hashed cookie token                                    |
+| `sessions (user_id)` / `sessions (expires_at)`                                                | A user's sessions and cascade / cleanup of expired sessions                          |
 | `<table> (organization_id, id)` UNIQUE on categories, products, warehouses, customers, orders | Target of composite foreign keys; also serves "list all X of an org"                 |
 | `categories (organization_id, name)` UNIQUE                                                   | Name uniqueness; lookup by name                                                      |
 | `products (organization_id, sku)` UNIQUE                                                      | SKU uniqueness; barcode/SKU lookup                                                   |
@@ -202,6 +206,7 @@ Beyond `NOT NULL`, foreign keys, and unique constraints, the first migration add
 | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | users                                                                                    | `users_email_normalized_check`                                                                                       | `email = lower(btrim(email))` and contains `@`. The app must normalize emails; the unique index then also blocks case variants. |
 | users, organizations, categories, products, warehouses, customers, orders, activity_logs | `*_not_blank_check`                                                                                                  | Required names and identifiers (name, SKU, code, order number, action, entity type) are not blank or whitespace                 |
+| sessions                                                                                 | `sessions_token_hash_format_check`, `sessions_expires_after_creation_check`                                          | `token_hash ~ '^[0-9a-f]{64}$'` (only a SHA-256 digest, never a raw token); `expires_at > created_at`                           |
 | organizations                                                                            | `organizations_slug_format_check`                                                                                    | `slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`                                                                                             |
 | products                                                                                 | `products_price_non_negative_check`, `products_cost_non_negative_check`, `products_minimum_stock_non_negative_check` | `price >= 0`, `cost >= 0` (NULL = unknown), `minimum_stock >= 0`                                                                |
 | inventory                                                                                | `inventory_quantity_non_negative_check`                                                                              | `quantity >= 0`: stock can't go below zero, even under concurrent updates                                                       |
@@ -244,20 +249,20 @@ Violations surface in Prisma 7 as `PrismaClientKnownRequestError`, with the raw 
 
 `npm run db:seed` creates one fictional tenant, **Demo Trading Co.** (`demo-trading`):
 
-| Data            | Content                                                                                                                    |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Users           | Owner and staff (`owner@demo-trading.example`, `staff@demo-trading.example`), both **without passwords**                   |
-| Catalog         | 3 categories, 5 products                                                                                                   |
-| Warehouses      | `MAIN` and `EAST`                                                                                                          |
-| Customers       | 2                                                                                                                          |
-| Stock movements | 13 (initial purchases, a MAIN→EAST transfer, damage, an adjustment, sales) and 8 inventory rows consistent with the ledger |
-| Orders          | `SO-1001` (COMPLETED, with SALE movements) and `SO-1002` (CONFIRMED)                                                       |
-| Activity logs   | 13                                                                                                                         |
+| Data            | Content                                                                                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Users           | Owner and staff (`owner@demo-trading.example`, `staff@demo-trading.example`) with the **development-only** password `demo-password-2026` (stored as an Argon2id hash) |
+| Catalog         | 3 categories, 5 products                                                                                                                                              |
+| Warehouses      | `MAIN` and `EAST`                                                                                                                                                     |
+| Customers       | 2                                                                                                                                                                     |
+| Stock movements | 13 (initial purchases, a MAIN→EAST transfer, damage, an adjustment, sales) and 8 inventory rows consistent with the ledger                                            |
+| Orders          | `SO-1001` (COMPLETED, with SALE movements) and `SO-1002` (CONFIRMED)                                                                                                  |
+| Activity logs   | 13                                                                                                                                                                    |
 
 Details:
 
 - **Deterministic:** fixed names, SKUs, quantities, prices, and timestamps (from 2026-09-01). UUIDs are generated per run.
-- **Idempotent:** skips if `demo-trading` already exists.
+- **Idempotent:** skips if `demo-trading` already exists. It still sets the development password on demo users that have none (databases seeded before authentication existed).
 - **Atomic:** runs in one transaction.
 - **Development only:** refuses `NODE_ENV=production`. All names are fictional, emails use the reserved `.example` domain, and phone numbers use 555-01xx.
 

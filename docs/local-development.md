@@ -63,7 +63,11 @@ npm run test:db    # database integration tests (uses the separate DB_TEST_NAME 
 npm run dev        # API on http://localhost:3000, web app on http://localhost:5173
 ```
 
-Open <http://localhost:5173/health-check>. Both checks should report **Operational**.
+Open <http://localhost:5173>. You are redirected to the sign-in page. Register a new account, or use a seeded demo account.
+
+> **Development-only credentials**, created by `npm run db:seed`. They are not production credentials: `owner@demo-trading.example` / `demo-password-2026` (also `staff@demo-trading.example`).
+
+Always use `http://localhost:5173`, not `127.0.0.1`, so the session cookie is shared with the API on `localhost`. <http://localhost:5173/health-check> should report **Operational** for both checks.
 
 ## 6. Working with the schema
 
@@ -75,12 +79,14 @@ See [database-design.md](database-design.md) for the model, tenancy rules, delet
 
 ## Troubleshooting
 
-| Symptom                                                | Likely cause / fix                                                                                                    |
-| ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `P1001: Can't reach database server at localhost:5432` | PostgreSQL service not running (`Start-Service postgresql-x64-<version>`), or a different port — check `DB_PORT`.     |
-| `P1000: Authentication failed`                         | Wrong `DB_USER` / `DB_PASSWORD`.                                                                                      |
-| `P1003: Database ... does not exist`                   | Create it (step 3) or fix `DB_NAME`.                                                                                  |
-| API exits with `Invalid environment configuration`     | `.env` is missing or incomplete; compare with `.env.example`.                                                         |
-| Health-check page shows **API unreachable**            | Start the API (`npm run dev:api`); confirm `VITE_API_BASE_URL` matches `API_PORT`. Restart Vite after editing `.env`. |
-| Browser console shows a CORS error                     | Add the web origin to `API_CORS_ORIGINS` and restart the API.                                                         |
-| `Port 5173 is already in use`                          | Another Vite server is running. The port is fixed on purpose because the API's CORS allow-list expects it.            |
+| Symptom                                                | Likely cause / fix                                                                                                                                    |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `P1001: Can't reach database server at localhost:5432` | PostgreSQL service not running (`Start-Service postgresql-x64-<version>`), or a different port — check `DB_PORT`.                                     |
+| `P1000: Authentication failed`                         | Wrong `DB_USER` / `DB_PASSWORD`.                                                                                                                      |
+| `P1003: Database ... does not exist`                   | Create it (step 3) or fix `DB_NAME`.                                                                                                                  |
+| API exits with `Invalid environment configuration`     | `.env` is missing or incomplete; compare with `.env.example`.                                                                                         |
+| Health-check page shows **API unreachable**            | Start the API (`npm run dev:api`); confirm `VITE_API_BASE_URL` matches `API_PORT`. Restart Vite after editing `.env`.                                 |
+| Signed in, but reloading shows the sign-in page again  | You opened the app via `127.0.0.1`, or `AUTH_COOKIE_SECURE=true` over plain HTTP. Use `http://localhost:5173` and `AUTH_COOKIE_SECURE=false` locally. |
+| `429` "Too many attempts" on sign-in                   | The login rate limit (10/min per IP) was hit. Wait a minute, or restart the API (limits are in memory).                                               |
+| Browser console shows a CORS error                     | Add the web origin to `API_CORS_ORIGINS` and restart the API.                                                                                         |
+| `Port 5173 is already in use`                          | Another Vite server is running. The port is fixed on purpose because the API's CORS allow-list expects it.                                            |

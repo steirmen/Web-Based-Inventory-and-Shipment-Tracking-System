@@ -10,7 +10,12 @@
   "rules": {
     "typescript/no-explicit-any": "error",
     "no-console": "warn",
-    "vitest/expect-expect": ["error", { "assertFunctionNames": ["expect*", "request.**.expect"] }]
+    "vitest/expect-expect": [
+      "error",
+      {
+        "assertFunctionNames": ["expect*", "request.**.expect", "api.**.expect", "agent.**.expect"]
+      }
+    ]
   },
   "overrides": [
     {

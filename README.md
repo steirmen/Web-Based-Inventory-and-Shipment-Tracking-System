@@ -2,16 +2,16 @@
 
 A business operations SaaS platform for small and medium-sized businesses: inventory, orders, customers, and reporting.
 
-> **Status: Phase 2 (database & domain model).** The repository contains the technical foundation (monorepo, API, web app, design system, tooling, tests) and the multi-tenant PostgreSQL domain schema with migrations, seed data, and database integration tests. Authentication, business APIs, and business UI come in later phases.
+> **Status: Phase 3 (authentication).** The repository contains the technical foundation (monorepo, API, web app, design system, tooling, tests), the multi-tenant PostgreSQL domain schema, and **email/password authentication** (registration, sign-in, sign-out, database-backed sessions in an HttpOnly cookie). Organizations, roles and permissions, and the business features (products, inventory, orders) come in later phases.
 
 ## Tech stack
 
-| Layer    | Technology                                                                              |
-| -------- | --------------------------------------------------------------------------------------- |
-| Web app  | React 19, TypeScript, Vite, React Router, TanStack Query, Tailwind CSS 4                |
-| API      | NestJS, TypeScript (ESM), Zod (config validation), class-validator (request validation) |
-| Database | PostgreSQL (native install on the host), Prisma ORM 7                                   |
-| Tooling  | npm workspaces, oxlint, Prettier, Vitest, Testing Library, GitHub Actions               |
+| Layer    | Technology                                                                                                           |
+| -------- | -------------------------------------------------------------------------------------------------------------------- |
+| Web app  | React 19, TypeScript, Vite, React Router, TanStack Query, Tailwind CSS 4                                             |
+| API      | NestJS, TypeScript (ESM), Zod (config validation), class-validator (request validation), Argon2id, @nestjs/throttler |
+| Database | PostgreSQL (native install on the host), Prisma ORM 7                                                                |
+| Tooling  | npm workspaces, oxlint, Prettier, Vitest, Testing Library, GitHub Actions                                            |
 
 ## Prerequisites
 
@@ -39,11 +39,41 @@ npm run db:seed
 npm run dev
 ```
 
-| Service             | URL                                  |
-| ------------------- | ------------------------------------ |
-| Web app             | <http://localhost:5173>              |
-| System status page  | <http://localhost:5173/health-check> |
-| API health endpoint | <http://localhost:3000/health>       |
+| Service             | URL                                        |
+| ------------------- | ------------------------------------------ |
+| Web app             | <http://localhost:5173>                    |
+| Sign in / register  | <http://localhost:5173/login>, `/register` |
+| System status page  | <http://localhost:5173/health-check>       |
+| API health endpoint | <http://localhost:3000/health>             |
+
+Use `http://localhost:5173`, not `127.0.0.1`: the session cookie is only sent when the web app and API share the `localhost` host.
+
+## Authentication
+
+Open <http://localhost:5173>. You are redirected to **Sign in**. Create an account at **/register**, or sign in with a seeded demo account.
+
+> **Development-only credentials.** These exist only in a local database seeded with `npm run db:seed`. They are not production credentials.
+>
+> | Email                        | Password             |
+> | ---------------------------- | -------------------- |
+> | `owner@demo-trading.example` | `demo-password-2026` |
+> | `staff@demo-trading.example` | `demo-password-2026` |
+
+Sessions last 7 days, are stored in PostgreSQL (the token itself only as a SHA-256 hash), and are carried by an HttpOnly `app_session` cookie. Signing out revokes the session on the server. Passwords are hashed with Argon2id. Details: [docs/authentication.md](docs/authentication.md).
+
+| Variable                | Default                 | Purpose                                                        |
+| ----------------------- | ----------------------- | -------------------------------------------------------------- |
+| `AUTH_SESSION_TTL_DAYS` | `7`                     | Absolute session lifetime (1–90 days)                          |
+| `AUTH_COOKIE_NAME`      | `app_session`           | Session cookie name                                            |
+| `AUTH_COOKIE_SECURE`    | `false`                 | HTTPS-only cookie; **must be `true` in production** (enforced) |
+| `API_CORS_ORIGINS`      | `http://localhost:5173` | Allowed browser origins for credentialed requests (no `*`)     |
+
+Test the authentication flow:
+
+```bash
+npm run test      # includes auth unit tests and the login/register/routing UI tests
+npm run test:db   # real HTTP tests of /auth/* and session tests against the test database
+```
 
 ## Commands
 
@@ -89,5 +119,6 @@ docs/           Architecture, design system, local setup
 - [Local development & PostgreSQL setup](docs/local-development.md)
 - [Architecture](docs/architecture.md)
 - [Database design](docs/database-design.md)
+- [Authentication](docs/authentication.md)
 - [Design system](docs/design-system.md)
 - [CLAUDE.md](CLAUDE.md): conventions for AI-assisted development

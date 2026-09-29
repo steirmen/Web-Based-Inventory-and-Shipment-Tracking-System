@@ -3,16 +3,20 @@
  *
  * Creates one fictional demo organization with a small, realistic dataset.
  * - Deterministic: fixed names, SKUs, codes, quantities, prices, and timestamps.
- * - Idempotent: skips if the demo organization already exists.
+ * - Idempotent: skips if the demo organization already exists (but still gives
+ *   demo users without a password the development password — see below).
  * - Atomic: runs in a single transaction.
  * - Development only: refuses to run with NODE_ENV=production. All people,
  *   emails (reserved `.example` domain), and phone numbers (555-01xx) are fictional.
- *   Users are created WITHOUT passwords; credentials belong to the auth phase.
+ *
+ * Demo users sign in with DEMO_PASSWORD. It is a DEVELOPMENT-ONLY credential:
+ * only its Argon2id hash is stored, and it must never be used outside local development.
  */
 import { randomUUID } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config as loadEnv } from 'dotenv';
 import { buildDatabaseUrl, databaseOptionsFromEnv } from '../src/config/database-url.js';
+import { hashPassword } from '../src/auth/password/password-hashing.js';
 import { ROOT_ENV_FILE } from '../src/config/env.js';
 import {
   MemberRole,
@@ -23,6 +27,10 @@ import {
 } from '../src/generated/prisma/client.js';
 
 const SEED_ORGANIZATION_SLUG = 'demo-trading';
+
+/** DEVELOPMENT-ONLY password shared by the demo users (documented in README). */
+const DEMO_PASSWORD = 'demo-password-2026';
+const DEMO_USER_EMAILS = ['owner@demo-trading.example', 'staff@demo-trading.example'];
 
 /** All seeded timestamps are offsets from this fixed instant. */
 const BASE_TIME = Date.parse('2026-09-01T08:00:00.000Z');
@@ -136,12 +144,13 @@ class StockLedger {
   }
 }
 
-async function seed(tx: Tx): Promise<Record<string, number>> {
+async function seed(tx: Tx, passwordHash: string): Promise<Record<string, number>> {
   // --- Identity & tenancy ------------------------------------------------------
   const owner = await tx.user.create({
     data: {
       name: 'Morgan Lane',
       email: 'owner@demo-trading.example',
+      passwordHash,
       createdAt: at(0),
     },
   });
@@ -149,6 +158,7 @@ async function seed(tx: Tx): Promise<Record<string, number>> {
     data: {
       name: 'Riley Chen',
       email: 'staff@demo-trading.example',
+      passwordHash,
       createdAt: at(0, 1),
     },
   });
@@ -533,14 +543,24 @@ async function main(): Promise<void> {
     const existing = await prisma.organization.findUnique({
       where: { slug: SEED_ORGANIZATION_SLUG },
     });
+    const passwordHash = await hashPassword(DEMO_PASSWORD);
+
     if (existing) {
+      // Databases seeded before authentication existed have password-less demo users.
+      const { count } = await prisma.user.updateMany({
+        where: { email: { in: DEMO_USER_EMAILS }, passwordHash: null },
+        data: { passwordHash },
+      });
       console.log(
-        `Seed skipped: organization "${SEED_ORGANIZATION_SLUG}" already exists in "${database.name}".`,
+        `Seed skipped: organization "${SEED_ORGANIZATION_SLUG}" already exists in "${database.name}".` +
+          (count > 0 ? ` Set the development password for ${count} demo user(s).` : ''),
       );
       return;
     }
 
-    const summary = await prisma.$transaction(seed, { timeout: 60_000 });
+    const summary = await prisma.$transaction((tx) => seed(tx, passwordHash), {
+      timeout: 60_000,
+    });
     const movements = await prisma.stockMovement.count({
       where: { organization: { slug: SEED_ORGANIZATION_SLUG } },
     });

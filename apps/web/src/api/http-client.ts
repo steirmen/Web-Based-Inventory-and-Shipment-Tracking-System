@@ -1,3 +1,4 @@
+import { API_ERROR_CODES, type ApiErrorCode, type ApiFieldError } from '@app/shared';
 import { getApiBaseUrl } from '@/lib/env';
 
 /**
@@ -5,7 +6,9 @@ import { getApiBaseUrl } from '@/lib/env';
  *
  *   component → hook (TanStack Query) → endpoint function (src/api/*.ts) → apiRequest → API
  *
- * Components never call `fetch` directly.
+ * Components never call `fetch` directly. Authentication uses an HttpOnly
+ * session cookie that the browser attaches automatically (`credentials: 'include'`);
+ * no token is ever visible to, or stored by, JavaScript.
  */
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -14,11 +17,26 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 export class ApiError extends Error {
   override name = 'ApiError';
   readonly status: number | null;
+  /** Machine-readable code from the API error body, when available. */
+  readonly code: ApiErrorCode | null;
+  /** Per-field validation messages (VALIDATION_ERROR). */
+  readonly details: ApiFieldError[];
   readonly url: string;
 
-  constructor(message: string, options: { status: number | null; url: string; cause?: unknown }) {
+  constructor(
+    message: string,
+    options: {
+      status: number | null;
+      url: string;
+      code?: ApiErrorCode | null;
+      details?: ApiFieldError[];
+      cause?: unknown;
+    },
+  ) {
     super(message, { cause: options.cause });
     this.status = options.status;
+    this.code = options.code ?? null;
+    this.details = options.details ?? [];
     this.url = options.url;
   }
 
@@ -59,6 +77,8 @@ export async function apiRequest<T>(
       method,
       headers: requestHeaders,
       body: body === undefined ? undefined : JSON.stringify(body),
+      // Send and accept the HttpOnly session cookie on cross-origin (different port) requests.
+      credentials: 'include',
       signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
     });
   } catch (error) {
@@ -73,7 +93,7 @@ export async function apiRequest<T>(
   }
 
   if (!response.ok) {
-    throw new ApiError(await readErrorMessage(response), { status: response.status, url });
+    throw await toApiError(response, url);
   }
 
   if (response.status === 204) {
@@ -83,17 +103,21 @@ export async function apiRequest<T>(
   return (await response.json()) as T;
 }
 
-/** Extracts NestJS-style `{ message }` error bodies, falling back to the status line. */
-async function readErrorMessage(response: Response): Promise<string> {
+/** Reads the API's `{ code, message, details }` error body, falling back to the status line. */
+async function toApiError(response: Response, url: string): Promise<ApiError> {
+  const fallback = `Request failed with status ${response.status}${response.statusText ? ` ${response.statusText}` : ''}.`;
+
+  let body: unknown;
   try {
-    const body: unknown = await response.json();
-    if (body && typeof body === 'object' && 'message' in body) {
-      const { message } = body;
-      if (typeof message === 'string') return message;
-      if (Array.isArray(message)) return message.join(', ');
-    }
+    body = await response.json();
   } catch {
     // Body is not JSON — use the fallback below.
   }
-  return `Request failed with status ${response.status}${response.statusText ? ` ${response.statusText}` : ''}.`;
+
+  const record = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+  const message = typeof record.message === 'string' ? record.message : fallback;
+  const code = API_ERROR_CODES.find((known) => known === record.code) ?? null;
+  const details = Array.isArray(record.details) ? (record.details as ApiFieldError[]) : [];
+
+  return new ApiError(message, { status: response.status, url, code, details });
 }

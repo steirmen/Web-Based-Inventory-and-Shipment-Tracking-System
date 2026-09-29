@@ -1,8 +1,13 @@
+import { LogOut } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, NavLink, Outlet } from 'react-router';
 import { BrandMark } from '@/components/layout/brand-mark';
 import { Container } from '@/components/layout/container';
+import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
+import { useAuth, useLogout } from '@/hooks/use-auth';
 import { appConfig } from '@/lib/app-config';
+import { initials } from '@/lib/initials';
 import { cn } from '@/lib/cn';
 import { paths } from '@/routes/paths';
 
@@ -11,6 +16,8 @@ import { paths } from '@/routes/paths';
  * Pages render inside <Outlet /> and inherit the page width and vertical rhythm.
  */
 export function AppShell() {
+  const auth = useAuth();
+
   return (
     <div className="flex min-h-dvh flex-col">
       <a
@@ -27,13 +34,26 @@ export function AppShell() {
             className="-mx-1 flex items-center gap-2.5 rounded-control px-1 py-1 focus-ring"
           >
             <BrandMark />
-            <span className="text-[15px] font-semibold tracking-tight">{appConfig.name}</span>
+            <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">
+              {appConfig.name}
+            </span>
           </Link>
 
-          <nav aria-label="Main" className="flex items-center gap-1">
-            <ShellNavLink to={paths.home}>Overview</ShellNavLink>
-            <ShellNavLink to={paths.healthCheck}>System status</ShellNavLink>
-          </nav>
+          <div className="flex items-center gap-1 sm:gap-3">
+            <nav aria-label="Main" className="flex items-center gap-1">
+              {auth.status === 'authenticated' && <ShellNavLink to={paths.home}>Home</ShellNavLink>}
+              <ShellNavLink to={paths.healthCheck}>System status</ShellNavLink>
+            </nav>
+            {auth.status === 'authenticated' && <UserMenu name={auth.user.name} />}
+            {auth.status === 'unauthenticated' && (
+              <Link
+                to={paths.login}
+                className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+              >
+                Sign in
+              </Link>
+            )}
+          </div>
         </Container>
       </header>
 
@@ -69,5 +89,32 @@ function ShellNavLink({ to, children }: { to: string; children: ReactNode }) {
     >
       {children}
     </NavLink>
+  );
+}
+
+/** Signed-in user and sign-out action. A full account menu arrives with later phases. */
+function UserMenu({ name }: { name: string }) {
+  const logout = useLogout();
+
+  return (
+    <div className="flex items-center gap-2 border-l border-border pl-2 sm:pl-3">
+      <span
+        className="flex size-8 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary-soft-foreground"
+        aria-hidden="true"
+      >
+        {initials(name)}
+      </span>
+      <span className="hidden max-w-40 truncate text-sm font-medium md:inline">{name}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => logout.mutate()}
+        isLoading={logout.isPending}
+        aria-label="Sign out"
+      >
+        {!logout.isPending && <LogOut aria-hidden="true" />}
+        <span className="hidden sm:inline">Sign out</span>
+      </Button>
+    </div>
   );
 }
