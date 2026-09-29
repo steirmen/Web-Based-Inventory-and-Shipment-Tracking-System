@@ -1,0 +1,41 @@
+{
+  "name": "business-ops-platform",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Business operations SaaS platform for small and medium-sized businesses.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.22.0",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "dev": "concurrently --names shared,api,web --prefix-colors gray,magenta,cyan \"npm run dev -w @app/shared\" \"npm run dev -w @app/api\" \"npm run dev -w @app/web\"",
+    "dev:api": "npm run dev -w @app/api",
+    "dev:web": "npm run dev -w @app/web",
+    "build": "npm run build -w @app/shared && npm run build -w @app/api && npm run build -w @app/web",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
+    "db:check": "npm run db:check -w @app/api",
+    "db:generate": "npm run db:generate -w @app/api",
+    "db:migrate": "npm run db:migrate -w @app/api",
+    "db:studio": "npm run db:studio -w @app/api",
+    "postinstall": "npm run build -w @app/shared && npm run db:generate -w @app/api"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "prettier": "^3.9.9",
+    "prettier-plugin-tailwindcss": "^0.8.1"
+  },
+  "overrides": {
+    "mysql2": "^3.24.5",
+    "deepmerge-ts": "^8.0.2"
+  }
+}

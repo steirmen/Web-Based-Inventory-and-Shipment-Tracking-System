@@ -1,0 +1,14 @@
+// Prisma schema — https://pris.ly/d/prisma-schema
+//
+// Phase 1 intentionally contains no models. Domain models (users,
+// organizations, products, ...) are introduced in later phases together with
+// their migrations. The connection URL is provided by `prisma.config.ts`.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
