@@ -27,7 +27,12 @@
     "db:generate": "npm run db:generate -w @app/api",
     "db:migrate": "npm run db:migrate -w @app/api",
     "db:studio": "npm run db:studio -w @app/api",
-    "postinstall": "npm run build -w @app/shared && npm run db:generate -w @app/api"
+    "postinstall": "npm run build -w @app/shared && npm run db:generate -w @app/api",
+    "test:db": "npm run test:db -w @app/api",
+    "db:deploy": "npm run db:deploy -w @app/api",
+    "db:status": "npm run db:status -w @app/api",
+    "db:seed": "npm run db:seed -w @app/api",
+    "db:validate": "npm run db:validate -w @app/api"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",

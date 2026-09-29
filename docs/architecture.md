@@ -28,14 +28,17 @@ src/
   health/            GET /health
   generated/prisma/  Prisma client output (git-ignored, created by `prisma generate`)
 prisma/
-  schema.prisma      Datasource + generator only in Phase 1 (no models)
+  schema.prisma      Multi-tenant domain model (see docs/database-design.md)
+  migrations/        SQL migrations (CHECK constraints are hand-written here)
+  seed.ts            Development seed (`npm run db:seed`)
 prisma.config.ts     Prisma CLI config; builds the connection URL from DB_* vars
 test/                HTTP-level (e2e) tests with Supertest
+test/database/       Database integration tests against the test database
 ```
 
 - **Configuration**: `ConfigModule` loads the repository-root `.env` and validates it with the Zod schema in `config/env.ts`. The app refuses to start with invalid config. Read values with `ConfigService<Env, true>` and `{ infer: true }`.
 - **Request validation**: global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`). DTOs use `class-validator` decorators.
-- **Database**: `PrismaService` extends the generated `PrismaClient` using the `@prisma/adapter-pg` driver adapter (Prisma 7). It connects lazily, so the API still starts when PostgreSQL is down.
+- **Database**: `PrismaService` extends the generated `PrismaClient` using the `@prisma/adapter-pg` driver adapter (Prisma 7). It connects lazily, so the API still starts when PostgreSQL is down. The schema, tenancy model, and constraints are described in [database-design.md](database-design.md).
 - **Feature modules**: one folder per domain (`src/<domain>/`) containing its module, controller, service, DTOs, and tests.
 
 ### `GET /health`
@@ -108,6 +111,9 @@ A single `.env` at the repository root serves every app:
 | Workspace | Runner                   | Environment | Location                                                  |
 | --------- | ------------------------ | ----------- | --------------------------------------------------------- |
 | api       | Vitest                   | node        | `src/**/*.spec.ts` (unit), `test/**/*.e2e-spec.ts` (HTTP) |
+| api (db)  | Vitest                   | node        | `test/database/**/*.db-spec.ts`                           |
 | web       | Vitest + Testing Library | jsdom       | `src/**/*.test.ts(x)`                                     |
 
-Tests do not need a database or a `.env` file: API tests inject env values via `vitest.config.ts` and mock `PrismaService`; web tests stub `fetch` and `VITE_API_BASE_URL`.
+`npm run test` does not need a database or a `.env` file: API tests inject env values via `vitest.config.ts` and mock `PrismaService`; web tests stub `fetch` and `VITE_API_BASE_URL`.
+
+`npm run test:db` (config: `apps/api/vitest.db.config.ts`) runs against a real PostgreSQL test database (`DB_TEST_NAME`, default `app_test`), which it creates and migrates automatically. See [database-design.md](database-design.md#testing).

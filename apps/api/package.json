@@ -8,14 +8,19 @@
     "dev": "nest start --watch --preserveWatchOutput",
     "build": "nest build",
     "start": "node dist/main.js",
-    "lint": "oxlint src test",
+    "lint": "oxlint src test prisma",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:check": "prisma db execute --file prisma/sql/connection-check.sql",
     "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test:db": "vitest run --config vitest.db.config.ts",
+    "db:validate": "prisma validate",
+    "db:deploy": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "db:seed": "prisma db seed"
   },
   "dependencies": {
     "@app/shared": "0.0.0",
@@ -42,6 +47,7 @@
     "oxlint": "^1.86.0",
     "prisma": "^7.10.0",
     "supertest": "^7.3.0",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2",
     "vitest": "^5.0.2"
   }

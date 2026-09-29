@@ -2,7 +2,7 @@
 
 A business operations SaaS platform for small and medium-sized businesses: inventory, orders, customers, and reporting.
 
-> **Status: Phase 1 (foundation).** This repository currently contains the technical foundation only: monorepo, API, web app, design system, database connectivity, tooling, and tests. Product features are built in later phases.
+> **Status: Phase 2 (database & domain model).** The repository contains the technical foundation (monorepo, API, web app, design system, tooling, tests) and the multi-tenant PostgreSQL domain schema with migrations, seed data, and database integration tests. Authentication, business APIs, and business UI come in later phases.
 
 ## Tech stack
 
@@ -30,8 +30,10 @@ cp .env.example .env
 # 2. Install dependencies (also builds the shared package and generates the Prisma client)
 npm install
 
-# 3. Verify the database connection
+# 3. Verify the database connection, apply migrations, load demo data
 npm run db:check
+npm run db:deploy
+npm run db:seed
 
 # 4. Start API + web app
 npm run dev
@@ -52,7 +54,8 @@ Run from the repository root.
 | `npm run dev`                             | Start shared (watch), API, and web app together                |
 | `npm run dev:api` / `npm run dev:web`     | Start one app                                                  |
 | `npm run build`                           | Production build of every workspace                            |
-| `npm run test`                            | Run all tests                                                  |
+| `npm run test`                            | Run unit and HTTP tests (no database needed)                   |
+| `npm run test:db`                         | Run database integration tests against `DB_TEST_NAME`          |
 | `npm run lint`                            | Lint all workspaces (oxlint)                                   |
 | `npm run typecheck`                       | Type-check all workspaces                                      |
 | `npm run format` / `npm run format:check` | Format with Prettier / verify formatting                       |
@@ -60,6 +63,10 @@ Run from the repository root.
 | `npm run db:check`                        | Verify Prisma can reach PostgreSQL                             |
 | `npm run db:generate`                     | Regenerate the Prisma client                                   |
 | `npm run db:migrate`                      | Create/apply migrations (`prisma migrate dev`)                 |
+| `npm run db:deploy`                       | Apply pending migrations (`prisma migrate deploy`)             |
+| `npm run db:status`                       | Show migration status                                          |
+| `npm run db:seed`                         | Load the development demo data (idempotent)                    |
+| `npm run db:validate`                     | Validate the Prisma schema                                     |
 | `npm run db:studio`                       | Open Prisma Studio                                             |
 
 Run a command in a single workspace with `-w`, for example `npm run test -w @app/web`.
@@ -81,5 +88,6 @@ docs/           Architecture, design system, local setup
 
 - [Local development & PostgreSQL setup](docs/local-development.md)
 - [Architecture](docs/architecture.md)
+- [Database design](docs/database-design.md)
 - [Design system](docs/design-system.md)
 - [CLAUDE.md](CLAUDE.md): conventions for AI-assisted development

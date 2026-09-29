@@ -57,10 +57,21 @@ Edit `.env` and set `DB_USER`, `DB_PASSWORD`, and `DB_NAME` to match step 3. Eve
 ```powershell
 npm install        # also builds @app/shared and generates the Prisma client
 npm run db:check   # Prisma executes `SELECT 1` against the configured database
+npm run db:deploy  # apply all migrations (creates tables, constraints, indexes)
+npm run db:seed    # load the fictional demo organization (safe to re-run)
+npm run test:db    # database integration tests (uses the separate DB_TEST_NAME database)
 npm run dev        # API on http://localhost:3000, web app on http://localhost:5173
 ```
 
 Open <http://localhost:5173/health-check>. Both checks should report **Operational**.
+
+## 6. Working with the schema
+
+- Edit `apps/api/prisma/schema.prisma`, then run `npm run db:migrate -- --name <change>` to create and apply a migration.
+- The database tests use `DB_TEST_NAME` (default `app_test`) on the same server. It is created automatically and **emptied before every test**, so never point it at data you care about.
+- To start the development database over, drop and recreate `app_development` (step 3), then run `npm run db:deploy && npm run db:seed`.
+
+See [database-design.md](database-design.md) for the model, tenancy rules, delete strategy, and constraints.
 
 ## Troubleshooting
 

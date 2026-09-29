@@ -35,3 +35,38 @@ jobs:
       # Tests are self-contained: they do not need a database or a .env file.
       - run: npm run test
       - run: npm run build
+
+  database:
+    name: Database (migrations, seed, integration tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_NAME: app_development
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_TEST_NAME: app_test
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # GitHub's Ubuntu runners ship PostgreSQL (disabled by default); no containers needed.
+      - name: Start PostgreSQL
+        run: |
+          sudo systemctl start postgresql.service
+          pg_isready --host localhost --timeout 30
+          sudo -u postgres psql --command "ALTER USER postgres PASSWORD 'postgres';"
+          sudo -u postgres createdb app_development
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm run db:validate
+      - run: npm run db:deploy
+      - run: npm run db:status
+      - run: npm run db:seed
+      - run: npm run test:db
