@@ -11,7 +11,7 @@ import { vi } from 'vitest';
 
 export const TEST_API_BASE_URL = 'http://api.test';
 
-type Handler = (init: RequestInit | undefined) => Response | Promise<Response>;
+type Handler = (init: RequestInit | undefined, url: URL) => Response | Promise<Response>;
 
 /**
  * Replaces `fetch` with a router keyed by "METHOD /path". Unhandled requests
@@ -27,7 +27,7 @@ export function mockApi(handlers: Record<string, Handler>) {
     if (!handler) {
       throw new Error(`Unhandled API request in test: ${key}`);
     }
-    return handler(init);
+    return handler(init, url);
   });
 
   vi.stubGlobal('fetch', fetchMock);

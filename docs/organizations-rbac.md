@@ -81,8 +81,14 @@ Permissions are defined once in `@app/shared` (`PERMISSIONS`, `ROLE_PERMISSIONS`
 | `MEMBERS_UPDATE_ROLE`: change roles                |  ✅   | ✅\*  |  ❌   |
 | `MEMBERS_REMOVE`: remove members                   |  ✅   | ✅\*  |  ❌   |
 | `OWNERSHIP_TRANSFER`                               |  ✅   |  ❌   |  ❌   |
+| `PRODUCTS_READ` / `_CREATE` / `_UPDATE`            |  ✅   |  ✅   |  ✅   |
+| `PRODUCTS_ARCHIVE`: archive and restore            |  ✅   |  ✅   |  ❌   |
+| `CATEGORIES_READ` / `_CREATE` / `_UPDATE`          |  ✅   |  ✅   |  ✅   |
+| `CATEGORIES_DELETE`                                |  ✅   |  ✅   |  ❌   |
 
 \* Also restricted by the role hierarchy below.
+
+Catalog permissions are described in [products-categories.md](products-categories.md).
 
 ### Role hierarchy
 
@@ -98,7 +104,7 @@ Consequences:
 
 - **OWNER** invites ADMIN or STAFF, switches members between ADMIN and STAFF, removes ADMIN or STAFF, transfers ownership, and renames the organization.
 - **ADMIN** invites STAFF only, removes STAFF only, and revokes only STAFF invitations. An ADMIN cannot grant ADMIN, and cannot modify the OWNER or another ADMIN. With the current three roles, the only role an ADMIN may assign is STAFF, so in practice an ADMIN cannot change anyone's role. The rule structure is ready for more roles.
-- **STAFF** can view the organization and its members.
+- **STAFF** can view the organization and its members, and create and edit products and categories (but not archive products or delete categories).
 - Nobody manages themselves through these endpoints (the OWNER is never manageable, and an ADMIN cannot manage ADMINs).
 - **OWNER is never assignable.** The generic role endpoint rejects `role: OWNER` (`MEMBER_ROLE_CHANGE_FORBIDDEN`) and rejects any change to the current owner (`OWNER_TRANSFER_REQUIRED`). Invitations can never grant OWNER, which a database CHECK constraint also enforces.
 
@@ -178,19 +184,22 @@ Organization mutations write an `activity_logs` row **in the same transaction** 
 | `INVITATION_REVOKED`    | OrganizationInvitation | email, role                                       |
 | `INVITATION_ACCEPTED`   | OrganizationInvitation | email, role, memberId                             |
 
+Catalog events (`CATEGORY_*`, `PRODUCT_*`) are listed in [products-categories.md](products-categories.md#activity-log).
+
 Every row has `organizationId`, `actorUserId`, `action`, `entityType`, `entityId`, and `createdAt`. Metadata never contains passwords, password hashes, session tokens, or invitation tokens or hashes; tests assert this.
 
 ## Frontend organization routing
 
-| Route                           | Purpose                                                                                                                                               |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                             | Signed in: no workspaces → `/onboarding`; the last opened workspace (if still in the list) or the only one → `/org/:id`; otherwise → `/organizations` |
-| `/onboarding`                   | Create a workspace (also used for "create another workspace")                                                                                         |
-| `/organizations`                | All of the user's workspaces with role and member count                                                                                               |
-| `/org/:organizationId`          | Workspace home (temporary; not the dashboard)                                                                                                         |
-| `/org/:organizationId/team`     | Members, role changes, removal, ownership transfer, invitations                                                                                       |
-| `/org/:organizationId/settings` | Name (OWNER/ADMIN), immutable slug                                                                                                                    |
-| `/invite/:token`                | Public invitation page: sign in, email-mismatch guidance, accept                                                                                      |
+| Route                                          | Purpose                                                                                                                                               |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                                            | Signed in: no workspaces → `/onboarding`; the last opened workspace (if still in the list) or the only one → `/org/:id`; otherwise → `/organizations` |
+| `/onboarding`                                  | Create a workspace (also used for "create another workspace")                                                                                         |
+| `/organizations`                               | All of the user's workspaces with role and member count                                                                                               |
+| `/org/:organizationId`                         | Workspace home (temporary; not the dashboard)                                                                                                         |
+| `/org/:organizationId/products`, `/categories` | Catalog, see [products-categories.md](products-categories.md#web-app)                                                                                 |
+| `/org/:organizationId/team`                    | Members, role changes, removal, ownership transfer, invitations                                                                                       |
+| `/org/:organizationId/settings`                | Name (OWNER/ADMIN), immutable slug                                                                                                                    |
+| `/invite/:token`                               | Public invitation page: sign in, email-mismatch guidance, accept                                                                                      |
 
 - **The URL identifies the organization.** There is no "active organization" on the session or in auth state, so tabs are independent: two tabs can show two different workspaces.
 - `OrganizationLayout` loads `GET /organizations/:id`. A 404 shows "Workspace not found or you don't have access to it." without any data from that organization. On success it provides `{ organization, role, can(), canAssign(), canManage() }` to the pages.

@@ -21,12 +21,13 @@ export function OrganizationLayout() {
   const { organizationId = '' } = useParams();
   const query = useOrganization(organizationId);
 
+  // Only ever render the organization the URL names: data for any other id is ignored.
   const context = useMemo(
     () =>
-      query.data
+      query.data && query.data.organization.id === organizationId
         ? createOrganizationContext(query.data.organization, query.data.membership.role)
         : null,
-    [query.data],
+    [query.data, organizationId],
   );
 
   useEffect(() => {
@@ -53,6 +54,8 @@ export function OrganizationLayout() {
 
   const tabs = [
     { to: paths.organization(organizationId), label: 'Overview', end: true },
+    { to: paths.products(organizationId), label: 'Products', end: false },
+    { to: paths.categories(organizationId), label: 'Categories', end: false },
     { to: paths.organizationTeam(organizationId), label: 'Team', end: false },
     { to: paths.organizationSettings(organizationId), label: 'Settings', end: false },
   ];
@@ -82,7 +85,9 @@ export function OrganizationLayout() {
             </NavLink>
           ))}
         </nav>
-        <Outlet />
+        {/* Keyed by organization: switching workspaces remounts the page, so no local state
+            (search input, open dialogs, pending mutations) carries over to another workspace. */}
+        <Outlet key={organizationId} />
       </div>
     </OrganizationContext>
   );

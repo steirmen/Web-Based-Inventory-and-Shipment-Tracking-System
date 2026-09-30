@@ -118,6 +118,8 @@ describe('LoginPage', () => {
     const { user, router } = renderApp('/organizations');
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
+    // Wait for the form itself, not just the URL, before typing.
+    await screen.findByRole('heading', { name: /sign in to/i });
     await fillAndSubmit(user);
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/organizations'));

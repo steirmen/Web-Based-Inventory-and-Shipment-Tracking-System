@@ -20,6 +20,15 @@ export const PERMISSIONS = [
   'MEMBERS_UPDATE_ROLE',
   'MEMBERS_REMOVE',
   'OWNERSHIP_TRANSFER',
+  'PRODUCTS_READ',
+  'PRODUCTS_CREATE',
+  'PRODUCTS_UPDATE',
+  /** Archive and restore products. */
+  'PRODUCTS_ARCHIVE',
+  'CATEGORIES_READ',
+  'CATEGORIES_CREATE',
+  'CATEGORIES_UPDATE',
+  'CATEGORIES_DELETE',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -32,8 +41,25 @@ export const ROLE_PERMISSIONS: Record<MemberRole, readonly Permission[]> = {
     'MEMBERS_INVITE',
     'MEMBERS_UPDATE_ROLE',
     'MEMBERS_REMOVE',
+    'PRODUCTS_READ',
+    'PRODUCTS_CREATE',
+    'PRODUCTS_UPDATE',
+    'PRODUCTS_ARCHIVE',
+    'CATEGORIES_READ',
+    'CATEGORIES_CREATE',
+    'CATEGORIES_UPDATE',
+    'CATEGORIES_DELETE',
   ],
-  STAFF: ['ORGANIZATION_READ', 'MEMBERS_READ'],
+  STAFF: [
+    'ORGANIZATION_READ',
+    'MEMBERS_READ',
+    'PRODUCTS_READ',
+    'PRODUCTS_CREATE',
+    'PRODUCTS_UPDATE',
+    'CATEGORIES_READ',
+    'CATEGORIES_CREATE',
+    'CATEGORIES_UPDATE',
+  ],
 };
 
 export function hasPermission(role: MemberRole, permission: Permission): boolean {

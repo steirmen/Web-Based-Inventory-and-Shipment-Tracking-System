@@ -241,6 +241,10 @@ model Product {
   @@index([organizationId, categoryId])
   /// Catalog lists filtered by status (e.g. active products only).
   @@index([organizationId, status])
+  /// Default product list order (newest first) with pagination.
+  @@index([organizationId, createdAt(sort: Desc)])
+  /// Product list sorted by name.
+  @@index([organizationId, name])
   @@map("products")
 }
 

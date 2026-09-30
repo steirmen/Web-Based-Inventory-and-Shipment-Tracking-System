@@ -52,7 +52,11 @@ export function useInvitations(organizationId: string, options: { enabled: boole
  * After a 403/404 from an organization endpoint the caller's membership or role
  * may have changed: refetch it so the UI reflects what the server now allows.
  */
-function refreshAccessOnDenial(queryClient: QueryClient, organizationId: string, error: Error) {
+export function refreshAccessOnDenial(
+  queryClient: QueryClient,
+  organizationId: string,
+  error: Error,
+) {
   if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
     void queryClient.invalidateQueries({ queryKey: organizationKeys.detail(organizationId) });
   }

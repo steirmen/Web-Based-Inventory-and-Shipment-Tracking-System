@@ -28,6 +28,7 @@ src/
   database/          Global DatabaseModule exposing PrismaService
   auth/              Register/login/logout/me, sessions, Argon2id passwords, global SessionAuthGuard
   organizations/     Organizations, members, invitations; OrganizationAccessGuard + @RequirePermissions (RBAC)
+  catalog/           Categories and products (list/search/sort/paginate, archive/restore); see products-categories.md
   activity/          recordActivity(): audit entries written inside the caller's transaction
   health/            GET /health (public)
   generated/prisma/  Prisma client output (git-ignored, created by `prisma generate`)
@@ -72,7 +73,8 @@ src/
   api/               HTTP client + one module per backend resource (endpoint functions, query keys)
   hooks/             TanStack Query hooks wrapping api/ functions
   components/ui/     Design-system primitives (Button, Input, Card, ...)
-  components/layout/ Page-structure primitives (Container, PageHeader, BrandMark)
+  components/layout/ Page-structure primitives (Container, PageHeader, page states, PaginationBar)
+  components/<feature>/ Feature components (organization, team, products, categories)
   layouts/           Route layouts (AppShell for the app, AuthLayout for sign-in/register)
   pages/             Route components
   routes/            Route table (router.tsx), path constants (paths.ts), RequireAuth/RequireGuest guards

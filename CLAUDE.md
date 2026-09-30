@@ -14,7 +14,8 @@ Work is delivered in explicit phases. **Only implement what the current phase as
 - **Phase 2 (done): database & domain model.** Prisma models and migration for User, Organization, OrganizationMember, Category, Product, Warehouse, Inventory, StockMovement, Customer, Order, OrderItem, and ActivityLog; CHECK constraints; dev seed; database integration tests. **Schema only: no services, APIs, or UI for these domains yet.**
 - **Phase 3 (done): authentication.** Register/login/logout/me, Argon2id passwords, database-backed sessions (`Session` model) in an HttpOnly cookie, global auth guard, rate limiting, standard error responses, login/register UI, protected and guest routes, authenticated landing page. See [docs/authentication.md](docs/authentication.md).
 - **Phase 4 (done): organizations & RBAC.** Organization creation/listing/switching (`/org/:organizationId` routes), OrganizationAccessGuard + `@RequirePermissions`, OWNER/ADMIN/STAFF matrix, team management, invitation links, ownership transfer, organization activity logging. See [docs/organizations-rbac.md](docs/organizations-rbac.md).
-- **Later phases:** products, categories, warehouses, inventory, stock movements, customers, orders, dashboard/reporting (APIs and UI). Password reset, email verification, email delivery, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
+- **Phase 5 (done): products & categories.** Category CRUD (delete only when unused), products with server-side search/filter/sort/pagination, archive/restore (no product delete), catalog permissions, activity logging, product list/create/edit/detail and categories UI, seed additions. See [docs/products-categories.md](docs/products-categories.md).
+- **Later phases:** warehouses, inventory, stock movements, customers, orders, dashboard/reporting (APIs and UI). Password reset, email verification, email delivery, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
 
 Environment constraints: **local development only. No Docker, no Docker Compose, no WSL.** PostgreSQL runs natively on the Windows host.
 
@@ -75,7 +76,16 @@ npm run db:seed      # idempotent demo data
 - Record organization mutations with `recordActivity(tx, …)` **inside the same transaction**. Never put passwords, hashes, session tokens, or invitation tokens in metadata.
 - Raw invitation tokens are returned once (in `inviteUrl`) and never persisted or logged. Store `hashToken(token)` (`src/common/security/secure-token.ts`).
 - Frontend permission checks (`<Can>`, `useCurrentOrganization().can/canManage`) are **UX only**. The API is authoritative.
-- Do not implement product, inventory, order, or dashboard functionality until those phases.
+- Do not implement inventory, warehouse, stock movement, customer, order, or dashboard functionality until those phases.
+
+### Products & categories (read [docs/products-categories.md](docs/products-categories.md))
+
+- **Money is a decimal string end to end** (`"19.99"`): validate with `MONEY_PATTERN`, store as `Decimal`, return `toFixed(2)`, compare with `Decimal#equals`. Never `Number()`/`parseFloat` a price or cost, in the API or the web app (`formatMoney` passes the string to `Intl`).
+- Products are **archived, never deleted**; status changes only via `…/archive` and `…/restore`. Edits of ARCHIVED products are rejected (`PRODUCT_ARCHIVED`).
+- List endpoints: whitelist sort fields (never pass a client string as a column), always add `id` as the tie-breaker, cap `pageSize` (100), and escape `%`, `_`, `\` in `contains` searches.
+- A `categoryId` from a client (body or filter) must be looked up **with** the organization id; a foreign one is `422 PRODUCT_CATEGORY_NOT_FOUND`.
+- Frontend catalog query keys live under `organizationKeys.detail(organizationId)` (`catalogKeys` in `src/api/catalog.ts`); invalidate by organization after mutations. `OrganizationLayout` keys the page outlet by organization id, so don't rely on page state surviving a workspace switch.
+- Confirm destructive or meaningful actions with `ConfirmDialog`/`Dialog` (`components/ui`), not `window.confirm`.
 
 ### Database schema (`apps/api/prisma`)
 

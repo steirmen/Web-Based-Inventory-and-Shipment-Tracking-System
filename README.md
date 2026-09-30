@@ -2,7 +2,7 @@
 
 A business operations SaaS platform for small and medium-sized businesses: inventory, orders, customers, and reporting.
 
-> **Status: Phase 4 (organizations & RBAC).** The repository contains the technical foundation, the multi-tenant PostgreSQL domain schema, email/password **authentication** with database-backed sessions, and **multi-tenant workspaces**: organization creation, switching, role-based access control (OWNER / ADMIN / STAFF), team management, invitation links, and ownership transfer. Business features (products, inventory, orders, dashboard) come in later phases.
+> **Status: Phase 5 (products & categories).** The repository contains the technical foundation, the multi-tenant PostgreSQL domain schema, email/password **authentication** with database-backed sessions, **multi-tenant workspaces** (organization creation and switching, role-based access control for OWNER / ADMIN / STAFF, team management, invitation links, ownership transfer), and the **product catalog**: categories and products with search, filters, sorting, pagination, and archive/restore. Inventory, warehouses, stock movements, customers, orders, and the dashboard come in later phases.
 
 ## Tech stack
 
@@ -83,7 +83,7 @@ The app is multi-tenant: each **organization** (shown as a _workspace_) owns its
 
 - **Onboarding.** A user without a workspace is sent to `/onboarding` to create one and becomes its **OWNER**.
 - **Switching.** Workspaces live at `/org/:organizationId`, so every browser tab can show a different workspace. Switch with the workspace menu in the header, or from `/organizations`.
-- **Roles.** OWNER has full control, including ownership transfer. ADMIN renames the workspace, invites STAFF, and removes STAFF. STAFF has read-only access to the workspace and team.
+- **Roles.** OWNER has full control, including ownership transfer. ADMIN renames the workspace, invites STAFF, and removes STAFF. STAFF has read-only access to the workspace settings and team, and works on the catalog (see below).
 - **Enforcement.** The API enforces every rule; hidden buttons in the UI are only a convenience. Non-members get "Workspace not found".
 - **Team** (`/org/:id/team`): members, role changes, removal with confirmation, ownership transfer, and pending invitations.
 - **Invitations.** No email is sent yet. Creating an invitation produces a one-time link (valid 7 days) to copy and share. The invitee signs in with the **invited email** and accepts it at `/invite/:token`.
@@ -96,6 +96,20 @@ Try it locally: sign in as `owner@demo-trading.example`, open **Team**, and crea
 | `WEB_APP_URL`         | `http://localhost:5173` | Base URL used in invitation links    |
 
 Details: [docs/organizations-rbac.md](docs/organizations-rbac.md).
+
+## Products and categories
+
+Each workspace has its own catalog under **Products** and **Categories** (`/org/:id/products`, `/org/:id/categories`).
+
+- **Products** have a name, a SKU (unique within the workspace), an optional description and category, a price and a cost (exact decimals, sent as strings such as `"19.99"`), and a minimum stock level.
+- **The list** is searched, filtered (category, status), sorted, and paginated on the server. The current view is kept in the URL, so reloads and shared links show the same results.
+- **Archive instead of delete.** Products are never deleted. Archiving (with confirmation) keeps them for history, and they can be restored. Archived products can't be edited until restored.
+- **Categories** show how many products (active and archived) use them. A category that is in use can't be deleted: move its products first.
+- **Who can do what.** Everyone creates and edits products and categories. Only OWNER and ADMIN archive/restore products and delete categories.
+
+Try it locally with the seeded demo workspace: sign in as `staff@demo-trading.example` (you can add and edit, but not archive) and as `admin@demo-trading.example` (archive, restore, delete unused categories).
+
+Details: [docs/products-categories.md](docs/products-categories.md).
 
 ## Commands
 
@@ -143,5 +157,6 @@ docs/           Architecture, design system, local setup
 - [Database design](docs/database-design.md)
 - [Authentication](docs/authentication.md)
 - [Organizations & RBAC](docs/organizations-rbac.md)
+- [Products & categories](docs/products-categories.md)
 - [Design system](docs/design-system.md)
 - [CLAUDE.md](CLAUDE.md): conventions for AI-assisted development

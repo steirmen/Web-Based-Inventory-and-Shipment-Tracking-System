@@ -9,6 +9,13 @@ export const paths = {
   organization: (organizationId: string) => `/org/${organizationId}`,
   organizationTeam: (organizationId: string) => `/org/${organizationId}/team`,
   organizationSettings: (organizationId: string) => `/org/${organizationId}/settings`,
+  products: (organizationId: string) => `/org/${organizationId}/products`,
+  productNew: (organizationId: string) => `/org/${organizationId}/products/new`,
+  product: (organizationId: string, productId: string) =>
+    `/org/${organizationId}/products/${productId}`,
+  productEdit: (organizationId: string, productId: string) =>
+    `/org/${organizationId}/products/${productId}/edit`,
+  categories: (organizationId: string) => `/org/${organizationId}/categories`,
   invitation: (token: string) => `/invite/${token}`,
 } as const;
 

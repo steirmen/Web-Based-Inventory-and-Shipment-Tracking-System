@@ -7,7 +7,7 @@ import {
 } from '@app/shared';
 import { describe, expect, it } from 'vitest';
 
-/** Pins the Phase 4 role matrix (docs/organizations-rbac.md). Changes here must be deliberate. */
+/** Pins the role matrix (Phase 4 organization + Phase 5 catalog permissions) (docs/organizations-rbac.md). Changes here must be deliberate. */
 describe('role permissions', () => {
   const matrix: Record<Permission, Record<MemberRole, boolean>> = {
     ORGANIZATION_READ: { OWNER: true, ADMIN: true, STAFF: true },
@@ -17,6 +17,14 @@ describe('role permissions', () => {
     MEMBERS_UPDATE_ROLE: { OWNER: true, ADMIN: true, STAFF: false },
     MEMBERS_REMOVE: { OWNER: true, ADMIN: true, STAFF: false },
     OWNERSHIP_TRANSFER: { OWNER: true, ADMIN: false, STAFF: false },
+    PRODUCTS_READ: { OWNER: true, ADMIN: true, STAFF: true },
+    PRODUCTS_CREATE: { OWNER: true, ADMIN: true, STAFF: true },
+    PRODUCTS_UPDATE: { OWNER: true, ADMIN: true, STAFF: true },
+    PRODUCTS_ARCHIVE: { OWNER: true, ADMIN: true, STAFF: false },
+    CATEGORIES_READ: { OWNER: true, ADMIN: true, STAFF: true },
+    CATEGORIES_CREATE: { OWNER: true, ADMIN: true, STAFF: true },
+    CATEGORIES_UPDATE: { OWNER: true, ADMIN: true, STAFF: true },
+    CATEGORIES_DELETE: { OWNER: true, ADMIN: true, STAFF: false },
   };
 
   for (const [permission, roles] of Object.entries(matrix)) {

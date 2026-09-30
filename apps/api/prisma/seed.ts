@@ -4,7 +4,8 @@
  * Creates one fictional demo organization with a small, realistic dataset.
  * - Deterministic: fixed names, SKUs, codes, quantities, prices, and timestamps.
  * - Idempotent: skips if the demo organization already exists (but still gives
- *   demo users without a password the development password — see below).
+ *   demo users without a password the development password, and adds missing
+ *   demo team members and catalog additions — see below).
  * - Atomic: runs in a single transaction.
  * - Development only: refuses to run with NODE_ENV=production. All people,
  *   emails (reserved `.example` domain), and phone numbers (555-01xx) are fictional.
@@ -578,6 +579,127 @@ async function ensureDemoTeam(tx: Tx, passwordHash: string): Promise<string[]> {
   return changes;
 }
 
+/**
+ * Catalog additions (Phase 5): an "Accessories" category, four accessories,
+ * and one archived product, so search, filters, sorting, pagination, and the
+ * archived state have something to show. Matched by category name and SKU,
+ * so re-running never duplicates them and never changes existing rows. No
+ * inventory is created for them (inventory is a later module).
+ */
+const CATALOG_ADDITIONS = {
+  category: { name: 'Accessories', description: 'Desk and computer accessories.' },
+  products: [
+    { sku: 'ACC-MOUSE-WL', name: 'Wireless Mouse', price: 2499, cost: 1140, minimumStock: 10 },
+    { sku: 'ACC-KB-US', name: 'Keyboard, US Layout', price: 4900, cost: 2350, minimumStock: 8 },
+    { sku: 'ACC-MON-24', name: 'Monitor, 24 inch', price: 18900, cost: 12400, minimumStock: 3 },
+    {
+      sku: 'ACC-STAND-AL',
+      name: 'Laptop Stand, Aluminium',
+      price: 3450,
+      cost: 1500,
+      minimumStock: 5,
+    },
+    {
+      sku: 'ACC-MOUSE-WD',
+      name: 'Wired Mouse (Discontinued)',
+      price: 999,
+      cost: 480,
+      minimumStock: 0,
+      archived: true,
+    },
+  ],
+} as const;
+
+async function ensureCatalogAdditions(tx: Tx): Promise<string[]> {
+  const changes: string[] = [];
+  const organization = await tx.organization.findUniqueOrThrow({
+    where: { slug: SEED_ORGANIZATION_SLUG },
+    select: { id: true },
+  });
+  const organizationId = organization.id;
+  const owner = await tx.user.findUnique({
+    where: { email: 'owner@demo-trading.example' },
+    select: { id: true },
+  });
+
+  let category = await tx.category.findFirst({
+    where: {
+      organizationId,
+      name: { equals: CATALOG_ADDITIONS.category.name, mode: 'insensitive' },
+    },
+    select: { id: true },
+  });
+  if (!category) {
+    category = await tx.category.create({
+      data: { organizationId, ...CATALOG_ADDITIONS.category, createdAt: at(10) },
+      select: { id: true },
+    });
+    await tx.activityLog.create({
+      data: {
+        organizationId,
+        actorUserId: owner?.id ?? null,
+        action: 'CATEGORY_CREATED',
+        entityType: 'Category',
+        entityId: category.id,
+        metadata: { name: CATALOG_ADDITIONS.category.name },
+        createdAt: at(10),
+      },
+    });
+    changes.push(`created category ${CATALOG_ADDITIONS.category.name}`);
+  }
+
+  for (const [index, item] of CATALOG_ADDITIONS.products.entries()) {
+    const existing = await tx.product.findUnique({
+      where: { organizationId_sku: { organizationId, sku: item.sku } },
+      select: { id: true },
+    });
+    if (existing) continue;
+    const archived = 'archived' in item && item.archived;
+    const product = await tx.product.create({
+      data: {
+        organizationId,
+        categoryId: category.id,
+        sku: item.sku,
+        name: item.name,
+        price: money(item.price),
+        cost: money(item.cost),
+        minimumStock: item.minimumStock,
+        status: archived ? 'ARCHIVED' : 'ACTIVE',
+        createdAt: at(10, index + 1),
+      },
+      select: { id: true },
+    });
+    await tx.activityLog.createMany({
+      data: [
+        {
+          organizationId,
+          actorUserId: owner?.id ?? null,
+          action: 'PRODUCT_CREATED',
+          entityType: 'Product',
+          entityId: product.id,
+          metadata: { name: item.name, sku: item.sku },
+          createdAt: at(10, index + 1),
+        },
+        ...(archived
+          ? [
+              {
+                organizationId,
+                actorUserId: owner?.id ?? null,
+                action: 'PRODUCT_ARCHIVED',
+                entityType: 'Product',
+                entityId: product.id,
+                metadata: { name: item.name, sku: item.sku },
+                createdAt: at(11),
+              },
+            ]
+          : []),
+      ],
+    });
+    changes.push(`created product ${item.sku}`);
+  }
+  return changes;
+}
+
 async function main(): Promise<void> {
   loadEnv({ path: ROOT_ENV_FILE, quiet: true });
 
@@ -617,6 +739,13 @@ async function main(): Promise<void> {
     const changes = await prisma.$transaction((tx) => ensureDemoTeam(tx, passwordHash));
     console.log(
       changes.length > 0 ? `Demo team updated: ${changes.join('; ')}.` : 'Demo team is up to date.',
+    );
+
+    const catalogChanges = await prisma.$transaction((tx) => ensureCatalogAdditions(tx));
+    console.log(
+      catalogChanges.length > 0
+        ? `Demo catalog updated: ${catalogChanges.join('; ')}.`
+        : 'Demo catalog is up to date.',
     );
   } finally {
     await prisma.$disconnect();

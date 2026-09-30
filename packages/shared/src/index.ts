@@ -36,3 +36,30 @@ export {
   ROLE_PERMISSIONS,
 } from './rbac.js';
 export type { MemberRole, Permission } from './rbac.js';
+export {
+  CATALOG_LIMITS,
+  MONEY_PATTERN,
+  PRODUCT_SORT_FIELDS,
+  PRODUCT_STATUSES,
+  SKU_PATTERN,
+  SORT_ORDERS,
+} from './catalog.js';
+export type {
+  Category,
+  CategoryListResponse,
+  CategoryResponse,
+  CreateCategoryRequest,
+  CreateProductRequest,
+  Pagination,
+  Product,
+  ProductCategoryRef,
+  ProductListItem,
+  ProductListQuery,
+  ProductListResponse,
+  ProductResponse,
+  ProductSortField,
+  ProductStatus,
+  SortOrder,
+  UpdateCategoryRequest,
+  UpdateProductRequest,
+} from './catalog.js';

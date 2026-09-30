@@ -183,6 +183,8 @@ Indexes follow expected query patterns, and every foreign key has a supporting i
 | `products (organization_id, sku)` UNIQUE                                                           | SKU uniqueness; barcode/SKU lookup                                                                |
 | `products (organization_id, category_id)`                                                          | Filter by category; category foreign key                                                          |
 | `products (organization_id, status)`                                                               | Active-only catalog lists                                                                         |
+| `products (organization_id, created_at DESC)`                                                      | Product list, newest first (default sort; Phase 5)                                                |
+| `products (organization_id, name)`                                                                 | Product list sorted by name (Phase 5)                                                             |
 | `warehouses (organization_id, code)` UNIQUE                                                        | Code uniqueness and lookup                                                                        |
 | `inventory (warehouse_id, product_id)` UNIQUE                                                      | One row per product per warehouse; "all stock in warehouse W"; warehouse foreign key              |
 | `inventory (organization_id, product_id)`                                                          | "Stock of product P across warehouses"; product foreign key                                       |
@@ -203,7 +205,7 @@ Indexes follow expected query patterns, and every foreign key has a supporting i
 | `activity_logs (organization_id, entity_type, entity_id, created_at DESC)`                         | History of one entity                                                                             |
 | `stock_movements (actor_user_id)`, `activity_logs (actor_user_id)`                                 | `ON DELETE SET NULL` when a user is deleted (avoids full scans)                                   |
 
-Deliberately **not** indexed yet: free-text search on names and descriptions (add `pg_trgm` GIN indexes when search is built), JSONB `metadata` (add GIN only when a real filter pattern appears), and low-cardinality flags on their own (`is_active`).
+Deliberately **not** indexed yet: substring search on product names and SKUs (`ILIKE '%…%'` within one organization; add `pg_trgm` GIN indexes when catalogs grow, see [products-categories.md](products-categories.md#indexes)), JSONB `metadata` (add GIN only when a real filter pattern appears), and low-cardinality flags on their own (`is_active`).
 
 ## Integrity constraints
 
@@ -260,17 +262,17 @@ Violations surface in Prisma 7 as `PrismaClientKnownRequestError`, with the raw 
 | Data            | Content                                                                                                                                                                                           |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Users           | Owner, admin, and staff of the demo organization plus `newcomer@demo-trading.example` (no workspace), all with the **development-only** password `demo-password-2026` (stored as Argon2id hashes) |
-| Catalog         | 3 categories, 5 products                                                                                                                                                                          |
+| Catalog         | 4 categories, 10 products (one archived); the Accessories category and its products are ensured on every run                                                                                      |
 | Warehouses      | `MAIN` and `EAST`                                                                                                                                                                                 |
 | Customers       | 2                                                                                                                                                                                                 |
 | Stock movements | 13 (initial purchases, a MAIN→EAST transfer, damage, an adjustment, sales) and 8 inventory rows consistent with the ledger                                                                        |
 | Orders          | `SO-1001` (COMPLETED, with SALE movements) and `SO-1002` (CONFIRMED)                                                                                                                              |
-| Activity logs   | 13                                                                                                                                                                                                |
+| Activity logs   | 20 (13 from the base seed, 7 from the catalog additions)                                                                                                                                          |
 
 Details:
 
 - **Deterministic:** fixed names, SKUs, quantities, prices, and timestamps (from 2026-09-01). UUIDs are generated per run.
-- **Idempotent:** skips if `demo-trading` already exists. It still sets the development password on demo users that have none (databases seeded before authentication existed).
+- **Idempotent:** skips if `demo-trading` already exists. It still sets the development password on demo users that have none (databases seeded before authentication existed), adds missing demo team members, and adds the Accessories catalog additions (matched by name and SKU, never duplicated or overwritten).
 - **Atomic:** runs in one transaction.
 - **Development only:** refuses `NODE_ENV=production`. All names are fictional, emails use the reserved `.example` domain, and phone numbers use 555-01xx.
 

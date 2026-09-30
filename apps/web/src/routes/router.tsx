@@ -2,6 +2,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router';
 import { AppShell } from '@/layouts/app-shell';
 import { AuthLayout } from '@/layouts/auth-layout';
 import { OrganizationLayout } from '@/layouts/organization-layout';
+import { CategoriesPage } from '@/pages/categories-page';
 import { HealthCheckPage } from '@/pages/health-check-page';
 import { HomeRedirectPage } from '@/pages/home-redirect-page';
 import { InvitationPage } from '@/pages/invitation-page';
@@ -11,6 +12,10 @@ import { OnboardingPage } from '@/pages/onboarding-page';
 import { OrganizationHomePage } from '@/pages/organization-home-page';
 import { OrganizationSettingsPage } from '@/pages/organization-settings-page';
 import { OrganizationsPage } from '@/pages/organizations-page';
+import { ProductDetailPage } from '@/pages/product-detail-page';
+import { ProductEditPage } from '@/pages/product-edit-page';
+import { ProductNewPage } from '@/pages/product-new-page';
+import { ProductsPage } from '@/pages/products-page';
 import { RegisterPage } from '@/pages/register-page';
 import { RouteErrorPage } from '@/pages/route-error-page';
 import { TeamPage } from '@/pages/team-page';
@@ -59,6 +64,11 @@ export const routes: RouteObject[] = [
                 element: <OrganizationLayout />,
                 children: [
                   { index: true, element: <OrganizationHomePage /> },
+                  { path: 'products', element: <ProductsPage /> },
+                  { path: 'products/new', element: <ProductNewPage /> },
+                  { path: 'products/:productId', element: <ProductDetailPage /> },
+                  { path: 'products/:productId/edit', element: <ProductEditPage /> },
+                  { path: 'categories', element: <CategoriesPage /> },
                   { path: 'team', element: <TeamPage /> },
                   { path: 'settings', element: <OrganizationSettingsPage /> },
                 ],
