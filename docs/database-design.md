@@ -111,23 +111,23 @@ Stock is stored twice, on purpose:
 
 A single mutable number loses history: you can't audit shrinkage, explain a discrepancy, or rebuild stock at a past date. A ledger alone makes "current stock" an aggregation over every movement ever recorded. Keeping both gives O(1) reads plus a complete audit trail.
 
-**Invariant (future inventory service):** every change to `inventory.quantity` happens in the **same transaction** as an insert into `stock_movements`, where
+**Invariant (enforced by `StockOperationsService` since Phase 6, see [warehouses-inventory.md](warehouses-inventory.md)):** every change to `inventory.quantity` happens in the **same transaction** as an insert into `stock_movements`, where
 
 - `quantity_before` = the inventory quantity before the change (read with `SELECT … FOR UPDATE`),
 - `quantity_after = quantity_before + quantity_delta` (enforced by CHECK), and
 - `quantity_after` = the new inventory quantity.
 
-The seed follows this invariant. For every product and warehouse, `inventory.quantity` equals `SUM(stock_movements.quantity_delta)`.
+The seed follows this invariant and verifies it on every run. For every product and warehouse, `inventory.quantity` equals `SUM(stock_movements.quantity_delta)` and the last `quantity_after`.
 
 **Movement semantics:**
 
-| Type                           | Direction (CHECK-enforced) | Typical reference                         |
-| ------------------------------ | -------------------------- | ----------------------------------------- |
-| `PURCHASE`                     | +                          | purchase order                            |
-| `SALE`                         | −                          | `ORDER` + order id                        |
-| `DAMAGE`                       | −                          | none (use `reason`)                       |
-| `ADJUSTMENT`                   | ± (never 0)                | none (use `reason`, e.g. cycle count)     |
-| `TRANSFER_OUT` / `TRANSFER_IN` | − / +                      | none; both legs share `transfer_group_id` |
+| Type                           | Direction (CHECK-enforced) | Typical reference                                                    |
+| ------------------------------ | -------------------------- | -------------------------------------------------------------------- |
+| `PURCHASE`                     | +                          | purchase order                                                       |
+| `SALE`                         | −                          | `ORDER` + order id                                                   |
+| `DAMAGE`                       | −                          | none (use `reason`)                                                  |
+| `ADJUSTMENT`                   | ± (never 0)                | none (use `reason`, e.g. cycle count)                                |
+| `TRANSFER_OUT` / `TRANSFER_IN` | − / +                      | `TRANSFER` + group id (Phase 6); both legs share `transfer_group_id` |
 
 `reference_type` + `reference_id` form a polymorphic link (for example `'ORDER'` + order id) rather than a foreign key. One ledger can then point at orders, purchase orders, or future documents without schema changes. The CHECK constraint only ensures the pair is complete or absent.
 
@@ -205,6 +205,8 @@ Indexes follow expected query patterns, and every foreign key has a supporting i
 | `activity_logs (organization_id, entity_type, entity_id, created_at DESC)`                         | History of one entity                                                                             |
 | `stock_movements (actor_user_id)`, `activity_logs (actor_user_id)`                                 | `ON DELETE SET NULL` when a user is deleted (avoids full scans)                                   |
 
+**Phase 6 review:** the warehouse, inventory, and movement queries are served by the Phase 2 indexes, so no index was added: inventory lists filter on `organization_id` (prefix of `inventory (organization_id, product_id)`) or a warehouse (`inventory (warehouse_id, product_id)`); movement history by warehouse, product, or organization uses the three `(organization_id, …, created_at DESC)` indexes, a transfer uses `(transfer_group_id)`, and an actor filter uses `(actor_user_id)`. A movement-type filter is evaluated on top of the `created_at` index (six values, low selectivity); add `(organization_id, movement_type, created_at DESC)` only if type-filtered feeds become slow on large ledgers.
+
 Deliberately **not** indexed yet: substring search on product names and SKUs (`ILIKE '%…%'` within one organization; add `pg_trgm` GIN indexes when catalogs grow, see [products-categories.md](products-categories.md#indexes)), JSONB `metadata` (add GIN only when a real filter pattern appears), and low-cardinality flags on their own (`is_active`).
 
 ## Integrity constraints
@@ -259,20 +261,20 @@ Violations surface in Prisma 7 as `PrismaClientKnownRequestError`, with the raw 
 
 `npm run db:seed` creates one fictional tenant, **Demo Trading Co.** (`demo-trading`):
 
-| Data            | Content                                                                                                                                                                                           |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Users           | Owner, admin, and staff of the demo organization plus `newcomer@demo-trading.example` (no workspace), all with the **development-only** password `demo-password-2026` (stored as Argon2id hashes) |
-| Catalog         | 4 categories, 10 products (one archived); the Accessories category and its products are ensured on every run                                                                                      |
-| Warehouses      | `MAIN` and `EAST`                                                                                                                                                                                 |
-| Customers       | 2                                                                                                                                                                                                 |
-| Stock movements | 13 (initial purchases, a MAIN→EAST transfer, damage, an adjustment, sales) and 8 inventory rows consistent with the ledger                                                                        |
-| Orders          | `SO-1001` (COMPLETED, with SALE movements) and `SO-1002` (CONFIRMED)                                                                                                                              |
-| Activity logs   | 20 (13 from the base seed, 7 from the catalog additions)                                                                                                                                          |
+| Data            | Content                                                                                                                                                                                                                                                                                                                    |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Users           | Owner, admin, and staff of the demo organization plus `newcomer@demo-trading.example` (no workspace), all with the **development-only** password `demo-password-2026` (stored as Argon2id hashes)                                                                                                                          |
+| Catalog         | 4 categories, 10 products (one archived); the Accessories category and its products are ensured on every run                                                                                                                                                                                                               |
+| Warehouses      | `MAIN`, `EAST`, `NORTH` (Phase 6), and the archived `OLD` depot (Phase 6, history kept)                                                                                                                                                                                                                                    |
+| Customers       | 2                                                                                                                                                                                                                                                                                                                          |
+| Stock movements | 30: 13 from the base seed (purchases, a MAIN→EAST transfer, damage, an adjustment, sales) and 17 for the accessories (Phase 6: purchases, sales, damage, a count adjustment, two transfers); 15 inventory rows consistent with the ledger, covering in-stock, low-stock (below and at the reorder level), and out-of-stock |
+| Orders          | `SO-1001` (COMPLETED, with SALE movements) and `SO-1002` (CONFIRMED)                                                                                                                                                                                                                                                       |
+| Activity logs   | 38 (13 from the base seed, 7 from the catalog additions, 18 from the warehouse/inventory additions)                                                                                                                                                                                                                        |
 
 Details:
 
 - **Deterministic:** fixed names, SKUs, quantities, prices, and timestamps (from 2026-09-01). UUIDs are generated per run.
-- **Idempotent:** skips if `demo-trading` already exists. It still sets the development password on demo users that have none (databases seeded before authentication existed), adds missing demo team members, and adds the Accessories catalog additions (matched by name and SKU, never duplicated or overwritten).
+- **Idempotent:** skips if `demo-trading` already exists. It still sets the development password on demo users that have none (databases seeded before authentication existed), adds missing demo team members, adds the Accessories catalog additions (matched by name and SKU, never duplicated or overwritten), and adds the Phase 6 warehouses and accessory stock once (keyed by the `NORTH` code, and only while that stock is untouched). Every run ends by checking that each stock record matches its movement history.
 - **Atomic:** runs in one transaction.
 - **Development only:** refuses `NODE_ENV=production`. All names are fictional, emails use the reserved `.example` domain, and phone numbers use 555-01xx.
 
@@ -286,12 +288,13 @@ To reseed from scratch, drop and recreate your **local** development database, t
 2. Every test starts from empty tables (`TRUNCATE … CASCADE`).
 3. Guard rails: the test database name must end in `_test` and differ from `DB_NAME`, and truncation re-checks `current_database()`. The development database is never touched.
 
-| Suite              | Covers                                                         |
-| ------------------ | -------------------------------------------------------------- |
-| `identity`         | Users, organizations, memberships, email/slug rules            |
-| `catalog`          | Categories, products, money precision, non-negative checks     |
-| `inventory`        | Warehouses, inventory, stock movement ledger checks, transfers |
-| `orders`           | Customers, orders, order items, snapshots                      |
-| `activity-logs`    | Tenant relation, JSONB metadata and path filters               |
-| `tenant-isolation` | Per-tenant uniqueness; cross-tenant references rejected        |
-| `delete-behavior`  | RESTRICT / CASCADE / SET NULL rules                            |
+| Suite              | Covers                                                                                                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `identity`         | Users, organizations, memberships, email/slug rules                                                                                                                                  |
+| `catalog`          | Categories, products, money precision, non-negative checks                                                                                                                           |
+| `inventory`        | Warehouses, inventory, stock movement ledger checks, transfers                                                                                                                       |
+| Phase 6 API suites | `warehouses-api`, `inventory-read`, `stock-operations`, `stock-rollback`, `stock-concurrency`, `inventory-tenant-isolation` (see [warehouses-inventory.md](warehouses-inventory.md)) |
+| `orders`           | Customers, orders, order items, snapshots                                                                                                                                            |
+| `activity-logs`    | Tenant relation, JSONB metadata and path filters                                                                                                                                     |
+| `tenant-isolation` | Per-tenant uniqueness; cross-tenant references rejected                                                                                                                              |
+| `delete-behavior`  | RESTRICT / CASCADE / SET NULL rules                                                                                                                                                  |

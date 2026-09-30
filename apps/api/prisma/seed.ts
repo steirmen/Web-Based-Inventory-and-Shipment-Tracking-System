@@ -5,7 +5,8 @@
  * - Deterministic: fixed names, SKUs, codes, quantities, prices, and timestamps.
  * - Idempotent: skips if the demo organization already exists (but still gives
  *   demo users without a password the development password, and adds missing
- *   demo team members and catalog additions — see below).
+ *   demo team members, catalog additions, and warehouse/inventory additions — see
+ *   below). Every run ends by verifying that stock matches the movement history.
  * - Atomic: runs in a single transaction.
  * - Development only: refuses to run with NODE_ENV=production. All people,
  *   emails (reserved `.example` domain), and phone numbers (555-01xx) are fictional.
@@ -68,10 +69,11 @@ interface MovementInput {
 
 /**
  * Records stock movements with consistent before/after quantities and writes the
- * resulting on-hand quantities to `inventory` — the same invariant the future
- * inventory service must maintain.
+ * resulting on-hand quantities to `inventory` — the same invariant the inventory
+ * service maintains (before + delta = after; inventory = last after = sum of deltas).
  */
 class StockLedger {
+  private recorded = 0;
   private readonly levels = new Map<
     string,
     { warehouseId: string; productId: string; quantity: number }
@@ -93,6 +95,7 @@ class StockLedger {
     level.quantity += input.delta;
     this.levels.set(key, level);
 
+    this.recorded += 1;
     await this.tx.stockMovement.create({
       data: {
         organizationId: this.organizationId,
@@ -118,8 +121,10 @@ class StockLedger {
     productId: string;
     quantity: number;
     createdAt: Date;
-    actorUserId: string;
+    actorUserId?: string;
     reason: string;
+    /** Reference both legs to the transfer itself, as the inventory service does (Phase 6). */
+    referenceTransfer?: boolean;
   }): Promise<string> {
     const transferGroupId = randomUUID();
     const shared = {
@@ -128,6 +133,9 @@ class StockLedger {
       actorUserId: input.actorUserId,
       reason: input.reason,
       transferGroupId,
+      ...(input.referenceTransfer
+        ? { referenceType: 'TRANSFER', referenceId: transferGroupId }
+        : {}),
     };
     await this.record({
       ...shared,
@@ -142,6 +150,15 @@ class StockLedger {
       delta: input.quantity,
     });
     return transferGroupId;
+  }
+
+  /** Current quantity of one (warehouse, product) pair in this ledger. */
+  quantity(warehouseId: string, productId: string): number {
+    return this.levels.get(`${warehouseId}:${productId}`)?.quantity ?? 0;
+  }
+
+  get movementCount(): number {
+    return this.recorded;
   }
 
   async writeInventory(): Promise<number> {
@@ -583,8 +600,8 @@ async function ensureDemoTeam(tx: Tx, passwordHash: string): Promise<string[]> {
  * Catalog additions (Phase 5): an "Accessories" category, four accessories,
  * and one archived product, so search, filters, sorting, pagination, and the
  * archived state have something to show. Matched by category name and SKU,
- * so re-running never duplicates them and never changes existing rows. No
- * inventory is created for them (inventory is a later module).
+ * so re-running never duplicates them and never changes existing rows. Their
+ * stock is added by ensureInventoryAdditions (Phase 6).
  */
 const CATALOG_ADDITIONS = {
   category: { name: 'Accessories', description: 'Desk and computer accessories.' },
@@ -700,6 +717,320 @@ async function ensureCatalogAdditions(tx: Tx): Promise<string[]> {
   return changes;
 }
 
+/**
+ * Warehouse & inventory additions (Phase 6): a third active warehouse, a
+ * closed (archived) depot whose history is kept, and stock for the Phase 5
+ * accessories built from purchases, sales, damage, an adjustment, and
+ * transfers. Every quantity comes from the movement ledger, so inventory
+ * matches history exactly. Resulting stock:
+ *   Wireless Mouse (min 10):  MAIN 7 (low), NORTH 10 (low, at the reorder level), EAST 0 (out)
+ *   Keyboard (min 8):         MAIN 26 (in stock), OLD 0 (archived depot)
+ *   Monitor (min 3):          EAST 0 (out; one written off as damaged)
+ *   Laptop Stand (min 5):     NORTH 15 (in stock, after a count adjustment)
+ * Applied once (keyed by the NORTH warehouse code), and only while none of the
+ * affected stock exists yet, so it never rewrites stock someone has changed.
+ */
+const INVENTORY_ADDITIONS = {
+  north: {
+    code: 'NORTH',
+    name: 'North Overflow Storage',
+    address: '8 Placeholder Lane, Lakeside',
+  },
+  old: { code: 'OLD', name: 'Harbor Street Depot (closed)', address: '3 Sample Quay, Springfield' },
+  skus: {
+    mouse: 'ACC-MOUSE-WL',
+    keyboard: 'ACC-KB-US',
+    monitor: 'ACC-MON-24',
+    stand: 'ACC-STAND-AL',
+  },
+} as const;
+
+async function ensureInventoryAdditions(tx: Tx): Promise<string[]> {
+  const organization = await tx.organization.findUniqueOrThrow({
+    where: { slug: SEED_ORGANIZATION_SLUG },
+    select: { id: true },
+  });
+  const organizationId = organization.id;
+  const { north: northData, old: oldData, skus } = INVENTORY_ADDITIONS;
+
+  const existing = await tx.warehouse.findUnique({
+    where: { organizationId_code: { organizationId, code: northData.code } },
+    select: { id: true },
+  });
+  if (existing) return [];
+
+  const warehouses = await tx.warehouse.findMany({
+    where: { organizationId, code: { in: ['MAIN', 'EAST', oldData.code] } },
+    select: { id: true, code: true },
+  });
+  const products = await tx.product.findMany({
+    where: { organizationId, sku: { in: Object.values(skus) }, status: 'ACTIVE' },
+    select: { id: true, sku: true },
+  });
+  const main = warehouses.find((warehouse) => warehouse.code === 'MAIN');
+  const east = warehouses.find((warehouse) => warehouse.code === 'EAST');
+  const productId = (sku: string) => products.find((product) => product.sku === sku)?.id;
+  const [mouse, keyboard, monitor, stand] = [
+    productId(skus.mouse),
+    productId(skus.keyboard),
+    productId(skus.monitor),
+    productId(skus.stand),
+  ];
+  const touched = await tx.inventory.count({
+    where: { organizationId, productId: { in: products.map((product) => product.id) } },
+  });
+  if (!main || !east || !mouse || !keyboard || !monitor || !stand || touched > 0) {
+    return ['skipped demo stock: the demo warehouses or accessories were changed by hand'];
+  }
+  if (warehouses.some((warehouse) => warehouse.code === oldData.code)) {
+    return ['skipped demo stock: a warehouse with code OLD already exists'];
+  }
+
+  const users = await tx.user.findMany({
+    where: {
+      email: {
+        in: [
+          'owner@demo-trading.example',
+          'admin@demo-trading.example',
+          'staff@demo-trading.example',
+        ],
+      },
+    },
+    select: { id: true, email: true },
+  });
+  const userId = (email: string) => users.find((user) => user.email === email)?.id ?? null;
+  const owner = userId('owner@demo-trading.example');
+  const admin = userId('admin@demo-trading.example') ?? owner;
+  const staff = userId('staff@demo-trading.example') ?? owner;
+
+  const north = await tx.warehouse.create({
+    data: { organizationId, ...northData, createdAt: at(12) },
+    select: { id: true, code: true, name: true },
+  });
+  const old = await tx.warehouse.create({
+    data: { organizationId, ...oldData, createdAt: at(12) },
+    select: { id: true, code: true, name: true },
+  });
+  const codeOf = new Map([
+    [main.id, 'MAIN'],
+    [east.id, 'EAST'],
+    [north.id, north.code],
+    [old.id, old.code],
+  ]);
+  const skuOf = new Map(products.map((product) => [product.id, product.sku]));
+
+  const ledger = new StockLedger(tx, organizationId);
+  const activity: Omit<Prisma.ActivityLogCreateManyInput, 'organizationId'>[] = [
+    ...[north, old].map((warehouse) => ({
+      action: 'WAREHOUSE_CREATED',
+      entityType: 'Warehouse',
+      entityId: warehouse.id,
+      actorUserId: admin,
+      metadata: { name: warehouse.name, code: warehouse.code },
+      createdAt: at(12),
+    })),
+  ];
+
+  /** One receive/issue/damage/adjustment, with its activity entry (same shape as the service). */
+  const change = async (input: {
+    type: 'PURCHASE' | 'SALE' | 'DAMAGE' | 'ADJUSTMENT';
+    warehouseId: string;
+    productId: string;
+    delta: number;
+    day: number;
+    hour: number;
+    actorUserId: string | null;
+    reason?: string;
+  }) => {
+    const createdAt = at(input.day, input.hour);
+    const before = ledger.quantity(input.warehouseId, input.productId);
+    await ledger.record({
+      warehouseId: input.warehouseId,
+      productId: input.productId,
+      type: StockMovementType[input.type],
+      delta: input.delta,
+      createdAt,
+      actorUserId: input.actorUserId ?? undefined,
+      reason: input.reason,
+    });
+    const actions = {
+      PURCHASE: 'STOCK_RECEIVED',
+      SALE: 'STOCK_ISSUED',
+      DAMAGE: 'STOCK_DAMAGED',
+      ADJUSTMENT: 'STOCK_ADJUSTED',
+    } as const;
+    activity.push({
+      action: actions[input.type],
+      entityType: 'Product',
+      entityId: input.productId,
+      actorUserId: input.actorUserId,
+      metadata: {
+        warehouseId: input.warehouseId,
+        warehouseCode: codeOf.get(input.warehouseId) ?? null,
+        productId: input.productId,
+        sku: skuOf.get(input.productId) ?? null,
+        ...(input.type === 'ADJUSTMENT' ? {} : { quantity: Math.abs(input.delta) }),
+        quantityBefore: before,
+        quantityAfter: before + input.delta,
+        quantityDelta: input.delta,
+      },
+      createdAt,
+    });
+  };
+
+  const transfer = async (input: {
+    from: string;
+    to: string;
+    productId: string;
+    quantity: number;
+    day: number;
+    hour: number;
+    actorUserId: string | null;
+    reason: string;
+  }) => {
+    const createdAt = at(input.day, input.hour);
+    const sourceBefore = ledger.quantity(input.from, input.productId);
+    const destinationBefore = ledger.quantity(input.to, input.productId);
+    const transferGroupId = await ledger.transfer({
+      fromWarehouseId: input.from,
+      toWarehouseId: input.to,
+      productId: input.productId,
+      quantity: input.quantity,
+      createdAt,
+      actorUserId: input.actorUserId ?? undefined,
+      reason: input.reason,
+      referenceTransfer: true,
+    });
+    activity.push({
+      action: 'STOCK_TRANSFERRED',
+      entityType: 'Product',
+      entityId: input.productId,
+      actorUserId: input.actorUserId,
+      metadata: {
+        productId: input.productId,
+        sku: skuOf.get(input.productId) ?? null,
+        sourceWarehouseId: input.from,
+        sourceWarehouseCode: codeOf.get(input.from) ?? null,
+        destinationWarehouseId: input.to,
+        destinationWarehouseCode: codeOf.get(input.to) ?? null,
+        quantity: input.quantity,
+        transferGroupId,
+        source: { quantityBefore: sourceBefore, quantityAfter: sourceBefore - input.quantity },
+        destination: {
+          quantityBefore: destinationBefore,
+          quantityAfter: destinationBefore + input.quantity,
+        },
+      },
+      createdAt,
+    });
+  };
+
+  // prettier-ignore
+  type Step =
+    | { kind: 'PURCHASE' | 'SALE' | 'DAMAGE' | 'ADJUSTMENT'; at: [number, number]; warehouse: string; product: string; delta: number; by: string | null; reason?: string }
+    | { kind: 'TRANSFER'; at: [number, number]; from: string; to: string; product: string; quantity: number; by: string | null; reason: string }
+    | { kind: 'ARCHIVE'; at: [number, number]; warehouse: string; by: string | null };
+  // prettier-ignore
+  const steps: Step[] = [
+    // Keyboard: stocked at the old depot, moved to MAIN, then the depot closed.
+    { kind: 'PURCHASE', at: [12, 1], warehouse: old.id, product: keyboard, delta: 10, by: staff, reason: 'Supplier delivery DN-2041' },
+    { kind: 'TRANSFER', at: [13, 1], from: old.id, to: main.id, product: keyboard, quantity: 10, by: admin, reason: 'Depot closing: move remaining stock' },
+    { kind: 'ARCHIVE', at: [13, 3], warehouse: old.id, by: admin },
+    { kind: 'PURCHASE', at: [14, 1], warehouse: main.id, product: keyboard, delta: 20, by: staff, reason: 'Supplier delivery DN-2057' },
+    { kind: 'SALE', at: [17, 2], warehouse: main.id, product: keyboard, delta: -4, by: staff, reason: 'Counter sale' },
+    // Wireless Mouse: low in MAIN and NORTH, sold out in EAST.
+    { kind: 'PURCHASE', at: [12, 2], warehouse: main.id, product: mouse, delta: 40, by: staff, reason: 'Supplier delivery DN-2042' },
+    { kind: 'PURCHASE', at: [12, 3], warehouse: east.id, product: mouse, delta: 5, by: staff, reason: 'Supplier delivery DN-2043' },
+    { kind: 'SALE', at: [15, 2], warehouse: main.id, product: mouse, delta: -25, by: staff, reason: 'Bulk sale to a walk-in customer' },
+    { kind: 'TRANSFER', at: [16, 1], from: main.id, to: north.id, product: mouse, quantity: 8, by: admin, reason: 'Overflow storage' },
+    { kind: 'PURCHASE', at: [16, 4], warehouse: north.id, product: mouse, delta: 2, by: staff },
+    { kind: 'SALE', at: [18, 1], warehouse: east.id, product: mouse, delta: -5, by: staff },
+    // Monitor: one damaged on arrival, the rest sold.
+    { kind: 'PURCHASE', at: [12, 4], warehouse: east.id, product: monitor, delta: 6, by: staff, reason: 'Supplier delivery DN-2044' },
+    { kind: 'DAMAGE', at: [13, 2], warehouse: east.id, product: monitor, delta: -1, by: staff, reason: 'Cracked screen on arrival' },
+    { kind: 'SALE', at: [18, 3], warehouse: east.id, product: monitor, delta: -5, by: staff },
+    // Laptop Stand: a cycle count found more than the system showed.
+    { kind: 'PURCHASE', at: [14, 2], warehouse: north.id, product: stand, delta: 12, by: staff, reason: 'Supplier delivery DN-2058' },
+    { kind: 'ADJUSTMENT', at: [19, 1], warehouse: north.id, product: stand, delta: 3, by: owner, reason: 'Cycle count: 3 units found on the returns shelf' },
+  ];
+  // Applied in time order, so each (warehouse, product) history chains correctly.
+  steps.sort((a, b) => a.at[0] - b.at[0] || a.at[1] - b.at[1]);
+  for (const step of steps) {
+    const [day, hour] = step.at;
+    if (step.kind === 'TRANSFER') {
+      await transfer({
+        from: step.from,
+        to: step.to,
+        productId: step.product,
+        quantity: step.quantity,
+        day,
+        hour,
+        actorUserId: step.by,
+        reason: step.reason,
+      });
+    } else if (step.kind === 'ARCHIVE') {
+      activity.push({
+        action: 'WAREHOUSE_ARCHIVED',
+        entityType: 'Warehouse',
+        entityId: step.warehouse,
+        actorUserId: step.by,
+        metadata: { name: old.name, code: old.code },
+        createdAt: at(day, hour),
+      });
+    } else {
+      await change({
+        type: step.kind,
+        warehouseId: step.warehouse,
+        productId: step.product,
+        delta: step.delta,
+        day,
+        hour,
+        actorUserId: step.by,
+        reason: step.reason,
+      });
+    }
+  }
+
+  // The depot closes only after its stock has moved out.
+  await tx.warehouse.update({ where: { id: old.id }, data: { isActive: false } });
+  const inventoryRows = await ledger.writeInventory();
+  await tx.activityLog.createMany({
+    data: activity.map((entry) => ({ ...entry, organizationId })),
+  });
+  return [
+    `created warehouses NORTH and OLD (archived) with ${inventoryRows} stock records and ${ledger.movementCount} movements`,
+  ];
+}
+
+/**
+ * Checks the core inventory invariant for the demo organization: every stock
+ * record equals the last `quantityAfter` and the sum of its movements.
+ */
+async function verifyStockLedger(prisma: PrismaClient): Promise<number> {
+  const mismatches = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT i.id
+    FROM inventory i
+    JOIN organizations o ON o.id = i.organization_id AND o.slug = ${SEED_ORGANIZATION_SLUG}
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(SUM(m.quantity_delta), 0)::int AS total,
+             (SELECT last.quantity_after FROM stock_movements last
+              WHERE last.warehouse_id = i.warehouse_id AND last.product_id = i.product_id
+              ORDER BY last.created_at DESC, last.id DESC LIMIT 1) AS last_after
+      FROM stock_movements m
+      WHERE m.warehouse_id = i.warehouse_id AND m.product_id = i.product_id
+    ) ledger ON true
+    WHERE i.quantity <> ledger.total OR i.quantity <> COALESCE(ledger.last_after, 0)`;
+  if (mismatches.length > 0) {
+    throw new Error(
+      `Stock ledger mismatch for inventory ${mismatches.map((row) => row.id).join(', ')}.`,
+    );
+  }
+  const [{ count }] = await prisma.$queryRaw<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count FROM inventory i
+    JOIN organizations o ON o.id = i.organization_id AND o.slug = ${SEED_ORGANIZATION_SLUG}`;
+  return count;
+}
+
 async function main(): Promise<void> {
   loadEnv({ path: ROOT_ENV_FILE, quiet: true });
 
@@ -747,6 +1078,18 @@ async function main(): Promise<void> {
         ? `Demo catalog updated: ${catalogChanges.join('; ')}.`
         : 'Demo catalog is up to date.',
     );
+
+    const inventoryChanges = await prisma.$transaction((tx) => ensureInventoryAdditions(tx), {
+      timeout: 60_000,
+    });
+    console.log(
+      inventoryChanges.length > 0
+        ? `Demo inventory updated: ${inventoryChanges.join('; ')}.`
+        : 'Demo inventory is up to date.',
+    );
+
+    const verified = await verifyStockLedger(prisma);
+    console.log(`Stock ledger verified: ${verified} stock records match their movement history.`);
   } finally {
     await prisma.$disconnect();
   }

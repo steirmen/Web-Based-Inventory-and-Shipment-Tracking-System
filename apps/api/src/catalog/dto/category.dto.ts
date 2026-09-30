@@ -5,7 +5,7 @@ import {
 } from '@app/shared';
 import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
-import { toNormalizedName, toOptionalText } from './transforms.js';
+import { toNormalizedName, toOptionalText } from '../../common/validation/transforms.js';
 
 const NAME_MAX = CATALOG_LIMITS.categoryNameMaxLength;
 const DESCRIPTION_MAX = CATALOG_LIMITS.categoryDescriptionMaxLength;

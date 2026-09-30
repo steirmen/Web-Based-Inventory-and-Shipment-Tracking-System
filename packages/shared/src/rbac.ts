@@ -29,6 +29,22 @@ export const PERMISSIONS = [
   'CATEGORIES_CREATE',
   'CATEGORIES_UPDATE',
   'CATEGORIES_DELETE',
+  'WAREHOUSES_READ',
+  'WAREHOUSES_CREATE',
+  'WAREHOUSES_UPDATE',
+  /** Archive and restore warehouses. */
+  'WAREHOUSES_ARCHIVE',
+  /** Inventory list and detail (with its movement history). */
+  'INVENTORY_READ',
+  /** Receive stock (PURCHASE movements). */
+  'INVENTORY_RECEIVE',
+  /** Remove stock: issue (SALE) and damage/write-off (DAMAGE). */
+  'INVENTORY_ISSUE',
+  /** Set a counted quantity (ADJUSTMENT). */
+  'INVENTORY_ADJUST',
+  /** Move stock between warehouses (TRANSFER_OUT + TRANSFER_IN). */
+  'INVENTORY_TRANSFER',
+  'STOCK_MOVEMENTS_READ',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -49,6 +65,16 @@ export const ROLE_PERMISSIONS: Record<MemberRole, readonly Permission[]> = {
     'CATEGORIES_CREATE',
     'CATEGORIES_UPDATE',
     'CATEGORIES_DELETE',
+    'WAREHOUSES_READ',
+    'WAREHOUSES_CREATE',
+    'WAREHOUSES_UPDATE',
+    'WAREHOUSES_ARCHIVE',
+    'INVENTORY_READ',
+    'INVENTORY_RECEIVE',
+    'INVENTORY_ISSUE',
+    'INVENTORY_ADJUST',
+    'INVENTORY_TRANSFER',
+    'STOCK_MOVEMENTS_READ',
   ],
   STAFF: [
     'ORGANIZATION_READ',
@@ -59,6 +85,11 @@ export const ROLE_PERMISSIONS: Record<MemberRole, readonly Permission[]> = {
     'CATEGORIES_READ',
     'CATEGORIES_CREATE',
     'CATEGORIES_UPDATE',
+    'WAREHOUSES_READ',
+    'INVENTORY_READ',
+    'INVENTORY_RECEIVE',
+    'INVENTORY_ISSUE',
+    'STOCK_MOVEMENTS_READ',
   ],
 };
 

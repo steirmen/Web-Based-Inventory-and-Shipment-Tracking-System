@@ -27,7 +27,7 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
-import { toNormalizedName, toOptionalText, toTrimmed } from './transforms.js';
+import { toNormalizedName, toOptionalText, toTrimmed } from '../../common/validation/transforms.js';
 
 const L = CATALOG_LIMITS;
 const MONEY_MESSAGE = (field: string) =>

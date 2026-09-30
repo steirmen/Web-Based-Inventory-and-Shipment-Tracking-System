@@ -29,6 +29,7 @@ src/
   auth/              Register/login/logout/me, sessions, Argon2id passwords, global SessionAuthGuard
   organizations/     Organizations, members, invitations; OrganizationAccessGuard + @RequirePermissions (RBAC)
   catalog/           Categories and products (list/search/sort/paginate, archive/restore); see products-categories.md
+  inventory/         Warehouses, inventory, stock operations (one transaction each), stock movement ledger; see warehouses-inventory.md
   activity/          recordActivity(): audit entries written inside the caller's transaction
   health/            GET /health (public)
   generated/prisma/  Prisma client output (git-ignored, created by `prisma generate`)
@@ -74,7 +75,7 @@ src/
   hooks/             TanStack Query hooks wrapping api/ functions
   components/ui/     Design-system primitives (Button, Input, Card, ...)
   components/layout/ Page-structure primitives (Container, PageHeader, page states, PaginationBar)
-  components/<feature>/ Feature components (organization, team, products, categories)
+  components/<feature>/ Feature components (organization, team, products, categories, warehouses, inventory)
   layouts/           Route layouts (AppShell for the app, AuthLayout for sign-in/register)
   pages/             Route components
   routes/            Route table (router.tsx), path constants (paths.ts), RequireAuth/RequireGuest guards
@@ -101,18 +102,22 @@ Components never call `fetch`. The API base URL comes only from `VITE_API_BASE_U
 
 ### Routes
 
-| Path                            | Access                | Page                                                                       |
-| ------------------------------- | --------------------- | -------------------------------------------------------------------------- |
-| `/`                             | authenticated         | Redirects to onboarding, the last or only workspace, or the workspace list |
-| `/onboarding`                   | authenticated         | Create a workspace                                                         |
-| `/organizations`                | authenticated         | The user's workspaces                                                      |
-| `/org/:organizationId`          | member (API-verified) | Workspace home                                                             |
-| `/org/:organizationId/team`     | member                | Team, invitations, roles, ownership                                        |
-| `/org/:organizationId/settings` | member                | Workspace settings                                                         |
-| `/login`, `/register`           | guest only            | Sign in, create account                                                    |
-| `/invite/:token`                | public                | View and accept an invitation                                              |
-| `/health-check`                 | public                | Technical frontend → API → database check                                  |
-| `*`                             | public                | 404                                                                        |
+| Path                                                           | Access                | Page                                                                       |
+| -------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------- |
+| `/`                                                            | authenticated         | Redirects to onboarding, the last or only workspace, or the workspace list |
+| `/onboarding`                                                  | authenticated         | Create a workspace                                                         |
+| `/organizations`                                               | authenticated         | The user's workspaces                                                      |
+| `/org/:organizationId`                                         | member (API-verified) | Workspace home                                                             |
+| `/org/:organizationId/products`, `…/categories`                | member                | Product catalog (see products-categories.md)                               |
+| `/org/:organizationId/inventory`                               | member                | Stock per product and warehouse, stock operations                          |
+| `/org/:organizationId/warehouses`, `…/warehouses/:warehouseId` | member                | Warehouses (see warehouses-inventory.md)                                   |
+| `/org/:organizationId/stock-movements`                         | member                | Read-only stock movement history                                           |
+| `/org/:organizationId/team`                                    | member                | Team, invitations, roles, ownership                                        |
+| `/org/:organizationId/settings`                                | member                | Workspace settings                                                         |
+| `/login`, `/register`                                          | guest only            | Sign in, create account                                                    |
+| `/invite/:token`                                               | public                | View and accept an invitation                                              |
+| `/health-check`                                                | public                | Technical frontend → API → database check                                  |
+| `*`                                                            | public                | 404                                                                        |
 
 ## Environment
 

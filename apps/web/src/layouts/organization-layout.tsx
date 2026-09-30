@@ -56,6 +56,9 @@ export function OrganizationLayout() {
     { to: paths.organization(organizationId), label: 'Overview', end: true },
     { to: paths.products(organizationId), label: 'Products', end: false },
     { to: paths.categories(organizationId), label: 'Categories', end: false },
+    { to: paths.inventory(organizationId), label: 'Inventory', end: false },
+    { to: paths.warehouses(organizationId), label: 'Warehouses', end: false },
+    { to: paths.stockMovements(organizationId), label: 'Stock movements', end: false },
     { to: paths.organizationTeam(organizationId), label: 'Team', end: false },
     { to: paths.organizationSettings(organizationId), label: 'Settings', end: false },
   ];

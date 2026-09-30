@@ -5,6 +5,7 @@ import { OrganizationLayout } from '@/layouts/organization-layout';
 import { CategoriesPage } from '@/pages/categories-page';
 import { HealthCheckPage } from '@/pages/health-check-page';
 import { HomeRedirectPage } from '@/pages/home-redirect-page';
+import { InventoryPage } from '@/pages/inventory-page';
 import { InvitationPage } from '@/pages/invitation-page';
 import { LoginPage } from '@/pages/login-page';
 import { NotFoundPage } from '@/pages/not-found-page';
@@ -18,7 +19,10 @@ import { ProductNewPage } from '@/pages/product-new-page';
 import { ProductsPage } from '@/pages/products-page';
 import { RegisterPage } from '@/pages/register-page';
 import { RouteErrorPage } from '@/pages/route-error-page';
+import { StockMovementsPage } from '@/pages/stock-movements-page';
 import { TeamPage } from '@/pages/team-page';
+import { WarehouseDetailPage } from '@/pages/warehouse-detail-page';
+import { WarehousesPage } from '@/pages/warehouses-page';
 import { RequireAuth, RequireGuest } from './guards';
 import { paths, routePatterns } from './paths';
 
@@ -69,6 +73,10 @@ export const routes: RouteObject[] = [
                   { path: 'products/:productId', element: <ProductDetailPage /> },
                   { path: 'products/:productId/edit', element: <ProductEditPage /> },
                   { path: 'categories', element: <CategoriesPage /> },
+                  { path: 'warehouses', element: <WarehousesPage /> },
+                  { path: 'warehouses/:warehouseId', element: <WarehouseDetailPage /> },
+                  { path: 'inventory', element: <InventoryPage /> },
+                  { path: 'stock-movements', element: <StockMovementsPage /> },
                   { path: 'team', element: <TeamPage /> },
                   { path: 'settings', element: <OrganizationSettingsPage /> },
                 ],

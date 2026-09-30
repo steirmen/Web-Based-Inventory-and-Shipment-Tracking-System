@@ -15,7 +15,8 @@ Work is delivered in explicit phases. **Only implement what the current phase as
 - **Phase 3 (done): authentication.** Register/login/logout/me, Argon2id passwords, database-backed sessions (`Session` model) in an HttpOnly cookie, global auth guard, rate limiting, standard error responses, login/register UI, protected and guest routes, authenticated landing page. See [docs/authentication.md](docs/authentication.md).
 - **Phase 4 (done): organizations & RBAC.** Organization creation/listing/switching (`/org/:organizationId` routes), OrganizationAccessGuard + `@RequirePermissions`, OWNER/ADMIN/STAFF matrix, team management, invitation links, ownership transfer, organization activity logging. See [docs/organizations-rbac.md](docs/organizations-rbac.md).
 - **Phase 5 (done): products & categories.** Category CRUD (delete only when unused), products with server-side search/filter/sort/pagination, archive/restore (no product delete), catalog permissions, activity logging, product list/create/edit/detail and categories UI, seed additions. See [docs/products-categories.md](docs/products-categories.md).
-- **Later phases:** warehouses, inventory, stock movements, customers, orders, dashboard/reporting (APIs and UI). Password reset, email verification, email delivery, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
+- **Phase 6 (done): warehouses & inventory.** Warehouse CRUD with immutable codes and archive/restore (no delete), inventory list/detail with low-stock states, receive/issue/damage/adjust/transfer in one row-locked transaction each, immutable stock movement history (filters, transfer groups), inventory permissions, activity logging, warehouses/inventory/stock-movements UI, seed additions. No schema changes. See [docs/warehouses-inventory.md](docs/warehouses-inventory.md).
+- **Later phases:** customers, orders (including order/inventory integration), dashboard/reporting (APIs and UI). Password reset, email verification, email delivery, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
 
 Environment constraints: **local development only. No Docker, no Docker Compose, no WSL.** PostgreSQL runs natively on the Windows host.
 
@@ -76,7 +77,7 @@ npm run db:seed      # idempotent demo data
 - Record organization mutations with `recordActivity(tx, …)` **inside the same transaction**. Never put passwords, hashes, session tokens, or invitation tokens in metadata.
 - Raw invitation tokens are returned once (in `inviteUrl`) and never persisted or logged. Store `hashToken(token)` (`src/common/security/secure-token.ts`).
 - Frontend permission checks (`<Can>`, `useCurrentOrganization().can/canManage`) are **UX only**. The API is authoritative.
-- Do not implement inventory, warehouse, stock movement, customer, order, or dashboard functionality until those phases.
+- Do not implement customer, order, or dashboard functionality until those phases.
 
 ### Products & categories (read [docs/products-categories.md](docs/products-categories.md))
 
@@ -86,6 +87,20 @@ npm run db:seed      # idempotent demo data
 - A `categoryId` from a client (body or filter) must be looked up **with** the organization id; a foreign one is `422 PRODUCT_CATEGORY_NOT_FOUND`.
 - Frontend catalog query keys live under `organizationKeys.detail(organizationId)` (`catalogKeys` in `src/api/catalog.ts`); invalidate by organization after mutations. `OrganizationLayout` keys the page outlet by organization id, so don't rely on page state surviving a workspace switch.
 - Confirm destructive or meaningful actions with `ConfirmDialog`/`Dialog` (`components/ui`), not `window.confirm`.
+
+### Warehouses & inventory (read [docs/warehouses-inventory.md](docs/warehouses-inventory.md))
+
+- Inventory, warehouses, and stock movements are **organization-scoped** like everything else: routes under `organizations/:organizationId`, queries filtered by `context.organization.id`, and every `warehouseId`/`productId` from a body or filter looked up **with** the organization id (foreign → `422 INVENTORY_WAREHOUSE_NOT_FOUND` / `INVENTORY_PRODUCT_NOT_FOUND`). Organization ids are never taken from bodies.
+- **Stock movements are immutable.** Never update or delete a `stock_movements` row, and never add a route that could (`stock-movement-immutability.spec.ts` fails if you do). Corrections are new movements.
+- **Every stock mutation goes through `StockOperationsService` and its single `transaction()`**: lock → read current quantity → validate → update `inventory` → insert `StockMovement` → `recordActivity`, all in the same transaction. Never read a quantity outside the transaction and write it later, and never change `inventory.quantity` anywhere else (controllers never touch inventory rows).
+- Lock order is fixed: `warehouses` FOR SHARE (id order) → `products` FOR SHARE → `inventory` FOR UPDATE (warehouse-id order). New operations must follow it, or they can deadlock with existing ones.
+- **Inventory quantity never goes negative** (checked under the lock, backed by `inventory_quantity_non_negative_check`), and `quantityBefore + quantityDelta = quantityAfter` must chain: each movement's before is the previous after, and the inventory equals the last after. DB tests end with `expectLedgerConsistent(org)`.
+- **Transfers always write exactly two movements** (`TRANSFER_OUT` + `TRANSFER_IN`, same `transferGroupId`, deltas summing to 0) and one `STOCK_TRANSFERRED` activity entry, atomically.
+- Concurrent stock operations must stay safe: rely on the row locks, add a real parallel test in `stock-concurrency.db-spec.ts` for new operations, and let lost lock races surface as `409 INVENTORY_CONCURRENCY_CONFLICT` (don't catch them elsewhere).
+- **Archived products and inactive warehouses take no new stock movements** (`INVENTORY_PRODUCT_INACTIVE` / `INVENTORY_WAREHOUSE_INACTIVE`); their history stays readable.
+- Frontend stock checks and previews are **UX only**; the backend is authoritative and re-validates against the locked row. Keep inventory query keys under `organizationKeys.detail(organizationId)` (`inventoryKeys`), and invalidate inventory, movements, and warehouses after an operation.
+- Stock operations are not idempotent; don't claim otherwise. Don't add Redis, queues, CQRS, or event sourcing for inventory.
+- **Do not integrate orders with inventory before Phase 7** (no automatic SALE movements from orders, no reservations).
 
 ### Database schema (`apps/api/prisma`)
 

@@ -1,4 +1,4 @@
-import { Settings, Users } from 'lucide-react';
+import { Boxes, Package, Settings, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router';
 import { PageHeader } from '@/components/layout/page-header';
 import { RoleBadge } from '@/components/organization/role-badge';
@@ -66,13 +66,26 @@ export function OrganizationHomePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>What&apos;s next</CardTitle>
+          <CardTitle>Get started</CardTitle>
           <CardDescription>
-            Product management will be added later. For now you can manage your team and workspace
-            settings.
+            Manage your product catalog, track stock across warehouses, and set up your team.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
+          <Link
+            to={paths.products(organization.id)}
+            className={buttonVariants({ variant: 'secondary' })}
+          >
+            <Package aria-hidden="true" />
+            Products
+          </Link>
+          <Link
+            to={paths.inventory(organization.id)}
+            className={buttonVariants({ variant: 'secondary' })}
+          >
+            <Boxes aria-hidden="true" />
+            Inventory
+          </Link>
           <Link
             to={paths.organizationTeam(organization.id)}
             className={buttonVariants({ variant: 'secondary' })}

@@ -7,7 +7,7 @@ import {
 } from '@app/shared';
 import { describe, expect, it } from 'vitest';
 
-/** Pins the role matrix (Phase 4 organization + Phase 5 catalog permissions) (docs/organizations-rbac.md). Changes here must be deliberate. */
+/** Pins the role matrix (Phase 4 organization, Phase 5 catalog, Phase 6 inventory permissions) (docs/organizations-rbac.md). Changes here must be deliberate. */
 describe('role permissions', () => {
   const matrix: Record<Permission, Record<MemberRole, boolean>> = {
     ORGANIZATION_READ: { OWNER: true, ADMIN: true, STAFF: true },
@@ -25,6 +25,16 @@ describe('role permissions', () => {
     CATEGORIES_CREATE: { OWNER: true, ADMIN: true, STAFF: true },
     CATEGORIES_UPDATE: { OWNER: true, ADMIN: true, STAFF: true },
     CATEGORIES_DELETE: { OWNER: true, ADMIN: true, STAFF: false },
+    WAREHOUSES_READ: { OWNER: true, ADMIN: true, STAFF: true },
+    WAREHOUSES_CREATE: { OWNER: true, ADMIN: true, STAFF: false },
+    WAREHOUSES_UPDATE: { OWNER: true, ADMIN: true, STAFF: false },
+    WAREHOUSES_ARCHIVE: { OWNER: true, ADMIN: true, STAFF: false },
+    INVENTORY_READ: { OWNER: true, ADMIN: true, STAFF: true },
+    INVENTORY_RECEIVE: { OWNER: true, ADMIN: true, STAFF: true },
+    INVENTORY_ISSUE: { OWNER: true, ADMIN: true, STAFF: true },
+    INVENTORY_ADJUST: { OWNER: true, ADMIN: true, STAFF: false },
+    INVENTORY_TRANSFER: { OWNER: true, ADMIN: true, STAFF: false },
+    STOCK_MOVEMENTS_READ: { OWNER: true, ADMIN: true, STAFF: true },
   };
 
   for (const [permission, roles] of Object.entries(matrix)) {

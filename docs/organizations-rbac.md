@@ -85,10 +85,16 @@ Permissions are defined once in `@app/shared` (`PERMISSIONS`, `ROLE_PERMISSIONS`
 | `PRODUCTS_ARCHIVE`: archive and restore            |  ✅   |  ✅   |  ❌   |
 | `CATEGORIES_READ` / `_CREATE` / `_UPDATE`          |  ✅   |  ✅   |  ✅   |
 | `CATEGORIES_DELETE`                                |  ✅   |  ✅   |  ❌   |
+| `WAREHOUSES_READ`                                  |  ✅   |  ✅   |  ✅   |
+| `WAREHOUSES_CREATE` / `_UPDATE`                    |  ✅   |  ✅   |  ❌   |
+| `WAREHOUSES_ARCHIVE`: archive and restore          |  ✅   |  ✅   |  ❌   |
+| `INVENTORY_READ`, `STOCK_MOVEMENTS_READ`           |  ✅   |  ✅   |  ✅   |
+| `INVENTORY_RECEIVE`, `INVENTORY_ISSUE` (+ damage)  |  ✅   |  ✅   |  ✅   |
+| `INVENTORY_ADJUST`, `INVENTORY_TRANSFER`           |  ✅   |  ✅   |  ❌   |
 
 \* Also restricted by the role hierarchy below.
 
-Catalog permissions are described in [products-categories.md](products-categories.md).
+Catalog permissions are described in [products-categories.md](products-categories.md), warehouse and inventory permissions in [warehouses-inventory.md](warehouses-inventory.md).
 
 ### Role hierarchy
 
@@ -104,7 +110,7 @@ Consequences:
 
 - **OWNER** invites ADMIN or STAFF, switches members between ADMIN and STAFF, removes ADMIN or STAFF, transfers ownership, and renames the organization.
 - **ADMIN** invites STAFF only, removes STAFF only, and revokes only STAFF invitations. An ADMIN cannot grant ADMIN, and cannot modify the OWNER or another ADMIN. With the current three roles, the only role an ADMIN may assign is STAFF, so in practice an ADMIN cannot change anyone's role. The rule structure is ready for more roles.
-- **STAFF** can view the organization and its members, and create and edit products and categories (but not archive products or delete categories).
+- **STAFF** can view the organization and its members, create and edit products and categories (but not archive products or delete categories), view warehouses, stock, and movements, and receive, issue, and write off stock (but not manage warehouses, adjust counts, or transfer).
 - Nobody manages themselves through these endpoints (the OWNER is never manageable, and an ADMIN cannot manage ADMINs).
 - **OWNER is never assignable.** The generic role endpoint rejects `role: OWNER` (`MEMBER_ROLE_CHANGE_FORBIDDEN`) and rejects any change to the current owner (`OWNER_TRANSFER_REQUIRED`). Invitations can never grant OWNER, which a database CHECK constraint also enforces.
 

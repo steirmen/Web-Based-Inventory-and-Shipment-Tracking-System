@@ -13,3 +13,7 @@ export const toOptionalText = ({ value }: TransformFnParams): unknown => {
 
 export const toTrimmed = ({ value }: TransformFnParams): unknown =>
   typeof value === 'string' ? value.trim() : value;
+
+/** Trims and upper-cases (codes such as "main " → "MAIN"). */
+export const toUpperCode = ({ value }: TransformFnParams): unknown =>
+  typeof value === 'string' ? value.trim().toUpperCase() : value;

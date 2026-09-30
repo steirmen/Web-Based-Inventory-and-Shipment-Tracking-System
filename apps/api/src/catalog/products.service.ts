@@ -9,6 +9,7 @@ import {
 import { Injectable } from '@nestjs/common';
 import { ActivityAction, recordActivity } from '../activity/activity-log.js';
 import { isForeignKeyViolation, isUniqueViolation } from '../common/errors/prisma-errors.js';
+import { escapeLikePattern } from '../common/validation/like-pattern.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { OrganizationContext } from '../organizations/organization-context.js';
@@ -39,14 +40,6 @@ function orderByFor(
       : ({ [field]: order } as Prisma.ProductOrderByWithRelationInput);
   // Unique tie-breaker so pages never overlap or skip rows.
   return [primary, { id: 'asc' }];
-}
-
-/**
- * Escapes LIKE wildcards so user input is matched literally ("50%" finds "50%",
- * not everything). The value is still sent as a bound parameter by Prisma.
- */
-function escapeLikePattern(value: string): string {
-  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
 }
 
 /**

@@ -2,7 +2,7 @@
 
 A business operations SaaS platform for small and medium-sized businesses: inventory, orders, customers, and reporting.
 
-> **Status: Phase 5 (products & categories).** The repository contains the technical foundation, the multi-tenant PostgreSQL domain schema, email/password **authentication** with database-backed sessions, **multi-tenant workspaces** (organization creation and switching, role-based access control for OWNER / ADMIN / STAFF, team management, invitation links, ownership transfer), and the **product catalog**: categories and products with search, filters, sorting, pagination, and archive/restore. Inventory, warehouses, stock movements, customers, orders, and the dashboard come in later phases.
+> **Status: Phase 6 (warehouses & inventory).** The repository contains the technical foundation, the multi-tenant PostgreSQL domain schema, email/password **authentication** with database-backed sessions, **multi-tenant workspaces** (organization creation and switching, role-based access control for OWNER / ADMIN / STAFF, team management, invitation links, ownership transfer), the **product catalog** (categories and products with search, filters, sorting, pagination, and archive/restore), and **warehouses & inventory**: warehouses with archive/restore, stock per product and warehouse with low-stock states, stock operations (receive, issue, damage, adjust, transfer), and an immutable stock movement history. Customers, orders (and their link to inventory), the dashboard, and reporting come in later phases.
 
 ## Tech stack
 
@@ -83,7 +83,7 @@ The app is multi-tenant: each **organization** (shown as a _workspace_) owns its
 
 - **Onboarding.** A user without a workspace is sent to `/onboarding` to create one and becomes its **OWNER**.
 - **Switching.** Workspaces live at `/org/:organizationId`, so every browser tab can show a different workspace. Switch with the workspace menu in the header, or from `/organizations`.
-- **Roles.** OWNER has full control, including ownership transfer. ADMIN renames the workspace, invites STAFF, and removes STAFF. STAFF has read-only access to the workspace settings and team, and works on the catalog (see below).
+- **Roles.** OWNER has full control, including ownership transfer. ADMIN renames the workspace, invites STAFF, and removes STAFF. STAFF has read-only access to the workspace settings and team, works on the catalog, and handles day-to-day stock (see below).
 - **Enforcement.** The API enforces every rule; hidden buttons in the UI are only a convenience. Non-members get "Workspace not found".
 - **Team** (`/org/:id/team`): members, role changes, removal with confirmation, ownership transfer, and pending invitations.
 - **Invitations.** No email is sent yet. Creating an invitation produces a one-time link (valid 7 days) to copy and share. The invitee signs in with the **invited email** and accepts it at `/invite/:token`.
@@ -110,6 +110,22 @@ Each workspace has its own catalog under **Products** and **Categories** (`/org/
 Try it locally with the seeded demo workspace: sign in as `staff@demo-trading.example` (you can add and edit, but not archive) and as `admin@demo-trading.example` (archive, restore, delete unused categories).
 
 Details: [docs/products-categories.md](docs/products-categories.md).
+
+## Warehouses and inventory
+
+Each workspace tracks stock per product and warehouse under **Inventory**, **Warehouses**, and **Stock movements** (`/org/:id/inventory`, `/org/:id/warehouses`, `/org/:id/stock-movements`).
+
+- **Warehouses** have a name, a code (unique within the workspace, e.g. `MAIN`, fixed after creation), and an address. They are archived instead of deleted and can be restored; an archived warehouse keeps its stock and history, but no stock moves in or out of it until it is restored.
+- **Inventory** shows the quantity on hand of each product in each warehouse, searched, filtered (warehouse, stock level), sorted, and paginated on the server.
+- **Low stock.** Each row is **Out of stock** (0), **Low stock** (at or below the product's minimum stock), or **In stock**, shown as text badges.
+- **Stock operations:** **Receive** (purchase), **Issue** (sale, recorded by hand until orders exist), **Damage** (write-off with a required reason), **Adjust** (set a counted quantity; the difference is recorded), and **Transfer** between two warehouses. Stock can never go negative, archived products and warehouses take no new stock, and every operation runs in one database transaction with row locks, so concurrent operations can't oversell or lose updates.
+- **Transfers** are atomic: the source decreases and the destination increases together, recorded as two linked movements (transfer out + transfer in) with the same transfer id.
+- **Movement history** is a permanent, read-only record of every change: type, signed change, quantity before and after, who, when, and why. Mistakes are corrected with a new movement, never by editing history. Filter by warehouse, product, type, and date, or open both legs of one transfer.
+- **Who can do what.** Everyone sees warehouses, stock, and history, and can receive, issue, and record damage. Only OWNER and ADMIN manage warehouses, adjust counts, and transfer stock. The API enforces this; the UI only hides what a role can't do.
+
+Try it locally with the seeded demo workspace: `MAIN`, `EAST`, and `NORTH` hold stock (the Wireless Mouse is low in MAIN and NORTH and out of stock in EAST), and the archived `OLD` depot shows how history survives archiving. Sign in as `staff@demo-trading.example` (receive, issue, damage) and `admin@demo-trading.example` (also adjust, transfer, and manage warehouses).
+
+Stock operations are not idempotent: resending a request records it again (the UI prevents double submission). Details: [docs/warehouses-inventory.md](docs/warehouses-inventory.md).
 
 ## Commands
 
@@ -158,5 +174,6 @@ docs/           Architecture, design system, local setup
 - [Authentication](docs/authentication.md)
 - [Organizations & RBAC](docs/organizations-rbac.md)
 - [Products & categories](docs/products-categories.md)
+- [Warehouses & inventory](docs/warehouses-inventory.md)
 - [Design system](docs/design-system.md)
 - [CLAUDE.md](CLAUDE.md): conventions for AI-assisted development
