@@ -43,6 +43,14 @@ export const envSchema = z
       .default('app_session'),
     /** Send the session cookie over HTTPS only. Must be true in production. */
     AUTH_COOKIE_SECURE: z.stringbool().default(false),
+
+    /** Lifetime of organization invitation links, in days. */
+    INVITATION_TTL_DAYS: z.coerce.number().int().min(1).max(30).default(7),
+    /** Public URL of the web app; used to build invitation links. */
+    WEB_APP_URL: z
+      .url({ protocol: /^https?$/ })
+      .default('http://localhost:5173')
+      .transform((url) => url.replace(/\/+$/, '')),
   })
   .refine((env) => env.NODE_ENV !== 'production' || env.AUTH_COOKIE_SECURE, {
     message: 'AUTH_COOKIE_SECURE must be true when NODE_ENV=production.',

@@ -1,5 +1,5 @@
 import { type ChangeEvent, type FormEvent, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from '@/components/ui/card';
@@ -22,7 +22,13 @@ const FIELDS = ['email', 'password'] as const;
 
 export function LoginPage() {
   const login = useLogin();
-  const [values, setValues] = useState<LoginValues>({ email: '', password: '' });
+  const location = useLocation();
+  // Set by invitation links: prefill the invited email; keep the return path for Register too.
+  const prefillEmail = (location.state as { email?: unknown } | null)?.email;
+  const [values, setValues] = useState<LoginValues>({
+    email: typeof prefillEmail === 'string' ? prefillEmail : '',
+    password: '',
+  });
   const [errors, setErrors] = useState<FieldErrors<keyof LoginValues>>({});
 
   const onChange = (field: keyof LoginValues) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -94,6 +100,7 @@ export function LoginPage() {
           Don&apos;t have an account?{' '}
           <Link
             to={paths.register}
+            state={location.state}
             className="rounded-sm font-medium text-primary focus-ring hover:underline"
           >
             Create one

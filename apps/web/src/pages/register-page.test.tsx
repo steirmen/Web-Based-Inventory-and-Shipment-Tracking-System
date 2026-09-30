@@ -1,7 +1,15 @@
 import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { authQueryKeys } from '@/api/auth';
-import { apiError, json, mockApi, pending, signedOut, testUser } from '@/test/mock-api';
+import {
+  apiError,
+  json,
+  mockApi,
+  noOrganizations,
+  pending,
+  signedOut,
+  testUser,
+} from '@/test/mock-api';
 import { renderApp } from '@/test/render-app';
 
 const PASSWORD = 'Correct-Horse-Battery-9';
@@ -116,12 +124,14 @@ describe('RegisterPage', () => {
   it('registers, signs the user in, and enters the app', async () => {
     const { user, fetchMock, queryClient } = await openRegisterPage({
       'POST /auth/register': json(201, { user: testUser }),
+      'GET /organizations': noOrganizations,
     });
 
     await fillForm(user);
     await submit(user);
 
-    expect(await screen.findByRole('heading', { name: `Welcome, ${testUser.name}` })).toBeVisible();
+    // Registration never creates a workspace: the new user is sent to onboarding.
+    expect(await screen.findByRole('heading', { name: 'Create your workspace' })).toBeVisible();
     expect(queryClient.getQueryData(authQueryKeys.me)).toEqual(testUser);
     const [, init] = fetchMock.mock.calls.find(([, call]) => call?.method === 'POST')!;
     // confirmPassword never leaves the browser.

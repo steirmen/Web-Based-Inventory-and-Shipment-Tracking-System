@@ -1,6 +1,6 @@
 import { AUTH_LIMITS } from '@app/shared';
 import { type ChangeEvent, type FormEvent, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { ApiError } from '@/api/http-client';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -24,9 +24,11 @@ const SERVER_FIELDS = ['name', 'email', 'password'] as const;
 
 export function RegisterPage() {
   const registration = useRegister();
+  const location = useLocation();
+  const prefillEmail = (location.state as { email?: unknown } | null)?.email;
   const [values, setValues] = useState<RegisterValues>({
     name: '',
-    email: '',
+    email: typeof prefillEmail === 'string' ? prefillEmail : '',
     password: '',
     confirmPassword: '',
   });
@@ -145,6 +147,7 @@ export function RegisterPage() {
           Already have an account?{' '}
           <Link
             to={paths.login}
+            state={location.state}
             className="rounded-sm font-medium text-primary focus-ring hover:underline"
           >
             Sign in

@@ -32,6 +32,16 @@ const SEED_ORGANIZATION_SLUG = 'demo-trading';
 const DEMO_PASSWORD = 'demo-password-2026';
 const DEMO_USER_EMAILS = ['owner@demo-trading.example', 'staff@demo-trading.example'];
 
+/**
+ * Demo users added after the original seed (Phase 4): an ADMIN, so every role
+ * can be tried, and a user without any organization for onboarding and
+ * invitation acceptance. Ensured on every run, also on already-seeded databases.
+ */
+const DEMO_TEAM_ADDITIONS: { name: string; email: string; role: MemberRole | null }[] = [
+  { name: 'Jordan Park', email: 'admin@demo-trading.example', role: MemberRole.ADMIN },
+  { name: 'Casey Brooks', email: 'newcomer@demo-trading.example', role: null },
+];
+
 /** All seeded timestamps are offsets from this fixed instant. */
 const BASE_TIME = Date.parse('2026-09-01T08:00:00.000Z');
 const HOUR = 3_600_000;
@@ -523,6 +533,51 @@ async function seed(tx: Tx, passwordHash: string): Promise<Record<string, number
   };
 }
 
+/** Idempotent upgrades for databases seeded by earlier versions of this script. */
+async function ensureDemoTeam(tx: Tx, passwordHash: string): Promise<string[]> {
+  const changes: string[] = [];
+  const organization = await tx.organization.findUniqueOrThrow({
+    where: { slug: SEED_ORGANIZATION_SLUG },
+    select: { id: true },
+  });
+
+  // Databases seeded before authentication existed have password-less demo users.
+  const { count } = await tx.user.updateMany({
+    where: { email: { in: DEMO_USER_EMAILS }, passwordHash: null },
+    data: { passwordHash },
+  });
+  if (count > 0) changes.push(`set the development password for ${count} demo user(s)`);
+
+  for (const demo of DEMO_TEAM_ADDITIONS) {
+    let user = await tx.user.findUnique({ where: { email: demo.email }, select: { id: true } });
+    if (!user) {
+      user = await tx.user.create({
+        data: { name: demo.name, email: demo.email, passwordHash, createdAt: at(2) },
+        select: { id: true },
+      });
+      changes.push(`created ${demo.email}`);
+    }
+    if (demo.role) {
+      const membership = await tx.organizationMember.findUnique({
+        where: { organizationId_userId: { organizationId: organization.id, userId: user.id } },
+        select: { id: true },
+      });
+      if (!membership) {
+        await tx.organizationMember.create({
+          data: {
+            organizationId: organization.id,
+            userId: user.id,
+            role: demo.role,
+            createdAt: at(2),
+          },
+        });
+        changes.push(`added ${demo.email} as ${demo.role}`);
+      }
+    }
+  }
+  return changes;
+}
+
 async function main(): Promise<void> {
   loadEnv({ path: ROOT_ENV_FILE, quiet: true });
 
@@ -546,25 +601,23 @@ async function main(): Promise<void> {
     const passwordHash = await hashPassword(DEMO_PASSWORD);
 
     if (existing) {
-      // Databases seeded before authentication existed have password-less demo users.
-      const { count } = await prisma.user.updateMany({
-        where: { email: { in: DEMO_USER_EMAILS }, passwordHash: null },
-        data: { passwordHash },
-      });
       console.log(
-        `Seed skipped: organization "${SEED_ORGANIZATION_SLUG}" already exists in "${database.name}".` +
-          (count > 0 ? ` Set the development password for ${count} demo user(s).` : ''),
+        `Seed skipped: organization "${SEED_ORGANIZATION_SLUG}" already exists in "${database.name}".`,
       );
-      return;
+    } else {
+      const summary = await prisma.$transaction((tx) => seed(tx, passwordHash), {
+        timeout: 60_000,
+      });
+      const movements = await prisma.stockMovement.count({
+        where: { organization: { slug: SEED_ORGANIZATION_SLUG } },
+      });
+      console.log(`Seeded "${database.name}":`, { ...summary, stockMovements: movements });
     }
 
-    const summary = await prisma.$transaction((tx) => seed(tx, passwordHash), {
-      timeout: 60_000,
-    });
-    const movements = await prisma.stockMovement.count({
-      where: { organization: { slug: SEED_ORGANIZATION_SLUG } },
-    });
-    console.log(`Seeded "${database.name}":`, { ...summary, stockMovements: movements });
+    const changes = await prisma.$transaction((tx) => ensureDemoTeam(tx, passwordHash));
+    console.log(
+      changes.length > 0 ? `Demo team updated: ${changes.join('; ')}.` : 'Demo team is up to date.',
+    );
   } finally {
     await prisma.$disconnect();
   }

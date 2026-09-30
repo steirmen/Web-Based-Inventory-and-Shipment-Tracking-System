@@ -2,7 +2,7 @@
 
 A business operations SaaS platform for small and medium-sized businesses: inventory, orders, customers, and reporting.
 
-> **Status: Phase 3 (authentication).** The repository contains the technical foundation (monorepo, API, web app, design system, tooling, tests), the multi-tenant PostgreSQL domain schema, and **email/password authentication** (registration, sign-in, sign-out, database-backed sessions in an HttpOnly cookie). Organizations, roles and permissions, and the business features (products, inventory, orders) come in later phases.
+> **Status: Phase 4 (organizations & RBAC).** The repository contains the technical foundation, the multi-tenant PostgreSQL domain schema, email/password **authentication** with database-backed sessions, and **multi-tenant workspaces**: organization creation, switching, role-based access control (OWNER / ADMIN / STAFF), team management, invitation links, and ownership transfer. Business features (products, inventory, orders, dashboard) come in later phases.
 
 ## Tech stack
 
@@ -54,10 +54,12 @@ Open <http://localhost:5173>. You are redirected to **Sign in**. Create an accou
 
 > **Development-only credentials.** These exist only in a local database seeded with `npm run db:seed`. They are not production credentials.
 >
-> | Email                        | Password             |
-> | ---------------------------- | -------------------- |
-> | `owner@demo-trading.example` | `demo-password-2026` |
-> | `staff@demo-trading.example` | `demo-password-2026` |
+> | Email                           | Password             | Role in "Demo Trading Co."          |
+> | ------------------------------- | -------------------- | ----------------------------------- |
+> | `owner@demo-trading.example`    | `demo-password-2026` | OWNER                               |
+> | `admin@demo-trading.example`    | `demo-password-2026` | ADMIN                               |
+> | `staff@demo-trading.example`    | `demo-password-2026` | STAFF                               |
+> | `newcomer@demo-trading.example` | `demo-password-2026` | none (for onboarding / invitations) |
 
 Sessions last 7 days, are stored in PostgreSQL (the token itself only as a SHA-256 hash), and are carried by an HttpOnly `app_session` cookie. Signing out revokes the session on the server. Passwords are hashed with Argon2id. Details: [docs/authentication.md](docs/authentication.md).
 
@@ -74,6 +76,26 @@ Test the authentication flow:
 npm run test      # includes auth unit tests and the login/register/routing UI tests
 npm run test:db   # real HTTP tests of /auth/* and session tests against the test database
 ```
+
+## Organizations, roles, and teams
+
+The app is multi-tenant: each **organization** (shown as a _workspace_) owns its data, and a user can belong to several organizations with a different role in each.
+
+- **Onboarding.** A user without a workspace is sent to `/onboarding` to create one and becomes its **OWNER**.
+- **Switching.** Workspaces live at `/org/:organizationId`, so every browser tab can show a different workspace. Switch with the workspace menu in the header, or from `/organizations`.
+- **Roles.** OWNER has full control, including ownership transfer. ADMIN renames the workspace, invites STAFF, and removes STAFF. STAFF has read-only access to the workspace and team.
+- **Enforcement.** The API enforces every rule; hidden buttons in the UI are only a convenience. Non-members get "Workspace not found".
+- **Team** (`/org/:id/team`): members, role changes, removal with confirmation, ownership transfer, and pending invitations.
+- **Invitations.** No email is sent yet. Creating an invitation produces a one-time link (valid 7 days) to copy and share. The invitee signs in with the **invited email** and accepts it at `/invite/:token`.
+
+Try it locally: sign in as `owner@demo-trading.example`, open **Team**, and create an invitation for `newcomer@demo-trading.example`. Then sign out, sign in as the newcomer, and open the link.
+
+| Variable              | Default                 | Purpose                              |
+| --------------------- | ----------------------- | ------------------------------------ |
+| `INVITATION_TTL_DAYS` | `7`                     | Invitation link lifetime (1–30 days) |
+| `WEB_APP_URL`         | `http://localhost:5173` | Base URL used in invitation links    |
+
+Details: [docs/organizations-rbac.md](docs/organizations-rbac.md).
 
 ## Commands
 
@@ -120,5 +142,6 @@ docs/           Architecture, design system, local setup
 - [Architecture](docs/architecture.md)
 - [Database design](docs/database-design.md)
 - [Authentication](docs/authentication.md)
+- [Organizations & RBAC](docs/organizations-rbac.md)
 - [Design system](docs/design-system.md)
 - [CLAUDE.md](CLAUDE.md): conventions for AI-assisted development

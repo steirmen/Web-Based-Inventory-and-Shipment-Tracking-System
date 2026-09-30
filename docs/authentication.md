@@ -197,12 +197,14 @@ Exceeding a limit returns `429 RATE_LIMITED` with a `Retry-After` header.
 
 > **DEVELOPMENT ONLY.** These accounts exist only in a local database seeded with `npm run db:seed`. They are not production credentials and must never be used anywhere else.
 
-| Email                        | Password             | Role in "Demo Trading Co." |
-| ---------------------------- | -------------------- | -------------------------- |
-| `owner@demo-trading.example` | `demo-password-2026` | OWNER                      |
-| `staff@demo-trading.example` | `demo-password-2026` | STAFF                      |
+| Email                           | Password             | Role in "Demo Trading Co." |
+| ------------------------------- | -------------------- | -------------------------- |
+| `owner@demo-trading.example`    | `demo-password-2026` | OWNER                      |
+| `staff@demo-trading.example`    | `demo-password-2026` | STAFF                      |
+| `admin@demo-trading.example`    | `demo-password-2026` | ADMIN                      |
+| `newcomer@demo-trading.example` | `demo-password-2026` | — (no workspace)           |
 
-The seed stores only Argon2id hashes. For databases seeded before authentication existed, re-running `npm run db:seed` sets this password on the password-less demo users without changing anything else. Roles are stored but not enforced yet.
+The seed stores only Argon2id hashes. For databases seeded before authentication existed, re-running `npm run db:seed` sets this password on the password-less demo users without changing anything else. Roles are enforced since Phase 4; see [organizations-rbac.md](organizations-rbac.md).
 
 ## Testing
 

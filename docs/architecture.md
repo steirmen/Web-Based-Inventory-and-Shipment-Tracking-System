@@ -27,6 +27,8 @@ src/
   common/errors/     AppException, ApiExceptionFilter (uniform error body), validation errors
   database/          Global DatabaseModule exposing PrismaService
   auth/              Register/login/logout/me, sessions, Argon2id passwords, global SessionAuthGuard
+  organizations/     Organizations, members, invitations; OrganizationAccessGuard + @RequirePermissions (RBAC)
+  activity/          recordActivity(): audit entries written inside the caller's transaction
   health/            GET /health (public)
   generated/prisma/  Prisma client output (git-ignored, created by `prisma generate`)
 prisma/
@@ -42,6 +44,7 @@ test/database/       Database integration tests against the test database
 - **Request validation**: global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`). DTOs use `class-validator` decorators. Failures become `400 VALIDATION_ERROR` with per-field `details`.
 - **Errors**: every error response has the shape `{ statusCode, code, message, details? }` (`ApiErrorBody` in `@app/shared`), produced by `ApiExceptionFilter`.
 - **Authentication**: a global `SessionAuthGuard` requires a valid session cookie on every route not marked `@Public()`. See [authentication.md](authentication.md).
+- **Organizations & RBAC**: routes under `/organizations/:organizationId` are guarded by `OrganizationAccessGuard`, which verifies membership (404 for non-members) and the handler's `@RequirePermissions` (403). See [organizations-rbac.md](organizations-rbac.md).
 - **Database**: `PrismaService` extends the generated `PrismaClient` using the `@prisma/adapter-pg` driver adapter (Prisma 7). It connects lazily, so the API still starts when PostgreSQL is down. The schema, tenancy model, and constraints are described in [database-design.md](database-design.md).
 - **Feature modules**: one folder per domain (`src/<domain>/`) containing its module, controller, service, DTOs, and tests.
 
@@ -96,13 +99,18 @@ Components never call `fetch`. The API base URL comes only from `VITE_API_BASE_U
 
 ### Routes
 
-| Path            | Access        | Page                                      |
-| --------------- | ------------- | ----------------------------------------- |
-| `/`             | authenticated | Minimal signed-in landing page            |
-| `/login`        | guest only    | Sign in                                   |
-| `/register`     | guest only    | Create account                            |
-| `/health-check` | public        | Technical frontend → API → database check |
-| `*`             | public        | 404                                       |
+| Path                            | Access                | Page                                                                       |
+| ------------------------------- | --------------------- | -------------------------------------------------------------------------- |
+| `/`                             | authenticated         | Redirects to onboarding, the last or only workspace, or the workspace list |
+| `/onboarding`                   | authenticated         | Create a workspace                                                         |
+| `/organizations`                | authenticated         | The user's workspaces                                                      |
+| `/org/:organizationId`          | member (API-verified) | Workspace home                                                             |
+| `/org/:organizationId/team`     | member                | Team, invitations, roles, ownership                                        |
+| `/org/:organizationId/settings` | member                | Workspace settings                                                         |
+| `/login`, `/register`           | guest only            | Sign in, create account                                                    |
+| `/invite/:token`                | public                | View and accept an invitation                                              |
+| `/health-check`                 | public                | Technical frontend → API → database check                                  |
+| `*`                             | public                | 404                                                                        |
 
 ## Environment
 

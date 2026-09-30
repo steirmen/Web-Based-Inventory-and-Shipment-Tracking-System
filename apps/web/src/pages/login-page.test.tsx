@@ -1,7 +1,15 @@
 import { screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { authQueryKeys } from '@/api/auth';
-import { apiError, json, mockApi, pending, signedOut, testUser } from '@/test/mock-api';
+import {
+  apiError,
+  json,
+  mockApi,
+  noOrganizations,
+  pending,
+  signedOut,
+  testUser,
+} from '@/test/mock-api';
 import { renderApp } from '@/test/render-app';
 
 const PASSWORD = 'Correct-Horse-Battery-9';
@@ -86,12 +94,14 @@ describe('LoginPage', () => {
   it('signs in, updates the auth state, and enters the app', async () => {
     const { user, fetchMock, router, queryClient } = await openLoginPage({
       'POST /auth/login': json(200, { user: testUser }),
+      'GET /organizations': noOrganizations,
     });
 
     await fillAndSubmit(user);
 
-    expect(await screen.findByRole('heading', { name: `Welcome, ${testUser.name}` })).toBeVisible();
-    expect(router.state.location.pathname).toBe('/');
+    // A new user without workspaces lands on onboarding.
+    expect(await screen.findByRole('heading', { name: 'Create your workspace' })).toBeVisible();
+    expect(router.state.location.pathname).toBe('/onboarding');
     expect(queryClient.getQueryData(authQueryKeys.me)).toEqual(testUser);
 
     const [, init] = fetchMock.mock.calls.find(([, call]) => call?.method === 'POST')!;
@@ -100,12 +110,16 @@ describe('LoginPage', () => {
   });
 
   it('returns to the originally requested page after signing in', async () => {
-    mockApi({ 'GET /auth/me': signedOut, 'POST /auth/login': json(200, { user: testUser }) });
-    const { user, router } = renderApp('/');
+    mockApi({
+      'GET /auth/me': signedOut,
+      'POST /auth/login': json(200, { user: testUser }),
+      'GET /organizations': noOrganizations,
+    });
+    const { user, router } = renderApp('/organizations');
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
     await fillAndSubmit(user);
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/organizations'));
   });
 });

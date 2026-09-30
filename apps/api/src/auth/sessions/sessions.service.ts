@@ -3,7 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env.js';
 import { PrismaService } from '../../database/prisma.service.js';
-import { generateSessionToken, hashSessionToken } from './session-token.js';
+import { generateSecureToken, hashToken } from '../../common/security/secure-token.js';
 
 const DAY_MS = 86_400_000;
 /** `last_seen_at` is refreshed at most this often, to avoid a write on every request. */
@@ -31,11 +31,11 @@ export class SessionsService {
   }
 
   async create(userId: string): Promise<IssuedSession> {
-    const token = generateSessionToken();
+    const token = generateSecureToken();
     const expiresAt = new Date(Date.now() + this.ttlMs);
 
     await this.prisma.session.create({
-      data: { userId, tokenHash: hashSessionToken(token), expiresAt },
+      data: { userId, tokenHash: hashToken(token), expiresAt },
     });
 
     return { token, expiresAt };
@@ -43,7 +43,7 @@ export class SessionsService {
 
   async validate(token: string): Promise<SessionValidation> {
     const session = await this.prisma.session.findUnique({
-      where: { tokenHash: hashSessionToken(token) },
+      where: { tokenHash: hashToken(token) },
       select: {
         id: true,
         expiresAt: true,
@@ -79,7 +79,7 @@ export class SessionsService {
   /** Revokes the session for this token, if it exists and is still active. Idempotent. */
   async revoke(token: string): Promise<void> {
     await this.prisma.session.updateMany({
-      where: { tokenHash: hashSessionToken(token), revokedAt: null },
+      where: { tokenHash: hashToken(token), revokedAt: null },
       data: { revokedAt: new Date() },
     });
   }

@@ -56,14 +56,21 @@ export function useLogout() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   return useMutation({
-    mutationFn: logout,
-    onSuccess: async () => {
+    /**
+     * `returnTo`: an internal path to come back to after the next sign-in (e.g. an invite link);
+     * `email`: prefilled on the sign-in form.
+     */
+    mutationFn: (_options?: { returnTo?: string; email?: string }) => logout(),
+    onSuccess: async (_data, options) => {
       // Drop every cached server response that belonged to the signed-in user.
       queryClient.removeQueries({
         predicate: (query) => query.queryKey[0] !== authQueryKeys.me[0],
       });
       queryClient.setQueryData(authQueryKeys.me, null);
-      await navigate(paths.login, { replace: true });
+      await navigate(paths.login, {
+        replace: true,
+        state: options?.returnTo ? { from: options.returnTo, email: options.email } : undefined,
+      });
     },
   });
 }

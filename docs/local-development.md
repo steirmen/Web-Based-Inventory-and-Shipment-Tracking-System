@@ -65,7 +65,7 @@ npm run dev        # API on http://localhost:3000, web app on http://localhost:5
 
 Open <http://localhost:5173>. You are redirected to the sign-in page. Register a new account, or use a seeded demo account.
 
-> **Development-only credentials**, created by `npm run db:seed`. They are not production credentials: `owner@demo-trading.example` / `demo-password-2026` (also `staff@demo-trading.example`).
+> **Development-only credentials**, created by `npm run db:seed`. They are not production credentials. The password is `demo-password-2026` for `owner@`, `admin@`, `staff@`, and `newcomer@demo-trading.example`.
 
 Always use `http://localhost:5173`, not `127.0.0.1`, so the session cookie is shared with the API on `localhost`. <http://localhost:5173/health-check> should report **Operational** for both checks.
 

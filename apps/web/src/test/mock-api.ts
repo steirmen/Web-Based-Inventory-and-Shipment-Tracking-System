@@ -1,4 +1,12 @@
-import type { ApiErrorBody, ApiErrorCode, ApiFieldError, AuthUser } from '@app/shared';
+import type {
+  ApiErrorBody,
+  ApiErrorCode,
+  ApiFieldError,
+  AuthUser,
+  MemberRole,
+  Organization,
+  OrganizationSummary,
+} from '@app/shared';
 import { vi } from 'vitest';
 
 export const TEST_API_BASE_URL = 'http://api.test';
@@ -49,3 +57,34 @@ export const testUser: AuthUser = {
 };
 
 export const signedIn = (user: AuthUser = testUser) => json(200, { user });
+
+export const testOrganization: Organization = {
+  id: '0198c0de-0000-7000-8000-00000000000a',
+  name: 'Demo Trading Co.',
+  slug: 'demo-trading',
+  createdAt: '2026-09-01T08:00:00.000Z',
+  updatedAt: '2026-09-01T08:00:00.000Z',
+};
+
+export function organizationSummary(
+  overrides: Partial<OrganizationSummary> = {},
+): OrganizationSummary {
+  return {
+    id: testOrganization.id,
+    name: testOrganization.name,
+    slug: testOrganization.slug,
+    role: 'OWNER',
+    memberCount: 3,
+    createdAt: testOrganization.createdAt,
+    ...overrides,
+  };
+}
+
+export const organizationList = (organizations: OrganizationSummary[]) =>
+  json(200, { organizations });
+
+export const noOrganizations = organizationList([]);
+
+/** `GET /organizations/:id` for `testOrganization` with the given role. */
+export const organizationDetail = (role: MemberRole = 'OWNER', organization = testOrganization) =>
+  json(200, { organization, membership: { role } });

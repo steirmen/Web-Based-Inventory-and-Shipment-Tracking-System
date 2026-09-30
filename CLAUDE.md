@@ -13,7 +13,8 @@ Work is delivered in explicit phases. **Only implement what the current phase as
 - **Phase 1 (done): foundation.** Monorepo, NestJS API with `GET /health`, React app with `/` and `/health-check`, design-system primitives, API client, Prisma + PostgreSQL connectivity, tooling, tests, CI.
 - **Phase 2 (done): database & domain model.** Prisma models and migration for User, Organization, OrganizationMember, Category, Product, Warehouse, Inventory, StockMovement, Customer, Order, OrderItem, and ActivityLog; CHECK constraints; dev seed; database integration tests. **Schema only: no services, APIs, or UI for these domains yet.**
 - **Phase 3 (done): authentication.** Register/login/logout/me, Argon2id passwords, database-backed sessions (`Session` model) in an HttpOnly cookie, global auth guard, rate limiting, standard error responses, login/register UI, protected and guest routes, authenticated landing page. See [docs/authentication.md](docs/authentication.md).
-- **Later phases:** organization creation/switching, RBAC enforcement, and the APIs/UI for products, warehouses, inventory, customers, orders, dashboard/reporting, and activity logs. Password reset, email verification, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
+- **Phase 4 (done): organizations & RBAC.** Organization creation/listing/switching (`/org/:organizationId` routes), OrganizationAccessGuard + `@RequirePermissions`, OWNER/ADMIN/STAFF matrix, team management, invitation links, ownership transfer, organization activity logging. See [docs/organizations-rbac.md](docs/organizations-rbac.md).
+- **Later phases:** products, categories, warehouses, inventory, stock movements, customers, orders, dashboard/reporting (APIs and UI). Password reset, email verification, email delivery, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
 
 Environment constraints: **local development only. No Docker, no Docker Compose, no WSL.** PostgreSQL runs natively on the Windows host.
 
@@ -64,6 +65,18 @@ npm run db:seed      # idempotent demo data
   - Uses the `@prisma/adapter-pg` driver adapter.
 - Never run destructive Prisma commands (`migrate reset`, `db push --force-reset`, `--accept-data-loss`) without explicit user approval.
 
+### Organizations & authorization (read [docs/organizations-rbac.md](docs/organizations-rbac.md))
+
+- **Never trust organization ids from the frontend.** Every organization-scoped endpoint lives under `organizations/:organizationId`, has `@UseGuards(OrganizationAccessGuard)` on the controller, and declares `@RequirePermissions(...)` per handler. The guard verifies membership and permission; use `@OrgContext()` and scope every query with `context.organization.id`. Never take the organization id from a body or query string.
+- Non-members and unknown organizations must get the same `404 ORGANIZATION_NOT_FOUND`. Look up sub-resources (members, invitations, and later products…) **with** the organization id.
+- Permissions and the role hierarchy live **only** in `packages/shared/src/rbac.ts` (`ROLE_PERMISSIONS`, `ASSIGNABLE_ROLES`, `canAssignRole`, `canManageMember`). Don't write `role === 'OWNER'` checks in controllers. New domains add permissions there (and update `src/organizations/rbac.spec.ts`).
+- **OWNER is protected:** never assignable through role changes or invitations, never removable. Ownership moves only via `POST …/ownership/transfer`. The DB allows at most one OWNER (partial unique index).
+- Mutations that change roles or memberships run in a transaction, re-check the target's current row, and use conditional updates.
+- Record organization mutations with `recordActivity(tx, …)` **inside the same transaction**. Never put passwords, hashes, session tokens, or invitation tokens in metadata.
+- Raw invitation tokens are returned once (in `inviteUrl`) and never persisted or logged. Store `hashToken(token)` (`src/common/security/secure-token.ts`).
+- Frontend permission checks (`<Can>`, `useCurrentOrganization().can/canManage`) are **UX only**. The API is authoritative.
+- Do not implement product, inventory, order, or dashboard functionality until those phases.
+
 ### Database schema (`apps/api/prisma`)
 
 Read [docs/database-design.md](docs/database-design.md) before changing the schema. Key rules:
@@ -83,6 +96,8 @@ Read [docs/database-design.md](docs/database-design.md) before changing the sche
 - **Data flow:** page/component → hook in `src/hooks` (TanStack Query) → endpoint function in `src/api/<resource>.ts` → `apiRequest` in `src/api/http-client.ts`. **Never call `fetch` in components.** Query keys live next to their endpoint functions.
 - Env vars: only via `src/lib/env.ts` (add the type to `src/vite-env.d.ts`). Browser-exposed vars must be prefixed `VITE_`.
 - Routes: add paths to `src/routes/paths.ts` and the route table in `src/routes/router.tsx`. Pages live in `src/pages`, render inside `AppShell`, start with `<PageHeader>`, and set `<title>{pageTitle('…')}</title>`. App pages go under the `RequireAuth` branch unless explicitly public. Guest-only pages go under `RequireGuest` → `AuthLayout`.
+- Organization pages go under `/org/:organizationId` (`OrganizationLayout`) and read `useCurrentOrganization()` (organization, role, `can`, `canAssign`, `canManage`). The URL is the only "active organization"; don't store it in auth state or on the session. `localStorage` `app:lastOrganizationId` is UX only.
+- Every page has loading, empty, error, and success states (`LoadingState`, `EmptyState`, `ErrorState` in `components/layout/page-state.tsx`). Show API errors with `apiErrorMessage()`, never raw error details.
 - **Auth state** comes only from `useAuth()` (TanStack Query on `GET /auth/me`). Never store tokens or user data in localStorage/sessionStorage/context. `apiRequest` always sends `credentials: 'include'`; the HttpOnly cookie is handled by the browser. After login/register, `setQueryData(authQueryKeys.me, user)`; any 401 resets it to `null` (see `app/query-client.ts`).
 - Forms: use `FormField` (label/hint/error wiring) with `Input` / `PasswordInput`. Validate on the client with `AUTH_LIMITS` from `@app/shared`, and treat the server as authoritative.
 - Frontend tests that need routing/auth: `renderApp(path)` (real route table) + `mockApi({ 'GET /auth/me': … })` from `src/test/`.
@@ -102,5 +117,8 @@ Read [docs/database-design.md](docs/database-design.md) before changing the sche
 - `psql` is not on PATH on the dev machine: use `"C:\Program Files\PostgreSQL\18\bin\psql.exe"`.
 - Open the web app at `http://localhost:5173` (not `127.0.0.1`), or the session cookie will not be sent to the API.
 - Auth rate limits are in-memory, per API process. Each HTTP test creates a fresh app (`createHttpApp()`), which resets the counters.
-- Dev-only demo login: `owner@demo-trading.example` / `demo-password-2026` (after `npm run db:seed`).
+- Dev-only demo logins (after `npm run db:seed`, password `demo-password-2026`): `owner@`, `admin@`, `staff@`, and `newcomer@demo-trading.example` (no workspace).
+- The seed is idempotent and also upgrades older databases (`ensureDemoTeam`). Don't delete user-created accounts in the dev DB; the developer's own account lives there too.
+- Prisma ignores partial indexes when diffing, so `organization_members_one_owner_per_organization` survives future `migrate dev` runs. Same for CHECK constraints.
+- Supertest: create each request right before awaiting it (it starts and stops a server per request).
 - In dev, React StrictMode mounts twice, so you'll see an aborted duplicate `GET /auth/me` in the network tab. That's expected.
