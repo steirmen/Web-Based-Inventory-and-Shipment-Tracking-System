@@ -137,6 +137,20 @@ export function dashboardSummary(
         outOfStockItems: 0,
       },
     ],
+    recentOrders: [
+      {
+        id: '0198c0de-0000-7000-8000-0000000000d9',
+        orderNumber: 'SO-1042',
+        status: 'SHIPPED',
+        customer: {
+          id: '0198c0de-0000-7000-8000-0000000000e1',
+          name: 'Alice Acme',
+          companyName: 'Acme, Inc.',
+        },
+        total: '79.98',
+        createdAt: '2025-09-06T10:00:00.000Z',
+      },
+    ],
     ...rest,
   };
 }
@@ -173,5 +187,6 @@ export function emptyDashboardSummary(): DashboardSummaryResponse {
     },
     topProducts: [],
     warehouses: [],
+    recentOrders: [],
   });
 }

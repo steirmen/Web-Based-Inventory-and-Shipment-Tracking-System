@@ -183,6 +183,7 @@ export type {
   DashboardMoneyMetric,
   DashboardOrderStatusCount,
   DashboardPeriod,
+  DashboardRecentOrder,
   DashboardRange,
   DashboardSelectedPeriod,
   DashboardSummaryQuery,

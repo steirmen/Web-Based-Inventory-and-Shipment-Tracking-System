@@ -1,16 +1,14 @@
-import type { DashboardTopProduct } from '@app/shared';
+import type { DashboardRecentOrder, DashboardTopProduct } from '@app/shared';
 import { ArrowRight, Package, ReceiptText } from 'lucide-react';
 import { Link } from 'react-router';
-import { EmptyState, ErrorState } from '@/components/layout/page-state';
+import { EmptyState } from '@/components/layout/page-state';
 import { Can } from '@/components/organization/can';
 import { OrderStatusBadge } from '@/components/orders/order-status-badge';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useOrders } from '@/hooks/use-sales';
 import { cn } from '@/lib/cn';
-import { formatCount, RECENT_ORDERS_QUERY } from '@/lib/dashboard-params';
+import { formatCount } from '@/lib/dashboard-params';
 import { formatDate } from '@/lib/format';
 import { formatMoney } from '@/lib/money';
 import { paths } from '@/routes/paths';
@@ -98,42 +96,40 @@ export function TopProducts({
 }
 
 /** The five newest orders (any status, any date), from the regular orders list. */
-export function RecentOrders({ organizationId }: { organizationId: string }) {
-  const orders = useOrders(organizationId, RECENT_ORDERS_QUERY);
-  const items = orders.data?.items ?? [];
-
+/**
+ * The newest orders of the dashboard's period (any status), delivered with the
+ * summary, so they always follow the selected range and time zone.
+ */
+export function RecentOrders({
+  organizationId,
+  orders: items,
+  allOrdersHref,
+}: {
+  organizationId: string;
+  orders: DashboardRecentOrder[];
+  /** The orders list filtered to the same days. */
+  allOrdersHref: string;
+}) {
   return (
     <Card>
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1.5">
           <CardTitle>Recent orders</CardTitle>
-          <CardDescription>The newest orders in this workspace.</CardDescription>
+          <CardDescription>The newest orders created in this period.</CardDescription>
         </div>
         <Link
-          to={paths.orders(organizationId)}
+          to={allOrdersHref}
           className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'self-start')}
         >
-          All orders
+          Orders in this period
           <ArrowRight aria-hidden="true" />
         </Link>
       </CardHeader>
       <CardContent>
-        {orders.isPending ? (
-          <output className="flex flex-col gap-3" aria-label="Loading recent orders">
-            {[0, 1, 2].map((row) => (
-              <Skeleton key={row} className="h-9 w-full" />
-            ))}
-          </output>
-        ) : orders.isError ? (
-          <ErrorState
-            title="We couldn't load recent orders"
-            error={orders.error}
-            onRetry={() => void orders.refetch()}
-          />
-        ) : items.length === 0 ? (
+        {items.length === 0 ? (
           <EmptyState
             icon={<ReceiptText className="size-5" aria-hidden="true" />}
-            title="No orders yet."
+            title="No orders in this period."
             action={
               <Can permission="ORDERS_CREATE">
                 <Link

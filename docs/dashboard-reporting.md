@@ -103,19 +103,20 @@ Each point has `period` and `periodEnd` (the first and last local day of the buc
 
 ## Aggregation strategy
 
-`DashboardService.summary()` answers the whole response with **five grouped SQL queries** (none per KPI, status, product, or warehouse), all filtered by `organization_id` and joined on `(organization_id, id)`:
+`DashboardService.summary()` answers the whole response with **six SQL queries**: five grouped ones (none per KPI, status, product, or warehouse) and one `LIMIT 5`,, all filtered by `organization_id` and joined on `(organization_id, id)`:
 
 1. Orders and realized revenue grouped by status and by period (current/previous): KPIs, comparison, and status distribution.
 2. Orders, realized orders, and revenue grouped by `date_trunc(day|week|month, local time)`: the time series.
 3. Order lines of realized orders grouped by product, `ORDER BY units DESC … LIMIT 5`: top products.
 4. Customer and product counts with `COUNT(*) FILTER (…)` in one statement.
 5. Warehouses `LEFT JOIN` their inventory rows of active products, grouped by warehouse: warehouse summaries (organization totals are their sum over active warehouses).
+6. The newest orders created in the period (`ORDER BY created_at DESC, id DESC LIMIT 5`, `DASHBOARD_LIMITS.recentOrders`) with their customer: `recentOrders`.
 
 Revenue per order comes from a `LATERAL` sum over its lines whose condition includes the realized statuses, so other orders add nothing. Client input reaches SQL only as bound parameters; the bucket unit comes from a whitelist.
 
-**Consistency:** the five queries run in one `REPEATABLE READ` transaction (a Prisma batch), so every number in a response comes from the same database snapshot even while orders or stock change. That is the only reason for the transaction; nothing is written. `generatedAt` is the time of the read.
+**Consistency:** the six queries run in one `REPEATABLE READ` transaction (a Prisma batch), so every number in a response comes from the same database snapshot even while orders or stock change. That is the only reason for the transaction; nothing is written. `generatedAt` is the time of the read.
 
-**Timestamps and time zones:** Prisma's PostgreSQL driver adapter sends `DateTime` values as zone-less UTC wall-clock text, which PostgreSQL reads in the session time zone (the dev machine's database runs in `Europe/Istanbul`), and Prisma fills `@default(now())` itself. Comparisons with `Date` parameters are consistent because both sides are written the same way. For bucketing, the query first recovers the true instant (`(created_at AT TIME ZONE current_setting('TimeZone')) AT TIME ZONE 'UTC'`) and then converts it to the requested zone; with a UTC session this is a no-op. See known limitations.
+**Timestamps and time zones:** stored timestamps are real UTC instants and the database session runs in UTC (Phase 8.1, see [timezone.md](timezone.md)). Buckets are `date_trunc(unit, created_at AT TIME ZONE $timeZone)`; period bounds are UTC instants computed by `common/time/local-days.ts`, the same helpers the orders list, stock movements, and reports use.
 
 ## Indexes
 
@@ -141,7 +142,7 @@ The work grows with the orders **in the selected period** (bounded by the 366-da
 | File                                                  | Covers                                                                                                                                                                                                                                                                                     |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `src/dashboard/dashboard-period.spec.ts`              | Every preset with a pinned clock, month/year/leap-day edges, time zones and DST, comparison periods, all validation errors, bucket generation and selection                                                                                                                                |
-| `src/dashboard/dashboard.service.spec.ts`             | Five queries in one REPEATABLE READ transaction, organization filter and parameters in every query, empty-organization response, `DASHBOARD_READ` metadata                                                                                                                                 |
+| `src/dashboard/dashboard.service.spec.ts`             | Six queries in one REPEATABLE READ transaction, organization filter and parameters in every query, empty-organization response, `DASHBOARD_READ` metadata                                                                                                                                  |
 | `test/database/dashboard-api.db-spec.ts`              | Access (roles, 401, 404), validation, realized sales per status (exact decimals, price snapshots), customers, products, inventory statuses and scope, top products, time series (boundaries, time zone, weeks, months), comparison (up, down, equal, zero), presets against the real clock |
 | `test/database/dashboard-tenant-isolation.db-spec.ts` | Organization A/B isolation in both directions                                                                                                                                                                                                                                              |
 
@@ -151,17 +152,17 @@ The work grows with the orders **in the selected period** (bounded by the 366-da
 
 ### Structure (fixed; no widget configuration)
 
-| Section               | Content                                                                                                                                                            | Links to                                        |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| Header                | Workspace name, "Overview", description, date range picker; below it the period and the comparison period                                                          |                                                 |
-| Set up your workspace | Only for a workspace with no products, customers, or orders: shortcuts (filtered by role)                                                                          | New product, warehouses, customers, new order   |
-| KPI cards             | Total sales and Orders (each with a neutral change indicator), Customers (+ new in the period), Products (+ archived), Inventory units, Low stock (+ out of stock) | Inventory filtered to low stock                 |
-| Sales over time       | SVG bar chart of realized revenue **or** orders per day/week/month (toggle), tooltip, data table                                                                   | Orders, new order (empty state)                 |
-| Orders by status      | All six statuses as labelled horizontal bars with count and share                                                                                                  | Orders filtered by status and the period's days |
-| Inventory             | In stock / Low stock / Out of stock tiles (stock items per product and warehouse) and units on hand                                                                | Inventory filtered by status                    |
-| Warehouses            | Active warehouses: units, low, out                                                                                                                                 | Warehouse detail, all warehouses                |
-| Top products          | Up to 5: product, SKU, units sold, revenue                                                                                                                         | Product detail                                  |
-| Recent orders         | The 5 newest orders (number, customer, date, status, total) from the regular orders list endpoint (`pageSize=5`, newest first)                                     | Order detail, all orders                        |
+| Section               | Content                                                                                                                                                            | Links to                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| Header                | Workspace name, "Overview", description, date range picker; below it the period and the comparison period                                                          |                                               |
+| Set up your workspace | Only for a workspace with no products, customers, or orders: shortcuts (filtered by role)                                                                          | New product, warehouses, customers, new order |
+| KPI cards             | Total sales and Orders (each with a neutral change indicator), Customers (+ new in the period), Products (+ archived), Inventory units, Low stock (+ out of stock) | Inventory filtered to low stock               |
+| Sales over time       | SVG bar chart of realized revenue **or** orders per day/week/month (toggle), tooltip, data table                                                                   | Orders, new order (empty state)               |
+| Orders by status      | All six statuses as labelled horizontal bars with count and share                                                                                                  | Orders filtered by status and the period      |
+| Inventory             | In stock / Low stock / Out of stock tiles (stock items per product and warehouse) and units on hand                                                                | Inventory filtered by status                  |
+| Warehouses            | Active warehouses: units, low, out                                                                                                                                 | Warehouse detail, all warehouses              |
+| Top products          | Up to 5: product, SKU, units sold, revenue                                                                                                                         | Product detail                                |
+| Recent orders         | The 5 newest orders **of the selected period** (number, customer, date, status, total), from `recentOrders` in the summary; "No orders in this period." otherwise  | Order detail, orders in this period           |
 
 Layout: KPI cards stack on phones, 2 columns from `sm`, 3 from `lg`; the chart takes two thirds next to the status bars from `lg`; the other sections pair up from `lg`. Tables scroll inside their card on very narrow screens; the page itself never scrolls sideways.
 
@@ -169,6 +170,7 @@ Layout: KPI cards stack on phones, 2 columns from `sm`, 3 from `lg`; the chart t
 
 - **URL state:** `?range=THIS_YEAR`, or `?range=CUSTOM&from=YYYY-MM-DD&to=YYYY-MM-DD` (only non-defaults are written; invalid links fall back to the last 30 days). Links are shareable and survive reloads; the back button restores earlier ranges.
 - **Time zone:** the browser's IANA time zone is sent as `timeZone`, so "today" and the chart's days are the viewer's days.
+- **Links to the orders list** (status bars, "Orders in this period") are built by `ordersInPeriodPath()` in `lib/dashboard-params.ts` and carry `from`, `to`, **and** `timeZone`; the orders list sends the same `timeZone` to `GET …/orders`, which turns the days into the same UTC instants as the dashboard (`instantRange` in `common/time/local-days.ts`). The counts on both sides therefore match, including orders created near local midnight.
 - **Query key:** `['organizations', 'detail', organizationId, 'dashboard', 'summary', query]` (`dashboardKeys` in `api/dashboard.ts`). Always refetched when the overview opens (`staleTime: 0`). While a new range loads, the previous range of the **same** workspace stays visible but dimmed (`aria-busy`); another workspace's data is never used as a placeholder, and the page remounts per workspace (`OrganizationLayout`).
 - **Loading:** skeletons in the shape of the sections; the header and range picker stay usable. **Error:** an error state with "Try again", never zeros. **Empty:** each section says what is missing and links to where to add it.
 - The overview only reads (GET requests); it never changes data.
@@ -187,7 +189,7 @@ Layout: KPI cards stack on phones, 2 columns from `sm`, 3 from `lg`; the chart t
 
 ### Frontend tests
 
-`pages/dashboard-page.test.tsx` covers render, KPI values, neutral comparison, loading, error and retry, empty workspace, role-based shortcuts, default/preset/custom/shared/invalid ranges, refetch with the previous range dimmed, chart data mapping, keyboard value text, data table, status distribution, inventory and warehouse summaries, top products, recent orders, GET-only requests, no hard-coded colors, and a workspace switch without stale data. `lib/chart-math.test.ts` and `lib/dashboard-params.test.ts` cover the helpers. `mockApi` answers the dashboard (empty workspace) and its recent-orders request by default, so other tests that land on the overview need no extra mocks.
+`pages/dashboard-page.test.tsx` covers render, KPI values, neutral comparison, loading, error and retry, empty workspace, role-based shortcuts, default/preset/custom/shared/invalid ranges, refetch with the previous range dimmed, chart data mapping, keyboard value text, data table, status distribution, inventory and warehouse summaries, top products, recent orders, GET-only requests, no hard-coded colors, and a workspace switch without stale data. `lib/chart-math.test.ts` and `lib/dashboard-params.test.ts` cover the helpers. `mockApi` answers the dashboard (empty workspace) by default, so other tests that land on the overview need no extra mocks.
 
 ## Reports
 
@@ -260,7 +262,7 @@ Enforced by the API per handler (`@RequirePermissions`, pinned by `reports.contr
 ### Reports UI
 
 - **Reports** tab in the workspace navigation, with a Sales / Orders / Inventory sub-navigation (the date range carries over between Sales and Orders, and from the dashboard: the Top products card links to the Sales report of the same range).
-- Filter bar: date range (the dashboard's range picker), search (debounced), selects (status, warehouse, customer, category; up to 100 customers listed), "Include archived" for inventory, "Clear filters". Everything is in the URL (`?range=…&warehouseId=…&sort=revenue:desc&page=2`), so views are shareable and reloadable.
+- Filter bar: date range (the dashboard's range picker), search (debounced), selects (status, warehouse, category), a customer search (the shared `CustomerPicker`: server-side search, 20 at a time with "Load more", archived customers included), "Include archived" for inventory, "Clear filters". Everything is in the URL (`?range=…&warehouseId=…&sort=revenue:desc&page=2`), so views are shareable and reloadable.
 - Table with sortable column headers (buttons in `<th aria-sort>`), totals above it, `PaginationBar` below. Tables scroll horizontally inside their card on narrow screens; the page itself never does.
 - States: loading, error with retry (never an empty table instead of an error), "nothing matches these filters" with Clear filters, and "no data yet" with a link to where data is created. Export is disabled for empty results.
 - Query keys `['organizations', 'detail', organizationId, 'reports', type, query]`; placeholder data only from the same workspace; the page remounts per workspace.
@@ -280,10 +282,6 @@ Enforced by the API per handler (`@RequirePermissions`, pinned by `reports.contr
 ## Known limitations
 
 - **Reporting date = order creation date.** Orders have no per-status timestamps, so a sale is attributed to the day the order was created, not the day it was processed. Adding status timestamps (or reading the SALE movement time) would be a separate change.
-- **Stored timestamps depend on the database session time zone.** Because of the Prisma adapter behavior above, raw SQL that reads timestamps as real instants (for example `psql`, or `now()` defaults written by PostgreSQL itself) sees Prisma-written times shifted by the session's UTC offset. The application is consistent through Prisma, and the dashboard compensates. A root fix (connections in UTC plus a one-time correction of existing timestamps) touches every table and existing data, so it needs a deliberate decision.
 - "Now" KPIs (stock, active customers/products) have no historical comparison.
 - Concurrent writes during a request are not visible to it (snapshot); the next request sees them.
-- Links from the overview to the orders list pass the period's days, but the orders list filters by **UTC** days while the dashboard uses the viewer's time zone, so counts can differ for orders created near midnight.
-- The Recent orders box shows the newest orders of the workspace regardless of the selected range.
-- Report filter selects list up to 100 customers; others are reachable through search or a link with `customerId`.
 - Exports above 10,000 rows must be narrowed; there are no background or scheduled exports, and no PDF/XLSX.

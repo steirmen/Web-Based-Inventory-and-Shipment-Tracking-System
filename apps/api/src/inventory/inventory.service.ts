@@ -6,8 +6,8 @@ import {
   type SortOrder,
   type StockMovementListResponse,
 } from '@app/shared';
-import { HttpStatus, Injectable } from '@nestjs/common';
-import { AppException } from '../common/errors/app-exception.js';
+import { Injectable } from '@nestjs/common';
+import { instantRange } from '../common/time/local-days.js';
 import { escapeLikePattern } from '../common/validation/like-pattern.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -38,9 +38,6 @@ const SORT_COLUMNS: Record<InventorySortField, Prisma.Sql> = {
   updatedAt: Prisma.sql`i.updated_at`,
 };
 
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-const DAY_MS = 86_400_000;
-
 function paging(query: PageQueryDto) {
   const page = query.page ?? 1;
   const pageSize = query.pageSize ?? INVENTORY_LIMITS.pageSizeDefault;
@@ -49,15 +46,6 @@ function paging(query: PageQueryDto) {
 
 function pagination(page: number, pageSize: number, totalItems: number) {
   return { page, pageSize, totalItems, totalPages: Math.ceil(totalItems / pageSize) };
-}
-
-function invalidField(field: string, message: string) {
-  return new AppException(
-    HttpStatus.BAD_REQUEST,
-    'VALIDATION_ERROR',
-    'The request contains invalid fields.',
-    [{ field, messages: [message] }],
-  );
 }
 
 /**
@@ -161,18 +149,9 @@ export class InventoryService {
     await this.assertFilterIds(organizationId, query);
     if (query.actorUserId) await this.assertActor(organizationId, query.actorUserId);
 
-    // Both bounds are inclusive. A date-only `to` ("2026-09-30") includes that whole day (UTC).
-    const from = query.from ? Date.parse(query.from) : undefined;
-    const toEndOfDay = query.to !== undefined && DATE_ONLY.test(query.to);
-    const to = query.to ? Date.parse(query.to) + (toEndOfDay ? DAY_MS - 1 : 0) : undefined;
-    if (from !== undefined && to !== undefined && from > to) {
-      throw invalidField('to', 'to must not be before from.');
-    }
-    const createdAt: Prisma.DateTimeFilter = {
-      ...(from !== undefined ? { gte: new Date(from) } : {}),
-      ...(to !== undefined ? { lte: new Date(to) } : {}),
-    };
-    const hasRange = from !== undefined || to !== undefined;
+    // Dates are local days in `timeZone` (default UTC), as on the dashboard and in the reports.
+    const createdAt = instantRange(query.from, query.to, query.timeZone);
+    const hasRange = Boolean(query.from || query.to);
 
     const search = query.search ? escapeLikePattern(query.search) : undefined;
     const where: Prisma.StockMovementWhereInput = {

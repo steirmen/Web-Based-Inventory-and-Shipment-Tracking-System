@@ -7,11 +7,14 @@ import { PaginationBar } from '@/components/layout/pagination-bar';
 import { Can } from '@/components/organization/can';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { CustomerPicker } from '@/components/customers/customer-picker';
 import { Card } from '@/components/ui/card';
-import { FormField } from '@/components/ui/form-field';
+import { type FieldControlProps, FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
+import { useCustomer } from '@/hooks/use-sales';
 import { apiErrorMessage } from '@/lib/api-errors';
+import { useCurrentOrganization } from '@/lib/organization-context';
 import { cn } from '@/lib/cn';
 import { REPORT_TITLES, reportPath, type ReportSort } from '@/lib/report-params';
 
@@ -340,5 +343,44 @@ export function ReportResults({
         onPageChange={onPageChange}
       />
     </div>
+  );
+}
+
+/**
+ * Customer filter of the sales and orders reports: the shared customer
+ * search (server-side, paged), including archived customers (their orders
+ * are history). The URL keeps only the id; the name is looked up.
+ */
+export function ReportCustomerFilter({
+  control,
+  customerId,
+  onChange,
+}: {
+  control: FieldControlProps;
+  customerId: string;
+  onChange: (customerId: string) => void;
+}) {
+  const { organization } = useCurrentOrganization();
+  const customer = useCustomer(organization.id, customerId);
+  const found = customerId ? customer.data?.customer : undefined;
+  const selected = found
+    ? { id: found.id, name: found.name, companyName: found.companyName, isActive: found.isActive }
+    : customerId
+      ? {
+          id: customerId,
+          name: customer.isError ? 'Unknown customer' : '…',
+          companyName: null,
+          isActive: true,
+        }
+      : null;
+  return (
+    <CustomerPicker
+      key={customerId || 'none'}
+      control={control}
+      includeArchived
+      selected={selected}
+      onChange={(next) => onChange(next?.id ?? '')}
+      placeholder="All customers"
+    />
   );
 }

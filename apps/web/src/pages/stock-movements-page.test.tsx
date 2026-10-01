@@ -107,6 +107,8 @@ describe('StockMovementsPage', () => {
       movementType: 'DAMAGE',
       from: '2026-09-01',
       to: '2026-09-30',
+      // The viewer's local days, like the dashboard.
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       sortOrder: 'desc',
       page: '2',
       pageSize: '20',

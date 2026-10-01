@@ -114,6 +114,24 @@ describe('SalesReportPage', () => {
     expect(router.state.location.search).toContain('search=acme');
   });
 
+  it('filters by any customer through the customer search (archived included)', async () => {
+    const { fetchMock, router, user } = await openReport('/sales', {}, 'Sales report');
+    await screen.findByRole('table', { name: 'Realized sales' });
+
+    await user.click(screen.getByRole('searchbox', { name: 'Customer' }));
+    const list = await screen.findByRole('list', { name: 'Matching customers' });
+    await user.click(within(list).getByRole('button', { name: /Jamie Rivera/ }));
+
+    await waitFor(() =>
+      expect(router.state.location.search).toContain(`customerId=${riverside.id}`),
+    );
+    expect(requestsTo(fetchMock, `${REPORTS}/sales`).at(-1)).toMatchObject({
+      customerId: riverside.id,
+    });
+    const customerSearch = requestsTo(fetchMock, `${ORG_API}/customers`)[0]!;
+    expect(customerSearch).not.toHaveProperty('status');
+  });
+
   it('sorts by clicking a column header, with aria-sort', async () => {
     const { fetchMock, router, user } = await openReport('/sales', {}, 'Sales report');
     const table = await screen.findByRole('table', { name: 'Realized sales' });

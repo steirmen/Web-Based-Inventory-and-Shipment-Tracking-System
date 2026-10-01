@@ -40,14 +40,14 @@ function recordingPrisma() {
 }
 
 describe('DashboardService query strategy', () => {
-  it('answers with five grouped queries in one REPEATABLE READ snapshot', async () => {
+  it('answers with six queries (five grouped, one LIMIT 5) in one REPEATABLE READ snapshot', async () => {
     const { prisma, queries, transactions } = recordingPrisma();
 
     await new DashboardService(prisma).summary(ORG, { range: 'THIS_YEAR' }, NOW);
 
-    expect(queries).toHaveLength(5);
+    expect(queries).toHaveLength(6);
     expect(transactions).toEqual([
-      { count: 5, options: { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead } },
+      { count: 6, options: { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead } },
     ]);
   });
 

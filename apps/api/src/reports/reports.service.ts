@@ -18,7 +18,8 @@ import {
 } from '@app/shared';
 import { Injectable } from '@nestjs/common';
 import { escapeLikePattern } from '../common/validation/like-pattern.js';
-import { formatLocalDateTime, resolveDashboardPeriods } from '../dashboard/dashboard-period.js';
+import { formatLocalDateTime } from '../common/time/local-days.js';
+import { resolveDashboardPeriods } from '../dashboard/dashboard-period.js';
 import { REALIZED_ORDER_SQL } from '../dashboard/sales-semantics.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';

@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { OrderStatusBadge } from '@/components/orders/order-status-badge';
 import {
   ClearFiltersButton,
+  ReportCustomerFilter,
   ExportButton,
   type ReportColumn,
   ReportResults,
@@ -21,7 +22,6 @@ import { Select } from '@/components/ui/select';
 import { useCategories, useProduct } from '@/hooks/use-catalog';
 import { useWarehouses } from '@/hooks/use-inventory';
 import { useReportExport, useSalesReport } from '@/hooks/use-reports';
-import { useCustomers } from '@/hooks/use-sales';
 import { pageTitle } from '@/lib/app-config';
 import {
   browserTimeZone,
@@ -43,8 +43,6 @@ import {
 import { ORDER_STATUS_LABELS } from '@/lib/sales-params';
 import { paths } from '@/routes/paths';
 
-const CUSTOMER_OPTIONS = 100;
-
 /**
  * Realized sales (processing, shipped, and completed orders) with units and
  * revenue from the order lines, filtered and sorted on the server, exported
@@ -60,12 +58,6 @@ export function SalesReportPage() {
   const exporter = useReportExport(organization.id, 'sales');
   const warehouses = useWarehouses(organization.id);
   const categories = useCategories(organization.id);
-  const customers = useCustomers(organization.id, {
-    sortBy: 'name',
-    sortOrder: 'asc',
-    page: 1,
-    pageSize: CUSTOMER_OPTIONS,
-  });
   const data = report.data;
 
   const setParams = (changes: Partial<SalesReportParams>) => {
@@ -157,7 +149,6 @@ export function SalesReportPage() {
   ];
 
   const filtered = hasSalesFilters(params);
-  const customerList = customers.data?.items ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -237,23 +228,11 @@ export function SalesReportPage() {
           </FormField>
           <FormField label="Customer">
             {(control) => (
-              <Select
-                {...control}
-                value={params.customerId}
-                onChange={(event) => setParams({ customerId: event.target.value })}
-              >
-                <option value="">All customers</option>
-                {params.customerId &&
-                  !customerList.some((customer) => customer.id === params.customerId) && (
-                    <option value={params.customerId}>Selected customer</option>
-                  )}
-                {customerList.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                    {customer.isActive ? '' : ' (archived)'}
-                  </option>
-                ))}
-              </Select>
+              <ReportCustomerFilter
+                control={control}
+                customerId={params.customerId}
+                onChange={(customerId) => setParams({ customerId })}
+              />
             )}
           </FormField>
           <FormField label="Category">

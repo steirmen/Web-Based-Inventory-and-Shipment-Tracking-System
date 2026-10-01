@@ -33,6 +33,46 @@ const listRequests = (fetchMock: Awaited<ReturnType<typeof openOrders>>['fetchMo
     .filter((url) => url.pathname === ORDERS_API)
     .map((url) => Object.fromEntries(url.searchParams));
 
+describe('OrdersPage dates', () => {
+  it('counts a dashboard link’s days in the dashboard’s time zone', async () => {
+    const { fetchMock } = await openOrders(
+      'OWNER',
+      {},
+      `${ORDERS_APP}?from=2026-09-30&to=2026-09-30&timeZone=Europe%2FIstanbul`,
+    );
+    await screen.findByRole('table');
+
+    expect(listRequests(fetchMock)[0]).toMatchObject({
+      from: '2026-09-30',
+      to: '2026-09-30',
+      timeZone: 'Europe/Istanbul',
+    });
+    expect(screen.getByText('Days in Europe/Istanbul.')).toBeVisible();
+  });
+
+  it('counts typed dates in the viewer’s time zone, and sends none without dates', async () => {
+    const { fetchMock } = await openOrders('OWNER', {}, `${ORDERS_APP}?from=2026-09-01`);
+    await screen.findByRole('table');
+    const viewer = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    expect(listRequests(fetchMock)[0]).toMatchObject({ from: '2026-09-01', timeZone: viewer });
+    expect(screen.getByText(`Days in ${viewer}.`)).toBeVisible();
+  });
+
+  it('ignores a malformed time zone in the URL', async () => {
+    const { fetchMock } = await openOrders(
+      'OWNER',
+      {},
+      `${ORDERS_APP}?from=2026-09-01&timeZone=%2B03%3A00`,
+    );
+    await screen.findByRole('table');
+
+    expect(listRequests(fetchMock)[0]!.timeZone).toBe(
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+    );
+  });
+});
+
 describe('OrdersPage', () => {
   it('lists orders with customer, warehouse, status text, lines, total, and date', async () => {
     await openOrders('STAFF');

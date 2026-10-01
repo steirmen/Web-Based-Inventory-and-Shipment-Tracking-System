@@ -1,5 +1,6 @@
 import type { MemberRole, Order, OrderAction } from '@app/shared';
 import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { ORG_API, ORG_APP, renderCatalog, sentBodies } from '@/test/catalog-fixtures';
 import {
@@ -23,6 +24,14 @@ type Handler = (init: RequestInit | undefined, url: URL) => Response | Promise<R
 
 const ORDERS_API = `${ORG_API}/orders`;
 const ORDERS_APP = `${ORG_APP}/orders`;
+
+/** Chooses a customer with the customer search (type, then pick the result). */
+async function pickCustomer(user: ReturnType<typeof userEvent.setup>, name: string) {
+  const search = await screen.findByRole('searchbox', { name: 'Customer' });
+  await user.click(search);
+  const results = await screen.findByRole('list', { name: 'Matching customers' });
+  await user.click(await within(results).findByRole('button', { name: new RegExp(name) }));
+}
 
 /** Shared API answers for the builder: customers, warehouses, products, and per-line stock. */
 function builderApi(extra: Parameters<typeof renderCatalog>[2] = {}) {
@@ -69,10 +78,7 @@ describe('New order (builder)', () => {
       { waitForHeading: 'New order' },
     );
 
-    await user.selectOptions(
-      await screen.findByRole('combobox', { name: 'Customer' }),
-      'Jamie Rivera — Riverside Dental',
-    );
+    await pickCustomer(user, 'Jamie Rivera');
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Warehouse' }),
       'Main Warehouse (MAIN)',
@@ -129,7 +135,7 @@ describe('New order (builder)', () => {
     expect(within(lines).getByLabelText('Quantity of Keyboard K2')).toHaveAccessibleDescription(
       `Enter a whole number from 1 to ${(1_000_000).toLocaleString()}.`,
     );
-    expect(screen.getByLabelText('Customer', { selector: 'select' })).toHaveAccessibleDescription(
+    expect(screen.getByRole('searchbox', { name: 'Customer' })).toHaveAccessibleDescription(
       'Choose a customer.',
     );
     expect(sentBodies(fetchMock, 'POST', ORDERS_API)).toHaveLength(0);
@@ -147,10 +153,7 @@ describe('New order (builder)', () => {
       builderApi({ [`POST ${ORDERS_API}`]: post }),
       { waitForHeading: 'New order' },
     );
-    await app.user.selectOptions(
-      await screen.findByRole('combobox', { name: 'Customer' }),
-      'Jamie Rivera — Riverside Dental',
-    );
+    await pickCustomer(app.user, 'Jamie Rivera');
     await app.user.selectOptions(
       screen.getByRole('combobox', { name: 'Warehouse' }),
       'Main Warehouse (MAIN)',
@@ -181,7 +184,7 @@ describe('New order (builder)', () => {
     await user.click(screen.getByRole('button', { name: 'Create draft' }));
 
     await waitFor(() =>
-      expect(screen.getByRole('combobox', { name: 'Customer' })).toHaveAccessibleDescription(
+      expect(screen.getByRole('button', { name: /^Change customer/ })).toHaveAccessibleDescription(
         'Customer Jamie Rivera is archived. Restore the customer or choose another one.',
       ),
     );

@@ -20,6 +20,7 @@ import { useCustomer, useOrders } from '@/hooks/use-sales';
 import { pageTitle } from '@/lib/app-config';
 import { cn } from '@/lib/cn';
 import { formatDate } from '@/lib/format';
+import { browserTimeZone } from '@/lib/local-days';
 import { formatMoney } from '@/lib/money';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import {
@@ -178,6 +179,11 @@ export function OrdersPage() {
           </FormField>
           <FormField
             label="Created to"
+            hint={
+              params.from || params.to
+                ? `Days in ${params.timeZone || browserTimeZone()}.`
+                : undefined
+            }
             error={invalidRange ? 'Must not be before “from”.' : undefined}
           >
             {(control) => (

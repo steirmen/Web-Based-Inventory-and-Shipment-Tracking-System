@@ -79,14 +79,15 @@ See [database-design.md](database-design.md) for the model, tenancy rules, delet
 
 ## Troubleshooting
 
-| Symptom                                                | Likely cause / fix                                                                                                                                    |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `P1001: Can't reach database server at localhost:5432` | PostgreSQL service not running (`Start-Service postgresql-x64-<version>`), or a different port — check `DB_PORT`.                                     |
-| `P1000: Authentication failed`                         | Wrong `DB_USER` / `DB_PASSWORD`.                                                                                                                      |
-| `P1003: Database ... does not exist`                   | Create it (step 3) or fix `DB_NAME`.                                                                                                                  |
-| API exits with `Invalid environment configuration`     | `.env` is missing or incomplete; compare with `.env.example`.                                                                                         |
-| Health-check page shows **API unreachable**            | Start the API (`npm run dev:api`); confirm `VITE_API_BASE_URL` matches `API_PORT`. Restart Vite after editing `.env`.                                 |
-| Signed in, but reloading shows the sign-in page again  | You opened the app via `127.0.0.1`, or `AUTH_COOKIE_SECURE=true` over plain HTTP. Use `http://localhost:5173` and `AUTH_COOKIE_SECURE=false` locally. |
-| `429` "Too many attempts" on sign-in                   | The login rate limit (10/min per IP) was hit. Wait a minute, or restart the API (limits are in memory).                                               |
-| Browser console shows a CORS error                     | Add the web origin to `API_CORS_ORIGINS` and restart the API.                                                                                         |
-| `Port 5173 is already in use`                          | Another Vite server is running. The port is fixed on purpose because the API's CORS allow-list expects it.                                            |
+| Symptom                                                | Likely cause / fix                                                                                                                                                             |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `P1001: Can't reach database server at localhost:5432` | PostgreSQL service not running (`Start-Service postgresql-x64-<version>`), or a different port — check `DB_PORT`.                                                              |
+| `P1000: Authentication failed`                         | Wrong `DB_USER` / `DB_PASSWORD`.                                                                                                                                               |
+| `P1003: Database ... does not exist`                   | Create it (step 3) or fix `DB_NAME`.                                                                                                                                           |
+| API exits with `Invalid environment configuration`     | `.env` is missing or incomplete; compare with `.env.example`.                                                                                                                  |
+| Health-check page shows **API unreachable**            | Start the API (`npm run dev:api`); confirm `VITE_API_BASE_URL` matches `API_PORT`. Restart Vite after editing `.env`.                                                          |
+| Signed in, but reloading shows the sign-in page again  | You opened the app via `127.0.0.1`, or `AUTH_COOKIE_SECURE=true` over plain HTTP. Use `http://localhost:5173` and `AUTH_COOKIE_SECURE=false` locally.                          |
+| `429` "Too many attempts" on sign-in                   | The login rate limit (10/min per IP) was hit. Wait a minute, or restart the API (limits are in memory).                                                                        |
+| Browser console shows a CORS error                     | Add the web origin to `API_CORS_ORIGINS` and restart the API.                                                                                                                  |
+| Times in `psql` look shifted by your UTC offset        | The database session is not in UTC. Run `npm run db:deploy` (migration `store_timestamps_in_utc`, API stopped), then restart both dev servers. See [timezone.md](timezone.md). |
+| `Port 5173 is already in use`                          | Another Vite server is running. The port is fixed on purpose because the API's CORS allow-list expects it.                                                                     |

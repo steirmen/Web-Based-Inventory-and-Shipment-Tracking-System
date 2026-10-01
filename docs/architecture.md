@@ -25,13 +25,14 @@ src/
   app.module.ts      Root module: ConfigModule + feature modules
   config/            Env schema (Zod) and helpers; the only place that reads raw env vars
   common/errors/     AppException, ApiExceptionFilter (uniform error body), validation errors
+  common/time/       local-days.ts: local calendar days in an IANA zone ↔ UTC instants (instantRange); see timezone.md
   database/          Global DatabaseModule exposing PrismaService
   auth/              Register/login/logout/me, sessions, Argon2id passwords, global SessionAuthGuard
   organizations/     Organizations, members, invitations; OrganizationAccessGuard + @RequirePermissions (RBAC)
   catalog/           Categories and products (list/search/sort/paginate, archive/restore); see products-categories.md
   inventory/         Warehouses, inventory, stock operations (one transaction each), stock movement ledger; see warehouses-inventory.md
-  customers/         Customers (archive/restore)
-  orders/            Sales orders, lifecycle, fulfillment through StockOperationsService
+  customers/         Customers (archive/restore); see customers-orders.md
+  orders/            Sales orders, lifecycle, fulfillment through StockOperationsService; see customers-orders.md
   dashboard/         Read-only dashboard aggregates (date ranges, KPIs, time series); see dashboard-reporting.md
   reports/           Sales, orders, inventory reports and CSV export (csv.ts); see dashboard-reporting.md
   appearance/        User-level appearance settings and profiles (/me/appearance); see personalization-appearance.md
@@ -53,7 +54,7 @@ test/database/       Database integration tests against the test database
 - **Authentication**: a global `SessionAuthGuard` requires a valid session cookie on every route not marked `@Public()`. See [authentication.md](authentication.md).
 - **Organizations & RBAC**: routes under `/organizations/:organizationId` are guarded by `OrganizationAccessGuard`, which verifies membership (404 for non-members) and the handler's `@RequirePermissions` (403). See [organizations-rbac.md](organizations-rbac.md).
 - **Database**: `PrismaService` extends the generated `PrismaClient` using the `@prisma/adapter-pg` driver adapter (Prisma 7). It connects lazily, so the API still starts when PostgreSQL is down. The schema, tenancy model, and constraints are described in [database-design.md](database-design.md).
-- **Read models / aggregates**: the dashboard (`src/dashboard`) and the reports (`src/reports`) answer with a few grouped or paginated SQL queries in one REPEATABLE READ snapshot instead of loading rows into memory; business rules they share (realized order statuses in `sales-semantics.ts`, date ranges in `dashboard-period.ts`, stock status SQL in `inventory-mappers.ts`) are imported, never re-implemented. CSV is written by `src/reports/csv.ts` only. See [dashboard-reporting.md](dashboard-reporting.md).
+- **Read models / aggregates**: the dashboard (`src/dashboard`) and the reports (`src/reports`) answer with a few grouped or paginated SQL queries in one REPEATABLE READ snapshot instead of loading rows into memory; business rules they share (realized order statuses in `sales-semantics.ts`, date ranges in `dashboard-period.ts` on top of `common/time/local-days.ts`, stock status SQL in `inventory-mappers.ts`) are imported, never re-implemented. CSV is written by `src/reports/csv.ts` only. See [dashboard-reporting.md](dashboard-reporting.md).
 - **Feature modules**: one folder per domain (`src/<domain>/`) containing its module, controller, service, DTOs, and tests.
 
 ### `GET /health`

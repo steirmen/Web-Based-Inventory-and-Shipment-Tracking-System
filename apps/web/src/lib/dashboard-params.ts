@@ -1,16 +1,16 @@
 import {
   DASHBOARD_LIMITS,
   DASHBOARD_RANGES,
-  type DashboardBucket,
   type DashboardRange,
   type DashboardSummaryQuery,
-  type OrderListQuery,
   DEFAULT_DASHBOARD_RANGE,
-  DEFAULT_DASHBOARD_TIME_ZONE,
   type OrderStatus,
   type StockStatus,
 } from '@app/shared';
 import { paths } from '@/routes/paths';
+import { dayOf } from './local-days';
+
+export { browserTimeZone, formatBucketLabel, formatDayRange } from './local-days';
 import { EMPTY_ORDER_PARAMS, writeOrderParams } from './sales-params';
 
 /**
@@ -42,17 +42,6 @@ export const DASHBOARD_RANGE_LABELS: Record<DashboardRange, string> = {
   THIS_YEAR: 'This year',
   CUSTOM: 'Custom range',
 };
-
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const DAY_MS = 86_400_000;
-
-/** Days since 1970-01-01 of a valid yyyy-mm-dd date, or null (rejects e.g. 2026-02-30). */
-function dayOf(value: string): number | null {
-  if (!DATE_PATTERN.test(value)) return null;
-  const time = Date.parse(`${value}T00:00:00Z`);
-  if (Number.isNaN(time) || new Date(time).toISOString().slice(0, 10) !== value) return null;
-  return time / DAY_MS;
-}
 
 /** Why a custom range is not acceptable, or undefined when it is. */
 export function customRangeError(from: string, to: string): string | undefined {
@@ -87,62 +76,12 @@ export function writeDashboardParams(params: DashboardParams): URLSearchParams {
   return searchParams;
 }
 
-/**
- * The viewer's IANA time zone, so "today" and the chart's days are the
- * viewer's days. Falls back to UTC when the browser reports none (or an
- * offset the API does not accept).
- */
-export function browserTimeZone(): string {
-  try {
-    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    return zone && /^[A-Za-z][A-Za-z0-9_+/-]*$/.test(zone) ? zone : DEFAULT_DASHBOARD_TIME_ZONE;
-  } catch {
-    return DEFAULT_DASHBOARD_TIME_ZONE;
-  }
-}
-
 export function toDashboardQuery(params: DashboardParams, timeZone: string): DashboardSummaryQuery {
   return {
     range: params.range,
     ...(params.range === 'CUSTOM' ? { from: params.from, to: params.to } : {}),
     timeZone,
   };
-}
-
-// --- Display ------------------------------------------------------------------------
-
-/** Date-only values are calendar days: format them in UTC so they never shift. */
-const dayFormatter = new Intl.DateTimeFormat(undefined, {
-  timeZone: 'UTC',
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
-const shortDayFormatter = new Intl.DateTimeFormat(undefined, {
-  timeZone: 'UTC',
-  month: 'short',
-  day: 'numeric',
-});
-const monthFormatter = new Intl.DateTimeFormat(undefined, {
-  timeZone: 'UTC',
-  month: 'short',
-  year: 'numeric',
-});
-
-const asDate = (day: string) => new Date(`${day}T00:00:00Z`);
-
-/** "Sep 2 – Oct 1, 2026" (or a single day). */
-export function formatDayRange(from: string, to: string): string {
-  return from === to
-    ? dayFormatter.format(asDate(from))
-    : dayFormatter.formatRange(asDate(from), asDate(to));
-}
-
-/** Short x-axis label of a time series bucket. */
-export function formatBucketLabel(period: string, bucket: DashboardBucket): string {
-  return bucket === 'MONTH'
-    ? monthFormatter.format(asDate(period))
-    : shortDayFormatter.format(asDate(period));
 }
 
 const countFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
@@ -156,23 +95,21 @@ export function inventoryStatusPath(organizationId: string, status: StockStatus)
 }
 
 /**
- * Orders list filtered to one status and the dashboard's days. Note: the
- * orders list counts days in UTC, the dashboard in the viewer's time zone.
+ * Orders list filtered to one status (or all) and exactly the dashboard's
+ * days: the same local days in the same time zone (the orders list counts days
+ * in `timeZone`, like the dashboard).
  */
 export function ordersInPeriodPath(
   organizationId: string,
   status: OrderStatus | '',
-  from: string,
-  to: string,
+  period: { from: string; to: string; timeZone: string },
 ): string {
-  const query = writeOrderParams({ ...EMPTY_ORDER_PARAMS, status, from, to }).toString();
+  const query = writeOrderParams({
+    ...EMPTY_ORDER_PARAMS,
+    status,
+    from: period.from,
+    to: period.to,
+    timeZone: period.timeZone,
+  }).toString();
   return `${paths.orders(organizationId)}?${query}`;
 }
-
-/** Recent orders on the dashboard: the five newest, from the regular orders list endpoint. */
-export const RECENT_ORDERS_QUERY: OrderListQuery = {
-  sortBy: 'createdAt',
-  sortOrder: 'desc',
-  page: 1,
-  pageSize: 5,
-};

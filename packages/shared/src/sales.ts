@@ -221,10 +221,15 @@ export interface OrderListQuery {
   status?: OrderStatus;
   customerId?: string;
   warehouseId?: string;
-  /** ISO 8601 date or date-time, inclusive (creation time). */
+  /** ISO 8601 date or date-time, inclusive (creation time); a date is a local day in `timeZone`. */
   from?: string;
-  /** ISO 8601 date or date-time, inclusive; a date-only value includes that whole day (UTC). */
+  /** ISO 8601 date or date-time, inclusive; a date-only value includes that whole local day. */
   to?: string;
+  /**
+   * IANA time zone of date-only `from`/`to` (default UTC): a date is that local
+   * day, as on the dashboard and in the reports.
+   */
+  timeZone?: string;
   /** Default `createdAt`. */
   sortBy?: OrderSortField;
   /** Default `desc`. */

@@ -32,6 +32,7 @@ import {
   formatCount,
   formatDayRange,
   inventoryStatusPath,
+  ordersInPeriodPath,
   readDashboardParams,
   toDashboardQuery,
   writeDashboardParams,
@@ -219,8 +220,7 @@ function DashboardContent({
         <OrderStatusChart
           organizationId={organizationId}
           statuses={data.orderStatus}
-          from={period.from}
-          to={period.to}
+          period={period}
         />
       </div>
 
@@ -239,7 +239,11 @@ function DashboardContent({
             to: period.range === 'CUSTOM' ? period.to : '',
           })}
         />
-        <RecentOrders organizationId={organizationId} />
+        <RecentOrders
+          organizationId={organizationId}
+          orders={data.recentOrders}
+          allOrdersHref={ordersInPeriodPath(organizationId, '', period)}
+        />
       </div>
     </>
   );

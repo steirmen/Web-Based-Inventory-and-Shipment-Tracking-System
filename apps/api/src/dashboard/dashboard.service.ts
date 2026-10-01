@@ -37,19 +37,16 @@ const REALIZED_REVENUE_JOIN = Prisma.sql`
     WHERE oi.organization_id = o.organization_id AND oi.order_id = o.id AND ${REALIZED_ORDER_SQL}
   ) line ON TRUE`;
 
-/**
- * The local wall-clock time of `o.created_at` in `timeZone`.
- *
- * Prisma's pg driver adapter sends DateTime values as zone-less UTC wall-clock
- * text, which PostgreSQL reads in the SESSION time zone (Europe/Istanbul on
- * the dev machine). Prisma-written timestamps (including @default(now()))
- * therefore hold "the UTC wall clock, read in the session zone". Comparisons
- * with Date parameters stay correct (both sides are written the same way), but
- * AT TIME ZONE needs the true instant first: read the wall clock back in the
- * session zone and interpret it as UTC. With a UTC session this is a no-op.
- */
-const localCreatedAt = (timeZone: string) =>
-  Prisma.sql`((o.created_at AT TIME ZONE current_setting('TimeZone')) AT TIME ZONE 'UTC') AT TIME ZONE ${timeZone}`;
+interface RecentOrderRow {
+  id: string;
+  orderNumber: string;
+  status: OrderStatus;
+  total: string;
+  createdAt: Date;
+  customerId: string | null;
+  customerName: string | null;
+  customerCompany: string | null;
+}
 
 interface StatusRow {
   status: OrderStatus;
@@ -119,8 +116,8 @@ function moneyMetric(current: Decimal, previous: Decimal): DashboardMoneyMetric 
 /**
  * Read-only dashboard aggregates for one organization (Phase 8A). Every query
  * is filtered by the organization id from the guard-verified context and
- * joins tenant tables on (organization_id, id). Five grouped queries answer
- * the whole summary — none per KPI, status, product, or warehouse — and run
+ * joins tenant tables on (organization_id, id). Six queries (five grouped,
+ * one LIMIT 5) answer the whole summary — none per KPI, status, product, or warehouse — and run
  * in one REPEATABLE READ transaction so all numbers come from one snapshot.
  * Money is summed by PostgreSQL (numeric) and handled as Decimal strings.
  */
@@ -140,7 +137,7 @@ export class DashboardService {
     const previousStart = new Date(previous.start);
     const inPeriod = Prisma.sql`o.created_at >= ${start}::timestamptz AND o.created_at < ${end}::timestamptz`;
 
-    const [statusRows, bucketRows, topRows, countRows, warehouseRows] =
+    const [statusRows, bucketRows, topRows, countRows, warehouseRows, recentRows] =
       await this.prisma.$transaction(
         [
           // 1. Orders and realized revenue per status, for the period and the comparison period.
@@ -158,7 +155,7 @@ export class DashboardService {
           // 2. Time series: buckets of local days in the requested time zone.
           this.prisma.$queryRaw<BucketRow[]>`
             SELECT to_char(
-                     date_trunc(${BUCKET_UNIT[bucket]}, ${localCreatedAt(current.timeZone)}),
+                     date_trunc(${BUCKET_UNIT[bucket]}, o.created_at AT TIME ZONE ${current.timeZone}),
                      'YYYY-MM-DD'
                    ) AS bucket,
                    COUNT(*)::int AS orders,
@@ -217,6 +214,16 @@ export class DashboardService {
             WHERE w.organization_id = ${org}
             GROUP BY w.id
             ORDER BY w.is_active DESC, w.code ASC, w.id ASC`,
+          // 6. The newest orders of the same period (any status), for the Recent orders box.
+          this.prisma.$queryRaw<RecentOrderRow[]>`
+            SELECT o.id, o.order_number AS "orderNumber", o.status::text AS status,
+                   o.total::text AS total, o.created_at AS "createdAt",
+                   c.id AS "customerId", c.name AS "customerName", c.company_name AS "customerCompany"
+            FROM orders o
+            LEFT JOIN customers c ON c.organization_id = o.organization_id AND c.id = o.customer_id
+            WHERE o.organization_id = ${org} AND ${inPeriod}
+            ORDER BY o.created_at DESC, o.id DESC
+            LIMIT ${DASHBOARD_LIMITS.recentOrders}`,
         ],
         { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
       );
@@ -296,6 +303,16 @@ export class DashboardService {
         revenue: money(new Decimal(row.revenue)),
       })),
       warehouses,
+      recentOrders: recentRows.map((row) => ({
+        id: row.id,
+        orderNumber: row.orderNumber,
+        status: row.status,
+        customer: row.customerId
+          ? { id: row.customerId, name: row.customerName!, companyName: row.customerCompany }
+          : null,
+        total: money(new Decimal(row.total)),
+        createdAt: row.createdAt.toISOString(),
+      })),
     };
   }
 }

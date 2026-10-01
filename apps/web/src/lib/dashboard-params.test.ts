@@ -63,8 +63,14 @@ describe('dashboard URL params', () => {
     expect(inventoryStatusPath('org-1', 'OUT_OF_STOCK')).toBe(
       '/org/org-1/inventory?status=OUT_OF_STOCK',
     );
-    expect(ordersInPeriodPath('org-1', 'SHIPPED', '2025-09-01', '2025-09-30')).toBe(
-      '/org/org-1/orders?status=SHIPPED&from=2025-09-01&to=2025-09-30',
+    expect(
+      ordersInPeriodPath('org-1', 'SHIPPED', {
+        from: '2025-09-01',
+        to: '2025-09-30',
+        timeZone: 'Europe/Istanbul',
+      }),
+    ).toBe(
+      '/org/org-1/orders?status=SHIPPED&from=2025-09-01&to=2025-09-30&timeZone=Europe%2FIstanbul',
     );
   });
 });

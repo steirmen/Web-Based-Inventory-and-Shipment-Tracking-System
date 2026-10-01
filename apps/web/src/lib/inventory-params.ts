@@ -11,6 +11,7 @@ import {
   type StockStatus,
 } from '@app/shared';
 import { paths } from '@/routes/paths';
+import { browserTimeZone } from './local-days';
 
 /**
  * URL state of the inventory and stock movement pages. Only non-default
@@ -149,6 +150,8 @@ export function toMovementQuery(params: MovementParams): StockMovementListQuery 
     ...(params.transferGroupId ? { transferGroupId: params.transferGroupId } : {}),
     ...(params.from ? { from: params.from } : {}),
     ...(params.to ? { to: params.to } : {}),
+    // The viewer's local days, cut by the API like the dashboard's.
+    ...(params.from || params.to ? { timeZone: browserTimeZone() } : {}),
     sortOrder: params.sortOrder,
     page: params.page,
     pageSize: INVENTORY_LIMITS.pageSizeDefault,

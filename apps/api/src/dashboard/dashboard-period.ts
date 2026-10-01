@@ -8,8 +8,19 @@ import {
   DEFAULT_DASHBOARD_RANGE,
   DEFAULT_DASHBOARD_TIME_ZONE,
 } from '@app/shared';
-import { HttpStatus } from '@nestjs/common';
-import { AppException } from '../common/errors/app-exception.js';
+
+import {
+  dayFromParts,
+  dayOf,
+  formatDay,
+  invalidField as invalidDashboardField,
+  isCalendarDate,
+  isKnownTimeZone,
+  localDay,
+  startOfLocalDay,
+  ymd,
+  type Day,
+} from '../common/time/local-days.js';
 
 /**
  * Date ranges of the dashboard. A range is a whole number of LOCAL days in the
@@ -18,103 +29,6 @@ import { AppException } from '../common/errors/app-exception.js';
  * where start is `from` 00:00 local and end is the day after `to`, 00:00
  * local. Pure functions; `now` is passed in so tests can pin the clock.
  */
-
-/** A calendar day as days since 1970-01-01 (time-zone free arithmetic). */
-type Day = number;
-
-const DAY_MS = 86_400_000;
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-
-export const dayOf = (date: string): Day => Date.parse(`${date}T00:00:00Z`) / DAY_MS;
-export const formatDay = (day: Day): string => new Date(day * DAY_MS).toISOString().slice(0, 10);
-
-function ymd(day: Day): { year: number; month: number; date: number } {
-  const value = new Date(day * DAY_MS);
-  return { year: value.getUTCFullYear(), month: value.getUTCMonth(), date: value.getUTCDate() };
-}
-const dayFromParts = (year: number, month: number, date: number): Day =>
-  Date.UTC(year, month, date) / DAY_MS;
-
-const formatters = new Map<string, Intl.DateTimeFormat>();
-function formatter(timeZone: string): Intl.DateTimeFormat {
-  let value = formatters.get(timeZone);
-  if (!value) {
-    value = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-    formatters.set(timeZone, value);
-  }
-  return value;
-}
-
-/** The wall-clock time in `timeZone` at `instant`, as if it were UTC (ms). */
-function wallClock(instant: number, timeZone: string): number {
-  const parts = Object.fromEntries(
-    formatter(timeZone)
-      .formatToParts(new Date(instant))
-      .map((part) => [part.type, Number(part.value)]),
-  ) as Record<'year' | 'month' | 'day' | 'hour' | 'minute' | 'second', number>;
-  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
-}
-
-/** `YYYY-MM-DD HH:mm`: the wall-clock time of `instant` in `timeZone` (report exports). */
-export function formatLocalDateTime(instant: Date, timeZone: string): string {
-  return new Date(wallClock(instant.getTime(), timeZone))
-    .toISOString()
-    .slice(0, 16)
-    .replace('T', ' ');
-}
-
-/** The local calendar day in `timeZone` at `instant`. */
-export function localDay(instant: Date, timeZone: string): Day {
-  return Math.floor(wallClock(instant.getTime(), timeZone) / DAY_MS);
-}
-
-/** The UTC instant of 00:00 local time on `day` in `timeZone` (DST-aware). */
-export function startOfLocalDay(day: Day, timeZone: string): Date {
-  const local = day * DAY_MS;
-  // offset = wall clock − UTC; refine once in case the offset changes between the guesses (DST).
-  let instant = local - (wallClock(local, timeZone) - local);
-  instant = local - (wallClock(instant, timeZone) - instant);
-  return new Date(instant);
-}
-
-/** IANA zone names only: `Europe/Istanbul`, `UTC`, `America/Argentina/Buenos_Aires`, `Etc/GMT+3`. */
-const ZONE_NAME = /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+)*$/;
-
-/**
- * Is `timeZone` a known IANA zone name? The name is used as given (ICU would
- * "canonicalize" Asia/Kolkata to the legacy Asia/Calcutta); PostgreSQL knows
- * the same names, case-insensitively. Numeric offsets (`+03:00`) are refused:
- * PostgreSQL reads them with the inverted POSIX sign in `AT TIME ZONE`.
- */
-export function isKnownTimeZone(timeZone: string): boolean {
-  if (timeZone.length > DASHBOARD_LIMITS.timeZoneMaxLength || !ZONE_NAME.test(timeZone)) {
-    return false;
-  }
-  try {
-    // Throws a RangeError for unknown zones.
-    return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone.length > 0;
-  } catch {
-    return false;
-  }
-}
-
-export function invalidDashboardField(field: string, message: string): AppException {
-  return new AppException(
-    HttpStatus.BAD_REQUEST,
-    'VALIDATION_ERROR',
-    'The request contains invalid fields.',
-    [{ field, messages: [message] }],
-  );
-}
 
 function period(fromDay: Day, toDay: Day, timeZone: string): DashboardPeriod {
   return {
@@ -196,9 +110,7 @@ export function resolveDashboardPeriods(
         if (value === undefined) {
           throw invalidDashboardField(field, `${field} is required when range is CUSTOM.`);
         }
-        // Round trip: rejects impossible dates such as 2026-02-30 (Date.parse rolls them over).
-        const day = DATE_ONLY.test(value) ? dayOf(value) : Number.NaN;
-        if (Number.isNaN(day) || formatDay(day) !== value) {
+        if (!isCalendarDate(value)) {
           throw invalidDashboardField(field, `${field} must be a date in YYYY-MM-DD format.`);
         }
       }

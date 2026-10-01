@@ -24,13 +24,12 @@ const BAR_TONES: Record<OrderStatus, string> = {
 export function OrderStatusChart({
   organizationId,
   statuses,
-  from,
-  to,
+  period,
 }: {
   organizationId: string;
   statuses: DashboardOrderStatusCount[];
-  from: string;
-  to: string;
+  /** The dashboard period (days and time zone) the links filter by. */
+  period: { from: string; to: string; timeZone: string };
 }) {
   const total = statuses.reduce((sum, entry) => sum + entry.count, 0);
   const largest = Math.max(1, ...statuses.map((entry) => entry.count));
@@ -52,7 +51,7 @@ export function OrderStatusChart({
             return (
               <li key={status}>
                 <Link
-                  to={ordersInPeriodPath(organizationId, status, from, to)}
+                  to={ordersInPeriodPath(organizationId, status, period)}
                   className="group flex flex-col gap-1.5 rounded-control focus-ring"
                   aria-label={`${ORDER_STATUS_LABELS[status]}: ${formatCount(count)} ${count === 1 ? 'order' : 'orders'}, ${share}%. View these orders`}
                 >

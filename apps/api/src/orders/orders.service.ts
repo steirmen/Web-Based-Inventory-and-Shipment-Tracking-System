@@ -8,9 +8,9 @@ import {
   type OrderStatus,
   type SortOrder,
 } from '@app/shared';
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ActivityAction, recordActivity } from '../activity/activity-log.js';
-import { AppException } from '../common/errors/app-exception.js';
+import { instantRange } from '../common/time/local-days.js';
 import { escapeLikePattern } from '../common/validation/like-pattern.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
@@ -43,9 +43,6 @@ import { orderTotals } from './order-totals.js';
 
 type Tx = Prisma.TransactionClient;
 type Client = Tx | PrismaService;
-
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
-const DAY_MS = 86_400_000;
 
 /** Stock is shown next to the lines only while it can still matter (before fulfillment). */
 const SHOWS_STOCK: readonly OrderStatus[] = ['DRAFT', 'CONFIRMED'];
@@ -94,19 +91,8 @@ export class OrdersService {
     if (query.customerId) await this.findCustomer(this.prisma, organizationId, query.customerId);
     if (query.warehouseId) await this.findWarehouse(this.prisma, organizationId, query.warehouseId);
 
-    // Both bounds are inclusive. A date-only `to` ("2026-09-30") includes that whole day (UTC).
-    const from = query.from ? Date.parse(query.from) : undefined;
-    const to = query.to
-      ? Date.parse(query.to) + (DATE_ONLY.test(query.to) ? DAY_MS - 1 : 0)
-      : undefined;
-    if (from !== undefined && to !== undefined && from > to) {
-      throw new AppException(
-        HttpStatus.BAD_REQUEST,
-        'VALIDATION_ERROR',
-        'The request contains invalid fields.',
-        [{ field: 'to', messages: ['to must not be before from.'] }],
-      );
-    }
+    // Dates are local days in `timeZone` (default UTC), exactly as on the dashboard.
+    const createdAt = instantRange(query.from, query.to, query.timeZone);
 
     const search = query.search ? escapeLikePattern(query.search) : undefined;
     const where: Prisma.OrderWhereInput = {
@@ -114,14 +100,7 @@ export class OrdersService {
       ...(query.status ? { status: query.status } : {}),
       ...(query.customerId ? { customerId: query.customerId } : {}),
       ...(query.warehouseId ? { warehouseId: query.warehouseId } : {}),
-      ...(from !== undefined || to !== undefined
-        ? {
-            createdAt: {
-              ...(from !== undefined ? { gte: new Date(from) } : {}),
-              ...(to !== undefined ? { lte: new Date(to) } : {}),
-            },
-          }
-        : {}),
+      ...(query.from || query.to ? { createdAt } : {}),
       ...(search
         ? {
             OR: [

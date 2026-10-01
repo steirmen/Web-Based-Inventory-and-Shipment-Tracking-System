@@ -664,6 +664,9 @@ describe('CSV export', () => {
         quantity: 1,
       })),
     });
+    // Autovacuum would analyze these tables after such a bulk insert; without fresh
+    // statistics the planner assumes 1 row and loops 10k × 10k (seconds).
+    await prisma.$executeRawUnsafe('ANALYZE products, inventory');
 
     const tooLarge = await f.exportCsv('inventory').expect(422);
     const narrowed = await f.exportCsv('inventory', { search: 'Bulk 1000' }).expect(200);

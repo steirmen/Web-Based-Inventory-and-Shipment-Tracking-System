@@ -182,10 +182,15 @@ export interface StockMovementListQuery {
   actorUserId?: string;
   /** Both legs (TRANSFER_OUT + TRANSFER_IN) of one transfer. */
   transferGroupId?: string;
-  /** ISO 8601 date-time, inclusive. */
+  /** ISO 8601 date or date-time, inclusive; a date is a local day in `timeZone`. */
   from?: string;
-  /** ISO 8601 date-time, inclusive. */
+  /** ISO 8601 date or date-time, inclusive; a date-only value includes that whole local day. */
   to?: string;
+  /**
+   * IANA time zone of date-only `from`/`to` (default UTC): a date is that local
+   * day, as on the dashboard and in the reports.
+   */
+  timeZone?: string;
   /** Case-insensitive match on product name, SKU, or reason. */
   search?: string;
   /** By `createdAt`; default `desc` (newest first). */

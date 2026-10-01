@@ -1,5 +1,6 @@
 import type {
   CreateCustomerRequest,
+  CustomerStatus,
   CreateOrderRequest,
   CustomerListQuery,
   OrderAction,
@@ -10,6 +11,7 @@ import type {
 import {
   keepPreviousData,
   type QueryClient,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -46,12 +48,47 @@ export function useCustomers(
   });
 }
 
+/** Customers per page in the customer picker (more load on demand). */
+export const CUSTOMER_SEARCH_PAGE_SIZE = 20;
+
+/**
+ * Server-side customer search for pickers: pages of 20 sorted by name, more
+ * on demand (`fetchNextPage`), so any customer is reachable without loading
+ * the whole list. Keys live under the organization.
+ */
+export function useCustomerSearch(
+  organizationId: string,
+  { search, status }: { search: string; status?: CustomerStatus },
+) {
+  return useInfiniteQuery({
+    queryKey: [...salesKeys.customers(organizationId), 'search', { search, status }] as const,
+    queryFn: ({ pageParam, signal }) =>
+      listCustomers(
+        organizationId,
+        {
+          ...(search ? { search } : {}),
+          ...(status ? { status } : {}),
+          sortBy: 'name',
+          sortOrder: 'asc',
+          page: pageParam,
+          pageSize: CUSTOMER_SEARCH_PAGE_SIZE,
+        },
+        { signal },
+      ),
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.pagination.page < last.pagination.totalPages ? last.pagination.page + 1 : undefined,
+    placeholderData: keepPreviousData,
+  });
+}
+
 /** One customer. 404 = unknown, malformed, or in another organization. */
 export function useCustomer(organizationId: string, customerId: string) {
   return useQuery({
     queryKey: salesKeys.customer(organizationId, customerId),
     queryFn: ({ signal }) => getCustomer(organizationId, customerId, { signal }),
     retry: false,
+    enabled: customerId !== '',
   });
 }
 

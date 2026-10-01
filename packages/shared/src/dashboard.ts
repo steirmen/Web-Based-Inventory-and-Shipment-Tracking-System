@@ -37,6 +37,7 @@ export const DASHBOARD_LIMITS = {
   /** Longest CUSTOM range, in days (inclusive), so a request can't scan unbounded history. */
   customRangeMaxDays: 366,
   topProducts: 5,
+  recentOrders: 5,
   timeZoneMaxLength: 64,
 } as const;
 
@@ -173,6 +174,17 @@ export interface DashboardWarehouseSummary {
   outOfStockItems: number;
 }
 
+/** One of the newest orders of the period (any status). */
+export interface DashboardRecentOrder {
+  id: string;
+  orderNumber: string;
+  status: OrderStatus;
+  customer: { id: string; name: string; companyName: string | null } | null;
+  /** Decimal string. */
+  total: string;
+  createdAt: string;
+}
+
 export interface DashboardSummaryResponse {
   period: DashboardSelectedPeriod;
   /** The same number of days immediately before `period`. */
@@ -187,4 +199,6 @@ export interface DashboardSummaryResponse {
   topProducts: DashboardTopProduct[];
   /** Every warehouse (active first, then by code) with its current stock summary. */
   warehouses: DashboardWarehouseSummary[];
+  /** Up to 5 newest orders created in the period (any status), newest first. */
+  recentOrders: DashboardRecentOrder[];
 }

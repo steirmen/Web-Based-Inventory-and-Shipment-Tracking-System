@@ -165,7 +165,7 @@ describe('DashboardPage', () => {
     expect(screen.getByText('No products sold in this period.')).toBeVisible();
     expect(screen.getByText('No stock recorded yet.')).toBeVisible();
     expect(screen.getByText('No active warehouses.')).toBeVisible();
-    expect(await screen.findByText('No orders yet.')).toBeVisible();
+    expect(await screen.findByText('No orders in this period.')).toBeVisible();
     expect(screen.getByText('No orders were created in this period.')).toBeVisible();
     expect(screen.getAllByRole('link', { name: 'Create order' })[0]).toHaveAttribute(
       'href',
@@ -348,7 +348,7 @@ describe('dashboard sections', () => {
     ]);
     expect(links[0]).toHaveAttribute(
       'href',
-      `${ORG_APP}/orders?status=DRAFT&from=2025-09-01&to=2025-09-07`,
+      `${ORG_APP}/orders?status=DRAFT&from=2025-09-01&to=2025-09-07&timeZone=UTC`,
     );
   });
 
@@ -398,26 +398,31 @@ describe('dashboard sections', () => {
     expect(within(second!).getByText('Archived')).toBeVisible();
   });
 
-  it('shows the five newest orders from the orders list', async () => {
-    const order = testOrder();
-    const { fetchMock } = await openDashboard({
-      orders: json(200, orderPage([toListItem(order)])),
-    });
+  it('shows the newest orders of the selected period, from the summary', async () => {
+    const { fetchMock } = await openDashboard();
     const table = await screen.findByRole('table', { name: 'Five newest orders' });
 
-    expect(within(table).getByRole('link', { name: order.orderNumber })).toHaveAttribute(
+    expect(within(table).getByRole('link', { name: 'SO-1042' })).toHaveAttribute(
       'href',
-      `${ORG_APP}/orders/${order.id}`,
+      `${ORG_APP}/orders/0198c0de-0000-7000-8000-0000000000d9`,
     );
-    const ordersRequest = fetchMock.mock.calls
-      .map(([input]) => new URL(String(input)))
-      .find((url) => url.pathname === ORDERS_API)!;
-    expect(Object.fromEntries(ordersRequest.searchParams)).toEqual({
-      sortBy: 'createdAt',
-      sortOrder: 'desc',
-      page: '1',
-      pageSize: '5',
-    });
+    expect(within(table).getByText(/Alice Acme/)).toBeVisible();
+    expect(within(table).getByText(formatMoney('79.98'))).toBeVisible();
+    // Same days and time zone as the dashboard, no separate orders request.
+    expect(screen.getByRole('link', { name: 'Orders in this period' })).toHaveAttribute(
+      'href',
+      `${ORG_APP}/orders?from=2025-09-01&to=2025-09-07&timeZone=UTC`,
+    );
+    expect(
+      fetchMock.mock.calls.some(([input]) => new URL(String(input)).pathname === ORDERS_API),
+    ).toBe(false);
+  });
+
+  it('shows no unrelated older orders when the period has none', async () => {
+    await openDashboard({ summary: json(200, dashboardSummary({ recentOrders: [] })) });
+
+    expect(await screen.findByText('No orders in this period.')).toBeVisible();
+    expect(screen.queryByRole('table', { name: 'Five newest orders' })).not.toBeInTheDocument();
   });
 
   it('never changes data: only GET requests', async () => {

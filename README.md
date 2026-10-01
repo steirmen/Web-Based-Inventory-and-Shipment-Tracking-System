@@ -127,6 +127,16 @@ Try it locally with the seeded demo workspace: `MAIN`, `EAST`, and `NORTH` hold 
 
 Stock operations are not idempotent: resending a request records it again (the UI prevents double submission). Details: [docs/warehouses-inventory.md](docs/warehouses-inventory.md).
 
+## Customers and orders
+
+**Customers** are the people and businesses a workspace sells to (search, archive/restore; archived customers keep their orders). **Orders** get a number per workspace (`SO-1001`, …), one fulfilment warehouse, and lines that keep the product name, SKU, and price they were added with.
+
+- Status workflow: Draft → Confirmed → Processing → Shipped → Completed; Draft and Confirmed orders can be cancelled.
+- **Processing** deducts stock: one SALE stock movement per line, all or nothing. If any line is short, nothing is deducted and the order stays Confirmed.
+- Shipping, completing, and cancelling never change stock. Staff can create, edit, and confirm orders; owners and admins also process, ship, complete, and cancel them.
+
+Details: [docs/customers-orders.md](docs/customers-orders.md).
+
 ## Personalization and appearance
 
 Each user can change how Nexora looks for them under **Appearance** (palette icon next to your name, `/settings/appearance`).
@@ -213,7 +223,9 @@ docs/           Architecture, design system, local setup
 - [Organizations & RBAC](docs/organizations-rbac.md)
 - [Products & categories](docs/products-categories.md)
 - [Warehouses & inventory](docs/warehouses-inventory.md)
+- [Customers & orders](docs/customers-orders.md)
 - [Personalization & appearance](docs/personalization-appearance.md)
 - [Dashboard & reporting](docs/dashboard-reporting.md)
+- [Timestamps & time zones](docs/timezone.md)
 - [Design system](docs/design-system.md)
 - [CLAUDE.md](CLAUDE.md): conventions for AI-assisted development

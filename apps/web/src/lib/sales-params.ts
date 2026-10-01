@@ -16,6 +16,7 @@ import {
   type SortOrder,
 } from '@app/shared';
 import { paths } from '@/routes/paths';
+import { browserTimeZone, timeZoneParam } from './local-days';
 
 /**
  * URL state of the customer and order lists (only non-default values are
@@ -123,6 +124,11 @@ export interface OrderParams {
   from: string;
   /** yyyy-mm-dd (inclusive, the whole day). */
   to: string;
+  /**
+   * IANA zone the days are counted in, when a link fixes it (e.g. from the
+   * dashboard); otherwise the viewer's zone.
+   */
+  timeZone: string;
   sort: OrderSort;
   page: number;
 }
@@ -134,6 +140,7 @@ export const EMPTY_ORDER_PARAMS: OrderParams = {
   warehouseId: '',
   from: '',
   to: '',
+  timeZone: '',
   sort: DEFAULT_ORDER_SORT,
   page: 1,
 };
@@ -146,6 +153,7 @@ export function readOrderParams(searchParams: URLSearchParams): OrderParams {
     warehouseId: uuidParam(searchParams.get('warehouseId')),
     from: dateParam(searchParams.get('from')),
     to: dateParam(searchParams.get('to')),
+    timeZone: timeZoneParam(searchParams.get('timeZone')),
     sort: sortParam(ORDER_SORT_FIELDS, searchParams.get('sort'), DEFAULT_ORDER_SORT),
     page: pageParam(searchParams.get('page')),
   };
@@ -159,6 +167,7 @@ export function writeOrderParams(params: OrderParams): URLSearchParams {
   if (params.warehouseId) searchParams.set('warehouseId', params.warehouseId);
   if (params.from) searchParams.set('from', params.from);
   if (params.to) searchParams.set('to', params.to);
+  if (params.timeZone && (params.from || params.to)) searchParams.set('timeZone', params.timeZone);
   if (params.sort !== DEFAULT_ORDER_SORT) searchParams.set('sort', params.sort);
   if (params.page > 1) searchParams.set('page', String(params.page));
   return searchParams;
@@ -173,6 +182,8 @@ export function toOrderQuery(params: OrderParams): OrderListQuery {
     ...(params.warehouseId ? { warehouseId: params.warehouseId } : {}),
     ...(params.from ? { from: params.from } : {}),
     ...(params.to ? { to: params.to } : {}),
+    // Days are local days, cut by the API exactly like the dashboard's.
+    ...(params.from || params.to ? { timeZone: params.timeZone || browserTimeZone() } : {}),
     sortBy,
     sortOrder,
     page: params.page,

@@ -28,6 +28,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import { TIME_ZONE_MAX_LENGTH } from '../../common/time/local-days.js';
 import { toLowerCaseId, toOptionalText, toTrimmed } from '../../common/validation/transforms.js';
 
 const L = ORDER_LIMITS;
@@ -130,6 +131,14 @@ export class OrderListQueryDto implements OrderListQuery {
   @IsOptional()
   @IsISO8601({ strict: true }, { message: 'to must be an ISO 8601 date or date-time.' })
   to?: string;
+
+  @IsOptional()
+  @Transform(toTrimmed)
+  @IsString()
+  @MaxLength(TIME_ZONE_MAX_LENGTH, {
+    message: `timeZone must be at most ${TIME_ZONE_MAX_LENGTH} characters.`,
+  })
+  timeZone?: string;
 
   /** Whitelisted — never an arbitrary column name. */
   @IsOptional()

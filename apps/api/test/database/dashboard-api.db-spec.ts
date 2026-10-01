@@ -34,6 +34,7 @@ describe('GET /organizations/:id/dashboard/summary — access', () => {
         'kpis',
         'orderStatus',
         'period',
+        'recentOrders',
         'timeSeries',
         'topProducts',
         'warehouses',
