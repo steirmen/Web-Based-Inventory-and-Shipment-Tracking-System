@@ -3,11 +3,16 @@ import { type ReactNode, useLayoutEffect, useMemo, useState, useSyncExternalStor
 import { BackgroundEffectLayer } from '@/components/appearance/background-effect-layer';
 import { useAuth } from '@/hooks/use-auth';
 import { useSavedAppearance } from '@/hooks/use-appearance';
-import { applyAppearance, cacheAppearance, clearAppearanceCache } from '@/lib/appearance/apply';
+import { applyAppearance, cacheAppearance } from '@/lib/appearance/apply';
 import {
   AppearanceContext,
   type AppearanceContextValue,
 } from '@/lib/appearance/appearance-context';
+import {
+  type GuestAppearanceChange,
+  readGuestAppearance,
+  storeGuestAppearance,
+} from '@/lib/appearance/guest';
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
@@ -22,7 +27,9 @@ const readReducedMotion = () =>
 
 /**
  * The single owner of appearance state:
- * - guests (sign-in pages) see the defaults, and sign-out forgets the cached look;
+ * - guests (sign-in pages) see the guest appearance (dark by default; the
+ *   choice made there is kept on this device), which also replaces the startup
+ *   cache, so signing out never leaves the previous user's look behind;
  * - signed in, the user's saved appearance (GET /me/appearance) is applied
  *   and cached for the next startup (index.html);
  * - the Appearance page can preview an unsaved configuration, which is
@@ -33,13 +40,14 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const saved = useSavedAppearance();
   const [preview, setPreview] = useState<AppearanceConfig | null>(null);
+  const [guestConfig, setGuestConfig] = useState(readGuestAppearance);
   const reducedMotion = useSyncExternalStore(subscribeReducedMotion, readReducedMotion);
 
   const guest = auth.status === 'unauthenticated';
-  const savedConfig = guest ? DEFAULT_APPEARANCE : (saved.data?.appearance ?? null);
+  const savedConfig = guest ? guestConfig : (saved.data?.appearance ?? null);
   // Guests never see a preview. While the user's appearance loads, `current`
   // is null and what index.html applied from the cache stays in place.
-  const current = guest ? DEFAULT_APPEARANCE : (preview ?? savedConfig);
+  const current = guest ? guestConfig : (preview ?? savedConfig);
 
   useLayoutEffect(() => {
     if (current) applyAppearance(current);
@@ -47,11 +55,11 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     if (guest) {
-      clearAppearanceCache();
+      cacheAppearance(guestConfig);
     } else if (saved.data) {
       cacheAppearance(saved.data.appearance);
     }
-  }, [guest, saved.data]);
+  }, [guest, guestConfig, saved.data]);
 
   const value = useMemo<AppearanceContextValue>(
     () => ({
@@ -61,9 +69,14 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
       error: saved.error,
       retry: () => void saved.refetch(),
       preview: setPreview,
+      changeGuestAppearance: (change: GuestAppearanceChange) => {
+        const next = { ...guestConfig, ...change };
+        storeGuestAppearance(next);
+        setGuestConfig(next);
+      },
       reducedMotion,
     }),
-    [savedConfig, current, guest, saved, reducedMotion],
+    [savedConfig, current, guest, guestConfig, saved, reducedMotion],
   );
 
   return (

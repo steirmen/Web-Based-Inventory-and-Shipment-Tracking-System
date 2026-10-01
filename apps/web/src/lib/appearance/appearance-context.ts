@@ -1,10 +1,11 @@
 import type { AppearanceConfig } from '@app/shared';
 import { createContext, useContext } from 'react';
+import type { GuestAppearanceChange } from './guest';
 
 export interface AppearanceContextValue {
   /**
-   * The persisted appearance (the defaults for guests and for users who never
-   * saved one); null while the signed-in user's appearance is loading.
+   * The persisted appearance (the guest appearance for guests; the defaults
+   * for users who never saved one); null while the user's appearance is loading.
    */
   saved: AppearanceConfig | null;
   /** What is applied right now: an unsaved preview, or `saved`. */
@@ -17,6 +18,11 @@ export interface AppearanceContextValue {
    * preview). `null` ends the preview and restores the saved appearance.
    */
   preview: (config: AppearanceConfig | null) => void;
+  /**
+   * Guests only (the sign-in pages): changes the guest appearance on this
+   * device. Never saved to the API and never applied once signed in.
+   */
+  changeGuestAppearance: (change: GuestAppearanceChange) => void;
   /** The OS/browser asks for reduced motion; decorative animation is then still. */
   reducedMotion: boolean;
 }

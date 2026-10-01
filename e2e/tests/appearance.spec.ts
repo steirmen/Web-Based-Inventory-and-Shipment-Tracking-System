@@ -1,12 +1,68 @@
 import type { Page } from '@playwright/test';
 import { ORGS, PASSWORD, USERS } from '../support/config.js';
-import { expect, orgPath, test } from '../support/fixtures.js';
+import { expect, horizontalOverflow, orgPath, test } from '../support/fixtures.js';
 
 const html = (page: Page) => page.locator('html');
 const choose = (page: Page, group: string, option: string) =>
   page.getByRole('radiogroup', { name: group }).getByRole('radio', { name: option }).click();
 
 test.describe('appearance', () => {
+  test('signed-out pages start dark (even before the app loads) and have a guest control', async ({
+    page,
+  }) => {
+    // Without any app JavaScript, only index.html's startup script runs: a first visit is
+    // already dark, so there is no light flash before React starts.
+    await page.route('**/assets/*.js', (route) => route.abort());
+    await page.goto('/login');
+    await expect(html(page)).toHaveAttribute('data-mode', 'dark');
+    expect(
+      await page.evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue('--background'),
+      ),
+    ).toContain('17%');
+    await page.unrouteAll();
+
+    await page.goto('/login');
+    await expect(page.getByRole('heading', { name: /sign in to/i })).toBeVisible();
+    await expect(html(page)).toHaveAttribute('data-mode', 'dark');
+    await expect(html(page)).toHaveAttribute('data-theme', 'default');
+
+    // Keyboard: Tab reaches the control, Enter opens it, Escape closes and returns focus.
+    const trigger = page.getByRole('button', { name: 'Appearance' });
+    const panel = page.getByRole('dialog', { name: 'Appearance' });
+    await page.keyboard.press('Tab');
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole('radio', { name: 'Dark' })).toBeFocused();
+    await choose(page, 'Mode', 'Light');
+    await expect(html(page)).toHaveAttribute('data-mode', 'light');
+    await choose(page, 'Theme', 'Ocean theme');
+    await expect(html(page)).toHaveAttribute('data-theme', 'ocean');
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(trigger).toBeFocused();
+
+    // The guest choice stays on this device, and registration uses the same shell.
+    await page.reload();
+    await expect(html(page)).toHaveAttribute('data-mode', 'light');
+    await expect(html(page)).toHaveAttribute('data-theme', 'ocean');
+    await page.goto('/register');
+    await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible();
+    await expect(trigger).toBeVisible();
+    await expect(html(page)).toHaveAttribute('data-theme', 'ocean');
+
+    // Phone width: the popover fits and nothing scrolls sideways.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await trigger.click();
+    await choose(page, 'Mode', 'Dark');
+    await expect(html(page)).toHaveAttribute('data-mode', 'dark');
+    const box = await panel.boundingBox();
+    expect(box?.x).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(375);
+    expect(await horizontalOverflow(page)).toBe(0);
+  });
+
   test('every setting previews, saves, survives a reload, and Cancel discards a preview', async ({
     pageAs,
   }) => {
@@ -149,6 +205,9 @@ test.describe('appearance', () => {
     await page.getByRole('menuitem', { name: 'Sign out' }).click();
     await expect(page).toHaveURL(/\/login$/);
     await expect(html(page)).not.toHaveAttribute('data-theme', 'plum');
+    // The guest look again: dark, default theme.
+    await expect(html(page)).toHaveAttribute('data-mode', 'dark');
+    await expect(html(page)).toHaveAttribute('data-theme', 'default');
     await page.getByLabel('Email').fill(USERS.styleB.email);
     await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
     await page.getByRole('button', { name: 'Sign in' }).click();

@@ -1,13 +1,20 @@
 import { Link, Outlet } from 'react-router';
+import { GuestAppearanceControl } from '@/components/appearance/guest-appearance-control';
 import { BrandMark } from '@/components/layout/brand-mark';
 import { appConfig } from '@/lib/app-config';
 import { paths } from '@/routes/paths';
 
-/** Minimal frame for guest pages (sign in, create account): brand, centered card, footer. */
+/**
+ * Minimal frame for guest pages (sign in, create account, invitations): brand,
+ * centered card, footer, and the guest Appearance control in the top-right corner.
+ */
 export function AuthLayout() {
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <main className="flex flex-1 flex-col items-center justify-center px-4 py-10 sm:py-16">
+      <header className="flex min-h-13 justify-end px-4 pt-4 sm:px-6">
+        <GuestAppearanceControl />
+      </header>
+      <main className="flex flex-1 flex-col items-center justify-center px-4 pt-4 pb-10 sm:pb-16">
         <div className="flex w-full max-w-sm flex-col gap-8">
           <Link
             to={paths.home}

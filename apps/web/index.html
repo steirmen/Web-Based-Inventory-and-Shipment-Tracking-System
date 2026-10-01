@@ -3,17 +3,66 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f8fafc" />
+    <meta name="theme-color" content="#0b1017" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Nexora</title>
     <script>
-      // Personalization: re-apply the last saved appearance before the app starts, so a
-      // reload does not flash the default theme. Presentation data only (see
-      // src/lib/appearance/apply.ts); the API stays the source of truth.
+      // Personalization: re-apply the last applied appearance before the app starts, so a
+      // reload does not flash another theme. Presentation data only (see
+      // src/lib/appearance/apply.ts); the API stays the source of truth. Without a cache
+      // (a first visit) the guest appearance is used: GUEST_APPEARANCE (dark) in
+      // @app/shared, computed by buildPalette(); a test keeps this copy in sync.
       (function () {
+        var guest = {
+          vars: {
+            '--background': 'oklch(17% 0.017 257)',
+            '--surface': 'oklch(21% 0.019 257)',
+            '--surface-muted': 'oklch(25.5% 0.02 257)',
+            '--foreground': 'oklch(96.5% 0.009 257)',
+            '--muted-foreground': 'oklch(78% 0.013 257)',
+            '--subtle-foreground': 'oklch(66% 0.014 257)',
+            '--border': 'oklch(31% 0.021 257)',
+            '--border-strong': 'oklch(39% 0.023 257)',
+            '--primary': 'oklch(67.3% 0.182 276.9)',
+            '--primary-hover': 'oklch(72.3% 0.182 276.9)',
+            '--primary-foreground': 'oklch(20% 0.02 265)',
+            '--primary-soft': 'oklch(30% 0.073 276.9)',
+            '--primary-soft-foreground': 'oklch(86% 0.109 276.9)',
+            '--ring': 'oklch(73.3% 0.182 276.9)',
+            '--overlay': 'oklch(8% 0 0 / 0.6)',
+            '--success': 'oklch(72% 0.15 162)',
+            '--success-soft': 'oklch(29% 0.05 165)',
+            '--success-soft-foreground': 'oklch(86% 0.11 163)',
+            '--success-border': 'oklch(42% 0.08 164)',
+            '--warning': 'oklch(80% 0.16 75)',
+            '--warning-soft': 'oklch(30% 0.05 75)',
+            '--warning-soft-foreground': 'oklch(89% 0.12 85)',
+            '--warning-border': 'oklch(45% 0.09 75)',
+            '--danger': 'oklch(63% 0.2 25)',
+            '--danger-hover': 'oklch(68% 0.2 25)',
+            '--danger-foreground': 'oklch(20% 0.02 265)',
+            '--danger-soft': 'oklch(29% 0.07 22)',
+            '--danger-soft-foreground': 'oklch(85% 0.09 20)',
+            '--danger-border': 'oklch(44% 0.12 22)',
+            '--shadow-card': '0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 0 rgb(0 0 0 / 0.2)',
+            '--shadow-raised': '0 8px 20px -4px rgb(0 0 0 / 0.5), 0 2px 6px -2px rgb(0 0 0 / 0.35)',
+          },
+          data: {
+            mode: 'dark',
+            theme: 'default',
+            density: 'comfortable',
+            radius: 'medium',
+            fontScale: 'default',
+          },
+        };
         try {
-          var cached = JSON.parse(localStorage.getItem('app:appearance') || 'null');
-          if (!cached || typeof cached !== 'object') return;
+          var cached = guest;
+          try {
+            cached = JSON.parse(localStorage.getItem('app:appearance') || 'null') || guest;
+          } catch (error) {
+            // Unavailable or corrupt storage: the guest appearance.
+          }
+          if (typeof cached !== 'object') return;
           var root = document.documentElement;
           var vars = cached.vars || {};
           for (var name in vars) {
@@ -34,7 +83,7 @@
               root.dataset[key] = data[key];
           });
         } catch (error) {
-          // Ignore: the default theme is used until the saved appearance loads.
+          // Ignore: the app applies the right appearance once it starts.
         }
       })();
     </script>

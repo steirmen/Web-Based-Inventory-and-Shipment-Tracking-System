@@ -11,10 +11,11 @@ import { buildPalette } from './themes';
 
 /**
  * localStorage key of the startup cache: the computed CSS variables and data
- * attributes of the last applied (saved) appearance. Read by the tiny script
- * in index.html before React starts, so a reload doesn't flash the default
- * theme. Presentation only — never authentication data. The server stays the
- * source of truth; the cache is cleared on sign-out.
+ * attributes of the last applied appearance (the signed-in user's saved one,
+ * or the guest appearance). Read by the tiny script in index.html before React
+ * starts, so a reload doesn't flash another theme. Presentation only — never
+ * authentication data. The server stays the source of truth; signing out
+ * replaces the cache with the guest appearance.
  */
 export const APPEARANCE_CACHE_KEY = 'app:appearance';
 
@@ -49,13 +50,5 @@ export function cacheAppearance(config: AppearanceConfig): void {
     localStorage.setItem(APPEARANCE_CACHE_KEY, JSON.stringify(cached));
   } catch {
     // Storage may be unavailable (private mode, quota): the cache is optional.
-  }
-}
-
-export function clearAppearanceCache(): void {
-  try {
-    localStorage.removeItem(APPEARANCE_CACHE_KEY);
-  } catch {
-    // Optional cache.
   }
 }

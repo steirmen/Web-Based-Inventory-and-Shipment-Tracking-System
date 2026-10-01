@@ -93,6 +93,13 @@ export const DEFAULT_APPEARANCE: AppearanceConfig = {
   fontScale: 'default',
 };
 
+/**
+ * What signed-out visitors see on the sign-in, registration, and invitation
+ * pages until they choose otherwise on this device: the default theme in dark
+ * mode. Never saved for a user (a user's saved appearance starts at DEFAULT_APPEARANCE).
+ */
+export const GUEST_APPEARANCE: AppearanceConfig = { ...DEFAULT_APPEARANCE, mode: 'dark' };
+
 export const APPEARANCE_FIELDS = [
   'mode',
   'theme',

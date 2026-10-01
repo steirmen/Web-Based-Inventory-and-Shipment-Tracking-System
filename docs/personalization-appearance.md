@@ -36,7 +36,7 @@ All identifiers are stable, lowercase, and defined once in [`packages/shared/src
 | `radius`             | `sharp`, `medium`, `round`                                                                                       | `medium`      |
 | `fontScale`          | `small`, `default`, `large`                                                                                      | `default`     |
 
-`DEFAULT_APPEARANCE` is the single definition of the defaults (API responses, reset, guests, and the web app all use it). The custom accent and tone are kept when another theme is selected, so switching back to Custom restores them.
+`DEFAULT_APPEARANCE` is the single definition of the defaults (API responses, reset, and the web app all use it). `GUEST_APPEARANCE` (`DEFAULT_APPEARANCE` in dark mode) is what signed-out visitors see; it is never saved for a user. The custom accent and tone are kept when another theme is selected, so switching back to Custom restores them.
 
 ## Persistence (API is the source of truth)
 
@@ -86,7 +86,8 @@ AppProviders
 
 `AppearanceProvider` is the single owner of appearance state (`useAppearance()` from `lib/appearance/appearance-context.ts`):
 
-- **Guests** (sign-in, register, invitation pages) always get `DEFAULT_APPEARANCE`, and the startup cache is cleared.
+- **Guests** (sign-in, register, invitation pages) get the guest appearance: `GUEST_APPEARANCE` (dark), or the mode and theme preset they chose with the **Appearance** button of the auth shell (`GuestAppearanceControl` in `AuthLayout`). That choice is kept on this device in `localStorage['app:guest-appearance']` (`lib/appearance/guest.ts`): only `{ mode, theme }`, validated on read, never sent to the API, and never applied once someone signs in. The guest look also replaces the startup cache, so after sign-out nothing of the previous user's look remains. No authenticated request (`/me/appearance`) is made for guests.
+- **Sign-in hand-off**: once signed in, the user's saved appearance (`GET /me/appearance`) replaces the guest look; the guest choice is never written to the user's appearance, and the guest control disappears (it renders only while `status === 'guest'`).
 - **Signed in**, it loads `GET /me/appearance` (`useSavedAppearance`, query key `['appearance', userId, 'current']`) and applies it. Keys include the user id, and sign-out removes all non-auth queries, so one user's appearance can never answer for the next user in the same browser.
 - **Preview**: the Appearance page calls `preview(config)` to show unsaved settings and `preview(null)` to drop them.
 
@@ -104,9 +105,9 @@ Because Tailwind 4 compiles `p-4`, `gap-3`, `rounded-control`, `bg-surface`, …
 
 ### Startup without a flash
 
-After applying the saved appearance, the provider caches the computed tokens and data attributes in `localStorage['app:appearance']`. A small inline script in `apps/web/index.html` re-applies them **before** React starts, so a reload does not flash the default theme. The cache:
+After applying the saved appearance (or, for guests, the guest appearance), the provider caches the computed tokens and data attributes in `localStorage['app:appearance']`. A small inline script in `apps/web/index.html` re-applies them **before** React starts, so a reload does not flash another theme. Without a cache (a first visit), the script applies its own copy of the guest palette, so the sign-in page is dark from the first paint; `appearance-provider.test.tsx` fails if that copy (or the static `theme-color`) drifts from `buildPalette(GUEST_APPEARANCE)`. The production CSP hash of the script is computed from `index.html` at build time. The cache:
 
-- holds presentation values only (no user id, email, token, or anything from the session) and is cleared for guests and on sign-out;
+- holds presentation values only (no user id, email, token, or anything from the session) and is replaced by the guest look for guests and on sign-out;
 - is never authoritative: the API response replaces it as soon as it loads;
 - is validated by the script: only `--lowercase-names` with plain color/shadow values (no `url()`, `image()`, `attr()`, `;`, or quotes) and whitelisted data attributes are applied, and a corrupt cache is ignored.
 
@@ -210,7 +211,7 @@ Effects are decorative and drawn by **one** `<canvas>` (`BackgroundEffectLayer`,
 - **API** (`apps/api/test/database/appearance-api.db-spec.ts`, real PostgreSQL): defaults, save, reset, invalid modes/themes/effects/colors/extra fields (`userId`, `organizationId`), 401 on every route, the same appearance across organizations, profile create/list/rename/replace/apply/delete, case-insensitive names, the 12-profile limit, and cross-user isolation (another user's profile is 404 for read, rename, apply, and delete).
 - **Theme engine** (`lib/appearance/themes.test.ts`): Default light equals the original tokens; every preset and extreme custom colors meet the contrast table in both modes.
 - **Effects** (`lib/appearance/effects.test.ts`): every effect animates and stops completely, reduced motion draws one still frame, hidden tabs pause, listeners are removed.
-- **Provider** (`app/appearance-provider.test.tsx`): guests get defaults, the cache holds no user data, workspace switches don't reload or change appearance, sign-out/sign-in as another user never shows the previous look, exactly one effect layer, and the `index.html` startup script (applies valid values, rejects unsafe ones, survives corrupt data).
+- **Provider** (`app/appearance-provider.test.tsx`): guests get the dark guest appearance (also on a first visit, before React), the cache holds no user data, workspace switches don't reload or change appearance, sign-out/sign-in as another user never shows the previous look, exactly one effect layer, and the `index.html` startup script (applies valid values, rejects unsafe ones, survives corrupt data).
 - **Page** (`pages/appearance-page.test.tsx`): loading/error/retry, preview, save, cancel, leaving the page, custom color validation, effects, intensity, density/radius/text size, keyboard, reset (with and without confirmation), reduced-motion notice, and profile save/apply/rename/delete/empty/error/limit.
 
 ## Adding a theme or effect later

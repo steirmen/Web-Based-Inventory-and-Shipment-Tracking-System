@@ -8,27 +8,38 @@ import { THEMES, themePreview } from '@/lib/appearance/themes';
  * Theme cards: each one is a miniature of the real interface in that theme
  * (canvas, a card, text lines, and the accent) for the current mode. The
  * selected card has a check mark and a thicker outline, not just a color.
+ * `compact` (the sign-in pages' appearance popover) shows smaller cards
+ * without descriptions; `themes` limits the choice.
  */
 export function ThemePicker({
   config,
   onChange,
+  themes = THEME_IDS,
+  compact = false,
 }: {
   config: AppearanceConfig;
   onChange: (theme: ThemeId) => void;
+  themes?: readonly ThemeId[];
+  compact?: boolean;
 }) {
   return (
     <div
       role="radiogroup"
       aria-label="Theme"
-      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6"
+      className={cn(
+        'grid',
+        compact
+          ? 'grid-cols-3 gap-2'
+          : 'grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6',
+      )}
     >
-      {THEMES.map((theme) => {
+      {THEMES.filter((theme) => themes.includes(theme.id)).map((theme) => {
         const colors = themePreview(theme.id, config);
         const checked = config.theme === theme.id;
         return (
           <button
             key={theme.id}
-            {...radioOptionProps(THEME_IDS, config.theme, onChange, theme.id)}
+            {...radioOptionProps(themes, config.theme, onChange, theme.id)}
             aria-label={`${theme.name} theme`}
             className={cn(
               'group relative flex flex-col overflow-hidden rounded-card border text-left focus-ring transition',
@@ -38,12 +49,18 @@ export function ThemePicker({
             )}
           >
             <span
-              className="relative flex h-20 items-end gap-1.5 p-2.5"
+              className={cn(
+                'relative flex items-end gap-1.5',
+                compact ? 'h-11 p-1.5' : 'h-20 p-2.5',
+              )}
               style={{ background: colors.background }}
               aria-hidden="true"
             >
               <span
-                className="flex h-14 flex-1 flex-col justify-between rounded-md p-2 shadow-card"
+                className={cn(
+                  'flex flex-1 flex-col justify-between rounded-md shadow-card',
+                  compact ? 'h-8 p-1.5' : 'h-14 p-2',
+                )}
                 style={{ background: colors.surface }}
               >
                 <span className="h-1.5 w-3/4 rounded-full" style={{ background: colors.text }} />
@@ -51,7 +68,10 @@ export function ThemePicker({
                   className="h-1.5 w-1/2 rounded-full opacity-40"
                   style={{ background: colors.text }}
                 />
-                <span className="h-3 w-10 rounded-sm" style={{ background: colors.accent }} />
+                <span
+                  className={cn('rounded-sm', compact ? 'h-2 w-6' : 'h-3 w-10')}
+                  style={{ background: colors.accent }}
+                />
               </span>
               {theme.id === 'custom' && (
                 <Palette
@@ -60,16 +80,30 @@ export function ThemePicker({
                 />
               )}
             </span>
-            <span className="flex items-start justify-between gap-2 border-t border-border bg-surface px-3 py-2">
+            <span
+              className={cn(
+                'flex items-start justify-between gap-2 border-t border-border bg-surface',
+                compact ? 'px-2 py-1.5' : 'px-3 py-2',
+              )}
+            >
               <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">{theme.name}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {theme.description}
+                <span className={cn('block truncate font-medium', compact ? 'text-xs' : 'text-sm')}>
+                  {theme.name}
                 </span>
+                {!compact && (
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {theme.description}
+                  </span>
+                )}
               </span>
               {checked && (
-                <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                  <Check className="size-3.5" aria-hidden="true" />
+                <span
+                  className={cn(
+                    'flex shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground',
+                    compact ? 'size-4' : 'mt-0.5 size-5',
+                  )}
+                >
+                  <Check className={compact ? 'size-3' : 'size-3.5'} aria-hidden="true" />
                 </span>
               )}
             </span>

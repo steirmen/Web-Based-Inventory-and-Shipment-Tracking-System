@@ -1,8 +1,11 @@
-import type { AuthUser, Organization } from '@app/shared';
+import { type AuthUser, GUEST_APPEARANCE, type Organization } from '@app/shared';
 import { screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import indexHtml from '../../index.html?raw';
 import { APPEARANCE_CACHE_KEY } from '@/lib/appearance/apply';
+import { parseCss, toHex } from '@/lib/appearance/color';
+import { GUEST_APPEARANCE_KEY } from '@/lib/appearance/guest';
+import { buildPalette } from '@/lib/appearance/themes';
 import {
   APPEARANCE_API,
   appearance,
@@ -37,17 +40,21 @@ const cached = () =>
   } | null;
 
 describe('AppearanceProvider', () => {
-  it('shows guests the default appearance and forgets a cached one', async () => {
+  it('shows guests the dark guest appearance and replaces a cached user look', async () => {
     localStorage.setItem(
       APPEARANCE_CACHE_KEY,
-      JSON.stringify({ vars: {}, data: { mode: 'dark' } }),
+      JSON.stringify({ vars: {}, data: { mode: 'light', theme: 'plum' } }),
     );
     const fetchMock = mockApi({ 'GET /auth/me': signedOut });
     renderApp('/login');
 
     await screen.findByRole('heading', { name: /sign in/i });
-    expect(applied()).toMatchObject({ mode: 'light', theme: 'default' });
-    expect(localStorage.getItem(APPEARANCE_CACHE_KEY)).toBeNull();
+    expect(applied()).toMatchObject({ mode: 'dark', theme: 'default' });
+    // The startup cache now holds the guest look, not the previous user's.
+    expect(cached()?.data).toMatchObject({ mode: 'dark', theme: 'default' });
+    expect(cached()?.vars['--background']).toBe(buildPalette(GUEST_APPEARANCE)['--background']);
+    // Nothing is stored for the guest until they choose something.
+    expect(localStorage.getItem(GUEST_APPEARANCE_KEY)).toBeNull();
     expect(effectLayers()).toHaveLength(0);
     expect(appearanceCalls(fetchMock)).toHaveLength(0);
   });
@@ -142,9 +149,11 @@ describe('AppearanceProvider', () => {
     await signOutFromMenu(user);
 
     await screen.findByRole('heading', { name: /sign in/i });
-    expect(applied()).toMatchObject({ mode: 'light', theme: 'default' });
+    // Back to the guest look (dark, default theme): nothing of the previous user's.
+    expect(applied()).toMatchObject({ mode: 'dark', theme: 'default' });
     expect(effectLayers()).toHaveLength(0);
-    expect(localStorage.getItem(APPEARANCE_CACHE_KEY)).toBeNull();
+    expect(cached()?.data).toMatchObject({ mode: 'dark', theme: 'default' });
+    expect(JSON.stringify(cached())).not.toContain('plum');
 
     await user.type(screen.getByLabelText('Email'), other.email);
     await user.type(screen.getByLabelText('Password'), 'another-test-password');
@@ -216,9 +225,27 @@ describe('index.html startup script', () => {
     expect(applied()).toEqual({ theme: 'ocean' });
   });
 
-  it('survives a corrupt cache', () => {
+  it('starts a first visit (no cache) in the guest appearance: dark, no light flash', () => {
+    run();
+    expect(applied()).toEqual({
+      mode: 'dark',
+      theme: 'default',
+      density: 'comfortable',
+      radius: 'medium',
+      fontScale: 'default',
+    });
+    // The script's copy of the guest palette matches the theme engine exactly.
+    const palette = buildPalette(GUEST_APPEARANCE);
+    for (const [name, value] of Object.entries(palette)) expect(appliedVar(name)).toBe(value);
+    expect(document.documentElement.style.length).toBe(Object.keys(palette).length);
+    // The static browser-UI color matches the guest canvas too.
+    const background = toHex(parseCss(palette['--background']!));
+    expect(indexHtml).toContain(`<meta name="theme-color" content="${background}" />`);
+  });
+
+  it('survives a corrupt cache (guest appearance)', () => {
     localStorage.setItem(APPEARANCE_CACHE_KEY, '{not json');
     expect(run).not.toThrow();
-    expect(applied()).toEqual({});
+    expect(applied()).toMatchObject({ mode: 'dark', theme: 'default' });
   });
 });
