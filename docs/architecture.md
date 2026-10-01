@@ -25,6 +25,7 @@ src/
   app.module.ts      Root module: ConfigModule + feature modules
   config/            Env schema (Zod) and helpers; the only place that reads raw env vars
   common/errors/     AppException, ApiExceptionFilter (uniform error body), validation errors
+  common/security/   Secure tokens, security headers + CSRF origin check (http-security.ts), route-security test; see security.md
   common/time/       local-days.ts: local calendar days in an IANA zone ↔ UTC instants (instantRange); see timezone.md
   database/          Global DatabaseModule exposing PrismaService
   auth/              Register/login/logout/me, sessions, Argon2id passwords, global SessionAuthGuard
@@ -148,11 +149,12 @@ A single `.env` at the repository root serves every app:
 
 ## Testing
 
-| Workspace | Runner                   | Environment | Location                                                  |
-| --------- | ------------------------ | ----------- | --------------------------------------------------------- |
-| api       | Vitest                   | node        | `src/**/*.spec.ts` (unit), `test/**/*.e2e-spec.ts` (HTTP) |
-| api (db)  | Vitest                   | node        | `test/database/**/*.db-spec.ts`                           |
-| web       | Vitest + Testing Library | jsdom       | `src/**/*.test.ts(x)`                                     |
+| Workspace | Runner                      | Environment  | Location                                                           |
+| --------- | --------------------------- | ------------ | ------------------------------------------------------------------ |
+| api       | Vitest                      | node         | `src/**/*.spec.ts` (unit), `test/**/*.e2e-spec.ts` (HTTP)          |
+| api (db)  | Vitest                      | node         | `test/database/**/*.db-spec.ts`                                    |
+| web       | Vitest + Testing Library    | jsdom        | `src/**/*.test.ts(x)`                                              |
+| e2e       | Playwright (installed Edge) | real browser | `e2e/tests/*.spec.ts` against production builds and `app_e2e_test` |
 
 `npm run test` does not need a database or a `.env` file: API tests inject env values via `vitest.config.ts` and mock `PrismaService`; web tests stub `fetch` and `VITE_API_BASE_URL`.
 

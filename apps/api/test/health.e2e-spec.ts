@@ -47,6 +47,9 @@ describe('GET /health', () => {
 
     expect(body.status).toBe('degraded');
     expect(body.checks.database).toBe('down');
+    // The cause stays in the server log; the public endpoint reveals nothing about it.
+    expect(JSON.stringify(response.body)).not.toMatch(/ECONNREFUSED|127.0.0.1|5432/);
+    expect(Object.keys(response.body).sort()).toEqual(['checks', 'status', 'timestamp', 'uptime']);
   });
 
   it('allows the configured frontend origin via CORS', async () => {

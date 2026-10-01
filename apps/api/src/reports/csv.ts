@@ -8,9 +8,10 @@
  *   trailing spaces are wrapped in double quotes, with inner quotes doubled.
  * - Formula injection: text starting with `=`, `+`, `-`, `@`, a tab, or a
  *   carriage return could run as a formula in Excel, LibreOffice, or Google
- *   Sheets. Such cells get a leading apostrophe (`'=SUM(…)`), which shows the
- *   text as-is instead (OWASP recommendation). Genuine numbers (`-12.50`) are
- *   numeric cells and are left untouched.
+ *   Sheets (also after leading spaces, which some importers trim). Such cells
+ *   get a leading apostrophe (`'=SUM(…)`), which shows the text as-is instead
+ *   (OWASP recommendation). Genuine numbers (`-12.50`) are numeric cells and
+ *   are left untouched.
  */
 
 export type CsvValue = string | number | null | undefined;
@@ -20,7 +21,7 @@ export interface CsvColumn<Row> {
   value: (row: Row) => CsvValue;
 }
 
-const FORMULA_START = /^[=+\-@\t\r]/;
+const FORMULA_START = /^\s*[=+\-@]|^[\t\r]/;
 const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
 const NEEDS_QUOTES = /[",\r\n]|^\s|\s$/;
 

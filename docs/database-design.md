@@ -241,6 +241,8 @@ Beyond `NOT NULL`, foreign keys, and unique constraints, the first migration add
 |                                                                                          | `<table>_custom_accent_check`                                                                                                                                                       | `custom_accent ~ '^#[0-9a-f]{6}$'` (lowercase hex)                                                                                  |
 | appearance_profiles                                                                      | `appearance_profiles_name_not_blank_check`                                                                                                                                          | Profile name is not blank                                                                                                           |
 
+**Append-only ledgers.** Triggers `stock_movements_append_only` and `activity_logs_append_only` (migration `append_only_ledgers`, function `prevent_append_only_change()`) refuse every `UPDATE` and `DELETE` on these tables, except the `actor_user_id → NULL` that `ON DELETE SET NULL` performs when a user is deleted. `TRUNCATE` (test suite only) does not fire them.
+
 Violations surface in Prisma 7 as `PrismaClientKnownRequestError`, with the raw PostgreSQL error in `error.meta.driverAdapterError.cause` (`originalCode`, `originalMessage`):
 
 | SQLSTATE | Meaning                                | Prisma code |

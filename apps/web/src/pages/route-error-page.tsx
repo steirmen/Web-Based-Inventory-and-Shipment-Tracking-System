@@ -1,37 +1,62 @@
-import { isRouteErrorResponse, useRouteError } from 'react-router';
+import { isRouteErrorResponse, Link, useRouteError } from 'react-router';
 import { Alert } from '@/components/ui/alert';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { pageTitle } from '@/lib/app-config';
 import { paths } from '@/routes/paths';
 
-/** Rendered by the router when a route throws while rendering. Replaces the whole shell. */
-export function RouteErrorPage() {
-  const error = useRouteError();
-  const message = isRouteErrorResponse(error)
-    ? `${error.status} ${error.statusText}`
-    : isChunkLoadError(error)
-      ? 'This page could not be loaded. Check your connection, then reload the app.'
-      : error instanceof Error
-        ? error.message
-        : 'An unexpected error occurred.';
+/** A readable explanation of a routing/rendering failure — never a stack trace. */
+function errorMessage(error: unknown): string {
+  if (isRouteErrorResponse(error)) return `${error.status} ${error.statusText}`;
+  if (isChunkLoadError(error)) {
+    return 'This page could not be loaded. Check your connection, then reload the app.';
+  }
+  return 'Something on this page stopped working. Reloading usually fixes it.';
+}
 
-  return (
-    <div className="flex min-h-dvh items-center justify-center p-4">
+/**
+ * Rendered by the router when a route throws while loading or rendering.
+ *
+ * - `inShell`: a page-level boundary (inside AppShell / OrganizationLayout):
+ *   the header and navigation stay, so the user can go elsewhere.
+ * - Otherwise the last-resort boundary at the root, which replaces everything.
+ *
+ * The router logs the real error to the console for developers; the page shows
+ * only a generic explanation (no messages, stacks, or internals).
+ */
+export function RouteErrorPage({ inShell = false }: { inShell?: boolean }) {
+  const error = useRouteError();
+
+  const card = (
+    <Card className="w-full max-w-md">
       <title>{pageTitle('Something went wrong')}</title>
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Something went wrong</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <Alert tone="danger">{message}</Alert>
+      <CardHeader>
+        <CardTitle>{inShell ? 'This page could not be shown' : 'Something went wrong'}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <Alert tone="danger">{errorMessage(error)}</Alert>
+        <div className="flex flex-wrap gap-2">
           {/* Full page load on purpose: resets any broken client state. */}
-          <a href={paths.home} className={buttonVariants({ variant: 'secondary' })}>
-            Reload the app
+          <a
+            href={inShell ? window.location.href : paths.home}
+            className={buttonVariants({ variant: 'secondary' })}
+          >
+            Reload the page
           </a>
-        </CardContent>
-      </Card>
-    </div>
+          {inShell && (
+            <Link to={paths.home} className={buttonVariants({ variant: 'ghost' })}>
+              Go to the start page
+            </Link>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  return inShell ? (
+    <div className="flex justify-center py-8">{card}</div>
+  ) : (
+    <div className="flex min-h-dvh items-center justify-center p-4">{card}</div>
   );
 }
 

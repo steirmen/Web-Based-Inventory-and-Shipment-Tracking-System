@@ -71,7 +71,9 @@ export function OrderActions({
     );
   };
 
-  if (actions.length === 0 && !canEdit) return null;
+  // Keep an open dialog mounted even when the order has moved on (e.g. a 409 because someone
+  // else cancelled it): its error explains what happened until the user closes it.
+  if (actions.length === 0 && !canEdit && pendingAction === null) return null;
   const info = pendingAction ? ORDER_ACTION_INFO[pendingAction] : null;
 
   return (

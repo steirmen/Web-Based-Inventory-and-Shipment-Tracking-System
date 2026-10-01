@@ -458,6 +458,47 @@ describe('Order detail', () => {
     ).toBeVisible();
   });
 
+  it('keeps the explanation open when the order has meanwhile reached a final status', async () => {
+    const order = testOrder({ status: 'DRAFT' });
+    let current: Order = order;
+    const { user } = await renderCatalog(
+      `${ORDERS_APP}/${order.id}`,
+      'OWNER',
+      {
+        [`GET ${ORDERS_API}/${order.id}`]: () => Response.json({ order: current }),
+        // Someone else cancelled the order: the confirm fails, and the reload shows CANCELLED.
+        [`POST ${ORDERS_API}/${order.id}/confirm`]: () => {
+          current = { ...order, status: 'CANCELLED' };
+          return Response.json(
+            {
+              statusCode: 409,
+              code: 'ORDER_INVALID_TRANSITION',
+              message: "Order SO-1001 is cancelled and can't be confirmed.",
+            },
+            { status: 409 },
+          );
+        },
+      },
+      { waitForHeading: /SO-1001/ },
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+    const dialog = screen.getByRole('dialog', { name: 'Confirm order?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm' }));
+
+    expect(
+      await within(dialog).findByText("Order SO-1001 is cancelled and can't be confirmed."),
+    ).toBeVisible();
+    // The page catches up (no actions left), but the dialog stays until it is closed.
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Cancelled'),
+    );
+    expect(dialog).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument();
+  });
+
   it('shows "not found" for unknown or foreign orders, and a loading state', async () => {
     const order = testOrder();
     await renderCatalog(`${ORDERS_APP}/${order.id}`, 'OWNER', {

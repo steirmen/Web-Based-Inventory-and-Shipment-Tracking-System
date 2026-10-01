@@ -133,7 +133,7 @@ Search first (`SearchInput`), then selects, then "Clear filters" (ghost) when an
 
 ### Menus and selectors
 
-`Menu` (`ui/menu.tsx`) for dropdown menus (workspace switcher, account menu): `role="menu"`, ↑/↓/Home/End, Escape returns focus to the trigger, a click outside closes it. Pickers with server-side search (`CustomerPicker`, `ProductPicker`) share one pattern: `SearchInput` + results with loading, "no matches", and error-with-retry states. Short fixed lists use the native `Select`.
+`Menu` (`ui/menu.tsx`) for dropdown menus (workspace switcher, account menu): `role="menu"`, ↑/↓/Home/End, Escape returns focus to the trigger, a click outside closes it. Pickers with server-side search (`CustomerPicker`, `ProductPicker`) share one pattern: `SearchInput` + results with loading, "no matches", and error-with-retry states. Keyboard focus never falls back to the page when results update (a replaced result hands focus to the first new one). Short fixed lists use the native `Select`.
 
 ### Feedback
 
@@ -145,6 +145,8 @@ One pattern: an inline `Alert` next to what it is about. Success after an action
 - Navigation: pages are code-split; the current page stays visible while the next page's code downloads, with a slim progress bar (`RouteProgress`). A page whose code can't be downloaded shows "Check your connection, then reload the app."
 - `EmptyState`: what is empty, why, and the next step (a primary action, or "Clear filters" when filters hide everything). Never fake data.
 - `ErrorState`: a readable explanation and "Try again"; never an empty table instead of an error.
+- A page that crashes while rendering is caught by a route-level boundary (`RouteErrorPage inShell`): the header and the workspace navigation stay, the card offers "Reload the page" and "Go to the start page", and no error text or stack is shown. Only a failure of the shell itself reaches the full-screen boundary.
+- A dialog whose action failed stays open with its error, even if the page behind it updates (e.g. an order someone else cancelled); the user closes it.
 
 ### Status badges
 

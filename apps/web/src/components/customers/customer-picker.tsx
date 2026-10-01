@@ -72,6 +72,17 @@ export function CustomerPicker({
     setTimeout(() => inputRef.current?.focus(), 0);
   };
   const buttons = () => [...(listRef.current?.querySelectorAll('button') ?? [])];
+
+  // A keyboard user can move into the results before a typed search has answered. When the
+  // new results replace the focused one, keep focus in the results (or the search field)
+  // instead of letting it fall back to the page.
+  const resultFocused = useRef(false);
+  useEffect(() => {
+    if (resultFocused.current && !listRef.current?.contains(document.activeElement)) {
+      const first = listRef.current?.querySelector('button');
+      (first ?? inputRef.current)?.focus();
+    }
+  }, [results.data]);
   const close = () => {
     setOpen(false);
     inputRef.current?.focus();
@@ -197,6 +208,8 @@ export function CustomerPicker({
                         })
                       }
                       onKeyDown={(event) => onResultKeyDown(event, index)}
+                      onFocus={() => (resultFocused.current = true)}
+                      onBlur={() => (resultFocused.current = false)}
                       className={cn(
                         'flex w-full flex-col px-3 py-2 text-left text-sm hover:bg-surface-muted focus-visible:bg-surface-muted focus-visible:outline-none',
                         isSelected && 'font-semibold',

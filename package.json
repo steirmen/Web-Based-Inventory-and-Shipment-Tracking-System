@@ -6,7 +6,8 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/*",
+    "e2e"
   ],
   "engines": {
     "node": ">=22.22.0",
@@ -22,7 +23,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build",
+    "validate": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run build && npm run check:build",
     "db:check": "npm run db:check -w @app/api",
     "db:generate": "npm run db:generate -w @app/api",
     "db:migrate": "npm run db:migrate -w @app/api",
@@ -32,9 +33,13 @@
     "db:deploy": "npm run db:deploy -w @app/api",
     "db:status": "npm run db:status -w @app/api",
     "db:seed": "npm run db:seed -w @app/api",
-    "db:validate": "npm run db:validate -w @app/api"
+    "db:validate": "npm run db:validate -w @app/api",
+    "db:verify": "npm run db:verify -w @app/api",
+    "test:e2e": "npm run build -w @app/shared && npm run build -w @app/api && npm run e2e -w @app/e2e",
+    "check:build": "node scripts/check-build.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "concurrently": "^10.0.5",
     "prettier": "^3.9.9",
     "prettier-plugin-tailwindcss": "^0.8.1"

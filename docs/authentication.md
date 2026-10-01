@@ -106,7 +106,7 @@ Indexes:
 
 - **Absolute lifetime:** `AUTH_SESSION_TTL_DAYS`, default **7 days**, allowed range 1–90. A week balances convenience for a daily-use business tool against limiting how long a stolen cookie stays useful. The cookie's `Max-Age` matches.
 - The lifetime is not sliding and there are no refresh tokens: after expiry the user signs in again. The server rejects expired sessions (`AUTH_SESSION_EXPIRED`) even if the browser still sends the cookie.
-- Expired and revoked rows stay in the table. A periodic cleanup (`DELETE … WHERE expires_at < now() - interval '30 days'`, served by the `expires_at` index) is not scheduled yet.
+- **Cleanup (Phase 10A):** ended sessions (expired, or revoked by sign-out) are kept for one day — so a returning browser still sees "your session has expired" — and then deleted opportunistically, with no background job: every sign-in/registration deletes that user's long-ended sessions, and the first sign-in each hour per API process also sweeps everyone's (`SessionsService.removeEndedSessions`). Active sessions are never deleted, so nobody is signed out by it.
 
 ## Session revocation
 
@@ -126,12 +126,12 @@ Configured in one place: `SessionCookieService`.
 | --------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------- |
 | Name                  | `AUTH_COOKIE_NAME` (default `app_session`) | Neutral; no branding                                                                   |
 | `HttpOnly`            | always                                     | Browser JavaScript cannot read the token                                               |
-| `SameSite`            | `Lax`                                      | Not sent on cross-site POST/fetch: the main CSRF mitigation                            |
+| `SameSite`            | `Lax`                                      | Not sent on cross-SITE POST/fetch (same-site origins still get it; see CSRF below)     |
 | `Secure`              | `AUTH_COOKIE_SECURE`                       | `false` for local HTTP; **the API refuses to start in production unless it is `true`** |
 | `Path`                | `/`                                        |                                                                                        |
 | `Max-Age` / `Expires` | session expiry                             |                                                                                        |
 
-**CSRF:** state-changing endpoints accept JSON bodies only, so a cross-origin request needs a CORS preflight, which only allowed origins pass. Combined with `SameSite=Lax`, this blocks cross-site request forgery for the current endpoints. A dedicated CSRF token is not implemented.
+**CSRF:** `SameSite=Lax` alone is not enough — other origins on the same site (another port on localhost, a sibling subdomain) still receive the cookie, and the API also parses form-encoded bodies, so a plain HTML form needs no CORS preflight. Since Phase 10A every POST/PUT/PATCH/DELETE must carry an allowed `Origin` (or `Referer`) from `API_CORS_ORIGINS`, or it is refused with `403 CSRF_ORIGIN_REJECTED` before any handler runs. Details: [security.md](security.md#csrf).
 
 ## CORS and credentials
 
@@ -152,7 +152,9 @@ The frontend (`:5173`) and API (`:3000`) are different origins, but the same _si
 
 Exceeding a limit returns `429 RATE_LIMITED` with a `Retry-After` header.
 
-**Limitation:** counters are kept **in memory** in the API process. That is fine for one local or single-instance API, but **not sufficient for a horizontally scaled deployment**: each instance counts separately and counters reset on restart. That needs a shared store (for example Redis) and per-account limits. Behind a reverse proxy, configure Express `trust proxy` so the real client IP is used.
+The client IP is the TCP peer address; `X-Forwarded-For` is ignored unless `API_TRUST_PROXY` names the trusted proxy (hop count or addresses — never "trust everyone"), so a client can't pick a new IP per request. Every request counts, successful or not.
+
+**Limitation:** counters are kept **in memory** in the API process (idle keys are evicted after their window, so memory stays bounded). That is fine for one local or single-instance API, but **not sufficient for a horizontally scaled deployment**: each instance counts separately and counters reset on restart. That needs a shared store and per-account limits. See [security.md](security.md#rate-limiting-and-client-ip).
 
 ## Error responses
 

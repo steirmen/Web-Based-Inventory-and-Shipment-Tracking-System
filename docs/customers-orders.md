@@ -126,12 +126,13 @@ Errors use the standard format (`statusCode`, `code`, `message`, optional `detai
 - **Orders** (`/org/:organizationId/orders`): search, status, warehouse, created-from/to (local days, with the zone shown in the hint), and sort, all in the URL. The overview's status bars link here with the same period and time zone.
 - **New / edit order** (`…/orders/new`, `…/orders/:orderId/edit`, drafts only): the order builder with a customer picker, warehouse select, product search and add, quantities, line totals, and available stock per line.
 - **Customer picker** (`components/customers/customer-picker.tsx`): searches on the server (name, company, email, phone), opens with the first 20 customers by name, and loads 20 more on demand, so customers beyond the first 100 are reachable. It has loading, error-with-retry, and "no matches" states, keyboard support (↓ into results, ↑/↓, Enter, Escape), and asks only the current workspace. Orders use active customers only; report filters pass `includeArchived`.
-- **Order detail**: lines with snapshots, totals, and history, plus the actions the status and the viewer's permissions allow. Every action is confirmed in a dialog; processing shows the stock each line takes and, if it fails, the server's per-line shortage. Lists and stock are refreshed after every action (nothing optimistic).
+- **Order detail**: lines with snapshots, totals, and history, plus the actions the status and the viewer's permissions allow. Every action is confirmed in a dialog; processing shows the stock each line takes and, if it fails, the server's per-line shortage. A failed action keeps its dialog open with the reason, even when the refreshed order no longer offers any action (e.g. it was cancelled meanwhile). Lists and stock are refreshed after every action (nothing optimistic).
 
 ## Tests
 
 - API database tests: `customers-api.db-spec.ts`, `orders-api.db-spec.ts`, `orders.db-spec.ts`, `order-fulfillment.db-spec.ts` (shortages change nothing, retry after replenishing, archived warehouse/product at processing, never twice, rollback midway), `order-concurrency.db-spec.ts`, `sales-tenant-isolation.db-spec.ts`. Unit: `order-rules.spec.ts`, `rbac.spec.ts`.
 - Web: `pages/customers-page.test.tsx`, `pages/orders-page.test.tsx`, `pages/order-pages.test.tsx`, `components/customers/customer-picker.test.tsx`.
+- Browser E2E (`e2e/tests/orders.spec.ts`, `history.spec.ts`, `errors.spec.ts`): the whole lifecycle through the UI with inventory, SALE movements, and activity verified in the database; cancellation; insufficient stock; invalid transitions; order history after products, customers, and warehouses change; a real 409 conflict; duplicate-click protection.
 
 ## Limitations
 

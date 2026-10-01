@@ -345,9 +345,15 @@ describe('GET /organizations/:id/stock-movements', () => {
       '2026-09-02T23:59:59.999Z',
       '2026-09-03T00:00:00.000Z',
     ];
-    for (const [index, movement] of movements.entries()) {
-      await prisma.$executeRaw`UPDATE stock_movements SET created_at = ${new Date(days[index % 3]!)} WHERE id = ${movement.id}::uuid`;
-    }
+    // The ledger is append-only (a trigger refuses UPDATE); backdating test fixtures needs
+    // replica mode, which skips triggers and is available only to a superuser on the test DB.
+    await prisma.$transaction([
+      prisma.$executeRaw`SET LOCAL session_replication_role = replica`,
+      ...movements.map(
+        (movement, index) =>
+          prisma.$executeRaw`UPDATE stock_movements SET created_at = ${new Date(days[index % 3]!)} WHERE id = ${movement.id}::uuid`,
+      ),
+    ]);
 
     const day2 = await ledger('?from=2026-09-02&to=2026-09-02').expect(200);
     const fromDay2 = await ledger('?from=2026-09-02T23:59:59.999Z').expect(200);

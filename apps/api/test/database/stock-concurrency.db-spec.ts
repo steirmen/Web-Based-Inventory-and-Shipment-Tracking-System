@@ -151,6 +151,31 @@ describe('concurrent stock operations', () => {
     await expectLedgerConsistent(org);
   });
 
+  it('competing transfers of 7 from 10 units: one moves, the other moves nothing (no half transfer)', async () => {
+    const { org, main, east, product, op } = await setup();
+    await op('receive', { warehouseId: main.id, quantity: 10 }).expect(200);
+
+    const responses = await Promise.all(
+      Array.from({ length: 2 }, () =>
+        op('transfer', {
+          sourceWarehouseId: main.id,
+          destinationWarehouseId: east.id,
+          quantity: 7,
+        }),
+      ),
+    );
+
+    expect(statuses(responses)).toEqual({ 200: 1, 409: 1 });
+    expect(await quantityOf(main.id, product.id)).toBe(3);
+    expect(await quantityOf(east.id, product.id)).toBe(7);
+    // Exactly one OUT and one IN: the refused transfer left no orphan movement.
+    const moves = await prisma.stockMovement.findMany({
+      where: { organizationId: org, movementType: { in: ['TRANSFER_OUT', 'TRANSFER_IN'] } },
+    });
+    expect(moves.map((move) => move.movementType).sort()).toEqual(['TRANSFER_IN', 'TRANSFER_OUT']);
+    await expectLedgerConsistent(org);
+  });
+
   it('mixes receipts, issues, damage, adjustments, and transfers without breaking the ledger', async () => {
     const { org, main, east, op } = await setup();
     await op('receive', { warehouseId: main.id, quantity: 30 }).expect(200);

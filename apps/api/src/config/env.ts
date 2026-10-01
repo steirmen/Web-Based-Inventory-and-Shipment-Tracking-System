@@ -9,6 +9,53 @@ export const ROOT_ENV_FILE = fileURLToPath(new URL('../../../../.env', import.me
 
 const port = z.coerce.number().int().min(1).max(65_535);
 
+/** True for a bare browser origin such as `https://app.example.com` or `http://localhost:5173`. */
+function isOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.origin === value;
+  } catch {
+    return false;
+  }
+}
+
+/** One trusted-proxy entry: an IP, a CIDR range, or an Express preset name. */
+const TRUSTED_PROXY_ENTRY =
+  /^(loopback|linklocal|uniquelocal|\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?|[0-9a-f:]+(\/\d{1,3})?)$/i;
+
+/**
+ * `API_TRUST_PROXY` → Express "trust proxy" value. `false` (default): the
+ * client IP is the socket address and X-Forwarded-For is ignored, so it can't
+ * be spoofed. A hop count (`1`) or a list of proxy addresses/ranges trusts
+ * only those proxies. `true` (trust everyone) is refused: any client could
+ * then choose its own IP and dodge the rate limits.
+ */
+const trustProxy = z
+  .string()
+  .default('false')
+  .transform((value, context): false | number | string[] => {
+    const trimmed = value.trim();
+    if (trimmed === '' || trimmed === 'false') return false;
+    if (/^\d+$/.test(trimmed)) {
+      const hops = Number(trimmed);
+      if (hops >= 1 && hops <= 10) return hops;
+    } else {
+      const entries = trimmed
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      if (entries.length > 0 && entries.every((entry) => TRUSTED_PROXY_ENTRY.test(entry))) {
+        return entries;
+      }
+    }
+    context.addIssue({
+      code: 'custom',
+      message:
+        'Use false, a hop count (1-10), or a comma-separated list of proxy IPs/CIDR ranges (never "true").',
+    });
+    return z.NEVER;
+  });
+
 /** Environment variables required by the API. Documented in `.env.example`. */
 export const envSchema = z
   .object({
@@ -27,7 +74,14 @@ export const envSchema = z
       // Credentialed (cookie) requests require explicit origins.
       .refine((origins) => !origins.includes('*'), {
         message: 'Wildcard origins are not allowed: the API uses credentialed (cookie) requests.',
+      })
+      // Exact origins only ("https://app.example.com": no path, no trailing slash), so the
+      // CORS and CSRF checks compare like with like.
+      .refine((origins) => origins.length > 0 && origins.every(isOrigin), {
+        message: 'List exact origins such as https://app.example.com (scheme and host, no path).',
       }),
+    /** Express "trust proxy" (client IP for rate limiting); see docs/security.md. */
+    API_TRUST_PROXY: trustProxy,
 
     DB_HOST: z.string().min(1),
     DB_PORT: port.default(5432),
@@ -55,6 +109,19 @@ export const envSchema = z
   .refine((env) => env.NODE_ENV !== 'production' || env.AUTH_COOKIE_SECURE, {
     message: 'AUTH_COOKIE_SECURE must be true when NODE_ENV=production.',
     path: ['AUTH_COOKIE_SECURE'],
+  })
+  .refine(
+    (env) =>
+      env.NODE_ENV !== 'production' ||
+      env.API_CORS_ORIGINS.every((origin) => origin.startsWith('https://')),
+    {
+      message: 'In production every API_CORS_ORIGINS entry must be an https:// origin.',
+      path: ['API_CORS_ORIGINS'],
+    },
+  )
+  .refine((env) => env.NODE_ENV !== 'production' || env.DB_PASSWORD.length > 0, {
+    message: 'DB_PASSWORD is required when NODE_ENV=production.',
+    path: ['DB_PASSWORD'],
   });
 
 export type Env = z.infer<typeof envSchema>;

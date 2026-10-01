@@ -1,0 +1,12 @@
+{
+  "name": "@app/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Real-browser end-to-end tests (Playwright + the installed Microsoft Edge) against a production build and a dedicated test database.",
+  "scripts": {
+    "e2e": "playwright test",
+    "lint": "oxlint .",
+    "typecheck": "tsc --noEmit"
+  }
+}

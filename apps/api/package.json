@@ -20,7 +20,8 @@
     "db:validate": "prisma validate",
     "db:deploy": "prisma migrate deploy",
     "db:status": "prisma migrate status",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "db:verify": "tsx prisma/verify-integrity.ts"
   },
   "dependencies": {
     "@app/shared": "0.0.0",

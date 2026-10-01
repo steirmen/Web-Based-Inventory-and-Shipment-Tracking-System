@@ -62,6 +62,14 @@ describe('csvCell', () => {
     expect(csvCell(value)).toBe(expected);
   });
 
+  it('neutralizes formulas hidden behind leading spaces, but not plain text', () => {
+    expect(csvCell('  =HYPERLINK("http://evil.test")')).toBe(
+      '"\'  =HYPERLINK(""http://evil.test"")"',
+    );
+    expect(csvCell(' @SUM(A1)')).toBe("' @SUM(A1)");
+    expect(csvCell(' plain text')).toBe('" plain text"');
+  });
+
   it('keeps numbers and decimal strings numeric', () => {
     expect(csvCell(42)).toBe('42');
     expect(csvCell('-12.50')).toBe('-12.50');

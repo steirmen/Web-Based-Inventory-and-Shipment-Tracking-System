@@ -29,3 +29,9 @@ Thumbs.db
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# Browser end-to-end tests (Phase 10B)
+e2e/.auth/
+e2e/test-results/
+e2e/playwright-report/
+apps/web/dist-e2e/

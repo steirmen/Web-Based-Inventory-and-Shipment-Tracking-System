@@ -23,6 +23,8 @@ Work is delivered in explicit phases. **Only implement what the current phase as
 - **Phase 8C (done): reports.** Sales/Orders/Inventory reports (`/org/:id/reports/…`, `src/reports`) with server-side filters, whitelisted sorting, pagination, totals, and CSV export (`…/export`, max 10,000 rows, `REPORT_EXPORT_TOO_LARGE`), `REPORTS_READ`/`REPORTS_EXPORT` (all roles), `REPORT_FILTER_NOT_FOUND` for foreign filter ids. Same definitions as the dashboard. No schema changes. See [docs/dashboard-reporting.md](docs/dashboard-reporting.md#reports).
 - **Phase 8.1 (done): stabilization.** Root fix for shifted timestamps (migration `store_timestamps_in_utc`: data repair + database session `TimeZone` UTC, see [docs/timezone.md](docs/timezone.md)); one local-day definition (`common/time/local-days.ts`, `instantRange`) for the dashboard, reports, and the orders/stock-movements date filters (`timeZone` param); dashboard → orders links carry the time zone; recent orders come from the summary for the selected period; server-side customer picker with load-more (orders and report filters); Phase 7A closure docs.
 - **Phase 9 (done): UI/UX polish & frontend performance.** Route-level code splitting (lazy routes, `RouteProgress`), workspace sidebar navigation (`WorkspaceNav`), account menu, shared primitives (`Table*`, `SearchInput`, `Menu`, `BackLink`, `ListSkeleton`/`DetailSkeleton`, dialog sizes, icon buttons, dismissible alerts), container-query responsive lists, order builder steps, Appearance preview, `ScrollRestoration`, docs cleanup. No API or business-rule changes. See [docs/design-system.md](docs/design-system.md#patterns).
+- **Phase 10A (done): security hardening.** CSRF Origin check for every POST/PUT/PATCH/DELETE (`CSRF_ORIGIN_REJECTED`), exact-origin CORS (https in production), `API_TRUST_PROXY` (never trust-all), API security headers + web CSP (preview), opportunistic session cleanup, append-only triggers on `stock_movements`/`activity_logs` (migration `append_only_ledgers`), CSV formula check after leading spaces, structural route-security test, security DB suite. See [docs/security.md](docs/security.md).
+- **Phase 10B (done): E2E, reliability & quality gate.** Real-browser E2E (`e2e/`, Playwright + installed Edge, production build on :5174, API build on :3100, dedicated `app_e2e_test`; 49 tests + API seed), read-only integrity audit (`npm run db:verify`, `prisma/integrity.ts`), build review (`npm run check:build`, part of `validate`), page-level route error boundaries, competing-transfer concurrency test, keyboard-focus and order-conflict dialog fixes, docs/testing.md and the security findings classification. See [docs/testing.md](docs/testing.md).
 - **Later phases:** not defined yet. PDF/XLSX exports, scheduled reports, and a report builder are out of scope until asked. Password reset, email verification, email delivery, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
 
 Environment constraints: **local development only. No Docker, no Docker Compose, no WSL.** PostgreSQL runs natively on the Windows host.
@@ -31,9 +33,12 @@ Environment constraints: **local development only. No Docker, no Docker Compose,
 
 ```bash
 npm run dev          # shared (watch) + api (:3000) + web (:5173)
-npm run validate     # format:check, lint, typecheck, test, build — run before finishing a task
+npm run validate     # format:check, lint, typecheck, test, build, check:build — run before finishing a task (plus test:db and test:e2e)
 npm run test         # unit + HTTP tests (no DB); single workspace: npm run test -w @app/api
 npm run test:db      # database integration tests (real PostgreSQL, DB_TEST_NAME)
+npm run test:e2e     # real-browser E2E (installed Edge) on :3100/:5174 against app_e2e_test
+npm run db:verify    # read-only integrity audit of DB_NAME (development by default)
+npm run check:build  # web build review (also run by validate)
 npm run db:check     # Prisma → PostgreSQL connectivity
 npm run db:migrate -- --name <change>   # after editing apps/api/prisma/schema.prisma
 npm run db:deploy    # apply pending migrations (non-destructive)
@@ -53,7 +58,7 @@ npm run db:seed      # idempotent demo data
 
 - TypeScript strict everywhere. `any` is a lint error.
 - Formatting: Prettier (single quotes, trailing commas, width 100, Tailwind class sorting). Linting: **oxlint** (not ESLint), per-app `.oxlintrc.json`.
-- Tests: Vitest in both apps. `npm run test` must not require a real database or a `.env` file. Tests that need PostgreSQL go in `apps/api/test/database/*.db-spec.ts` (`npm run test:db`).
+- Tests: Vitest in both apps. `npm run test` must not require a real database or a `.env` file. Tests that need PostgreSQL go in `apps/api/test/database/*.db-spec.ts` (`npm run test:db`). Critical user journeys have real-browser E2E in `e2e/tests/*.spec.ts` (read [docs/testing.md](docs/testing.md)): use role/label locators, create the records a test mutates (never rely on another spec), assert server state (`support/db.ts`, E2E database only) where the UI can't show it, and never point E2E or tests at the development database.
 - File names: kebab-case (`health-check-page.tsx`, `prisma.service.ts`).
 - Shared request/response types go in `packages/shared`, imported with `import type` from both apps.
 
@@ -63,7 +68,8 @@ npm run db:seed      # idempotent demo data
 - Do **not** convert DI constructor parameters to `import type`, because Nest needs the runtime class for `emitDecoratorMetadata`.
 - One folder per feature module under `src/<feature>/`: `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`, and `*.spec.ts` next to the code. HTTP-level tests go in `test/*.e2e-spec.ts` using `configureApp()` so they run the real pipeline.
 - Configuration: add new env vars to the Zod schema in `src/config/env.ts` **and** to `.env.example` (documented). Read them via `ConfigService<Env, true>` with `{ infer: true }`, never `process.env`.
-- Cross-cutting HTTP setup (pipes, CORS, cookies, error filter) goes in `src/app.setup.ts`.
+- Cross-cutting HTTP setup (security headers, CORS, CSRF origin check, trust proxy, cookies, pipes, error filter) goes in `src/app.setup.ts`. Read [docs/security.md](docs/security.md) before touching auth, cookies, CORS, or middleware.
+- **CSRF:** every POST/PUT/PATCH/DELETE must come from an origin in `API_CORS_ORIGINS` (`csrfOriginCheck`); HTTP tests that send a foreign `Origin` get `403 CSRF_ORIGIN_REJECTED`. Never add a state-changing GET. New organization routes must keep passing `src/common/security/route-security.spec.ts` (guard + declared permission; public routes are an explicit list).
 - **Authentication is secure by default:** `SessionAuthGuard` is a global guard, so every new route requires a session. Mark intentionally public routes with `@Public()` (from `src/auth/decorators.ts`). Get the user with `@CurrentUser()`. Authorization is RBAC through `OrganizationAccessGuard` + `@RequirePermissions` (below); don't add ad-hoc role checks.
 - **Errors:** throw `AppException(status, code, message)` (codes are `ApiErrorCode` in `@app/shared`) for anything the client should read. Messages of other exceptions are replaced with generic text by `ApiExceptionFilter`, and 5xx never leak details.
 - **Never log** passwords, password hashes, session tokens, cookies, or email addresses; log user IDs. Never select `passwordHash` into anything returned to a client.
@@ -116,7 +122,7 @@ Read [docs/database-design.md](docs/database-design.md) before changing the sche
 - **Tenancy:** every tenant-owned table has `organizationId`. Every query on tenant data must filter by `organizationId`. References between tenant-owned tables use **composite foreign keys** `(organizationId, xId) → X(organizationId, id)`, so each referenced model keeps `@@unique([organizationId, id])`. Follow this pattern for new tables.
 - Naming: snake_case tables/columns via `@@map`/`@map`; IDs `@default(uuid(7)) @db.Uuid`; timestamps `@db.Timestamptz(3)`; money `Decimal @db.Decimal(12, 2)` (never Float); quantities `Int`.
 - **CHECK constraints live in migration SQL** (Prisma can't express them). When adding a rule, create the migration with `--create-only`, append `ALTER TABLE … ADD CONSTRAINT <table>_<rule>_check …`, then apply it. Document it in database-design.md.
-- Deletes are RESTRICT by default. Retire records (`isActive`, `ProductStatus.ARCHIVED`) instead of deleting. `stock_movements` and `activity_logs` are append-only: never update or delete rows.
+- Deletes are RESTRICT by default. Retire records (`isActive`, `ProductStatus.ARCHIVED`) instead of deleting. `stock_movements` and `activity_logs` are append-only: never update or delete rows — database triggers refuse it (only the `actor_user_id → NULL` of a user deletion is allowed). Test fixtures that must backdate rows do it in a transaction with `SET LOCAL session_replication_role = replica` on the test DB only; never in app code, seed, or migrations without explicit approval.
 - Inventory invariant: change `inventory.quantity` only in the same transaction as inserting the matching `StockMovement` (before + delta = after).
 - Order lines store `productNameSnapshot`, `skuSnapshot`, and `unitPrice`. Never read historical order data from the current product.
 - Prisma with composite relations: nested creates inherit `organizationId` from the parent (don't pass it). Clear optional composite relations by setting the scalar (`categoryId: null`), not with `disconnect`.

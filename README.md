@@ -179,25 +179,28 @@ Filters, sorting, and pages run on the server and are kept in the URL. **Export 
 
 Run from the repository root.
 
-| Command                                   | Description                                                    |
-| ----------------------------------------- | -------------------------------------------------------------- |
-| `npm run dev`                             | Start shared (watch), API, and web app together                |
-| `npm run dev:api` / `npm run dev:web`     | Start one app                                                  |
-| `npm run build`                           | Production build of every workspace                            |
-| `npm run test`                            | Run unit and HTTP tests (no database needed)                   |
-| `npm run test:db`                         | Run database integration tests against `DB_TEST_NAME`          |
-| `npm run lint`                            | Lint all workspaces (oxlint)                                   |
-| `npm run typecheck`                       | Type-check all workspaces                                      |
-| `npm run format` / `npm run format:check` | Format with Prettier / verify formatting                       |
-| `npm run validate`                        | Everything CI runs: format check, lint, typecheck, test, build |
-| `npm run db:check`                        | Verify Prisma can reach PostgreSQL                             |
-| `npm run db:generate`                     | Regenerate the Prisma client                                   |
-| `npm run db:migrate`                      | Create/apply migrations (`prisma migrate dev`)                 |
-| `npm run db:deploy`                       | Apply pending migrations (`prisma migrate deploy`)             |
-| `npm run db:status`                       | Show migration status                                          |
-| `npm run db:seed`                         | Load the development demo data (idempotent)                    |
-| `npm run db:validate`                     | Validate the Prisma schema                                     |
-| `npm run db:studio`                       | Open Prisma Studio                                             |
+| Command                                   | Description                                                                            |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| `npm run dev`                             | Start shared (watch), API, and web app together                                        |
+| `npm run dev:api` / `npm run dev:web`     | Start one app                                                                          |
+| `npm run build`                           | Production build of every workspace                                                    |
+| `npm run test`                            | Run unit and HTTP tests (no database needed)                                           |
+| `npm run test:db`                         | Run database integration tests against `DB_TEST_NAME`                                  |
+| `npm run test:e2e`                        | Real-browser end-to-end tests (Playwright + installed Edge) against `app_e2e_test`     |
+| `npm run db:verify`                       | Read-only integrity audit of the database in `DB_NAME`                                 |
+| `npm run check:build`                     | Review the web production build (no source maps or secrets, lazy pages, bundle budget) |
+| `npm run lint`                            | Lint all workspaces (oxlint)                                                           |
+| `npm run typecheck`                       | Type-check all workspaces                                                              |
+| `npm run format` / `npm run format:check` | Format with Prettier / verify formatting                                               |
+| `npm run validate`                        | Format check, lint, typecheck, test, build, build review                               |
+| `npm run db:check`                        | Verify Prisma can reach PostgreSQL                                                     |
+| `npm run db:generate`                     | Regenerate the Prisma client                                                           |
+| `npm run db:migrate`                      | Create/apply migrations (`prisma migrate dev`)                                         |
+| `npm run db:deploy`                       | Apply pending migrations (`prisma migrate deploy`)                                     |
+| `npm run db:status`                       | Show migration status                                                                  |
+| `npm run db:seed`                         | Load the development demo data (idempotent)                                            |
+| `npm run db:validate`                     | Validate the Prisma schema                                                             |
+| `npm run db:studio`                       | Open Prisma Studio                                                                     |
 
 Run a command in a single workspace with `-w`, for example `npm run test -w @app/web`.
 
@@ -227,5 +230,7 @@ docs/           Architecture, design system, local setup
 - [Personalization & appearance](docs/personalization-appearance.md)
 - [Dashboard & reporting](docs/dashboard-reporting.md)
 - [Timestamps & time zones](docs/timezone.md)
+- [Security](docs/security.md)
+- [Testing & quality gate](docs/testing.md)
 - [Design system](docs/design-system.md)
 - [CLAUDE.md](CLAUDE.md): conventions for AI-assisted development

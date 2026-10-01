@@ -64,6 +64,8 @@ export const API_ERROR_CODES = [
   'REPORT_FILTER_NOT_FOUND',
   'REPORT_EXPORT_TOO_LARGE',
   'RATE_LIMITED',
+  /** A state-changing request from an origin that is not allowed (CSRF protection). */
+  'CSRF_ORIGIN_REJECTED',
   'BAD_REQUEST',
   'FORBIDDEN',
   'NOT_FOUND',
