@@ -72,29 +72,36 @@ export class ProductsController {
 
 Permissions are defined once in `@app/shared` (`PERMISSIONS`, `ROLE_PERMISSIONS`). The API enforces them; the web app imports the same map only to decide what to show.
 
-| Permission                                         | OWNER | ADMIN | STAFF |
-| -------------------------------------------------- | :---: | :---: | :---: |
-| `ORGANIZATION_READ`: view the organization         |  ✅   |  ✅   |  ✅   |
-| `ORGANIZATION_UPDATE`: rename                      |  ✅   |  ✅   |  ❌   |
-| `MEMBERS_READ`: view members                       |  ✅   |  ✅   |  ✅   |
-| `MEMBERS_INVITE`: create, list, revoke invitations |  ✅   | ✅\*  |  ❌   |
-| `MEMBERS_UPDATE_ROLE`: change roles                |  ✅   | ✅\*  |  ❌   |
-| `MEMBERS_REMOVE`: remove members                   |  ✅   | ✅\*  |  ❌   |
-| `OWNERSHIP_TRANSFER`                               |  ✅   |  ❌   |  ❌   |
-| `PRODUCTS_READ` / `_CREATE` / `_UPDATE`            |  ✅   |  ✅   |  ✅   |
-| `PRODUCTS_ARCHIVE`: archive and restore            |  ✅   |  ✅   |  ❌   |
-| `CATEGORIES_READ` / `_CREATE` / `_UPDATE`          |  ✅   |  ✅   |  ✅   |
-| `CATEGORIES_DELETE`                                |  ✅   |  ✅   |  ❌   |
-| `WAREHOUSES_READ`                                  |  ✅   |  ✅   |  ✅   |
-| `WAREHOUSES_CREATE` / `_UPDATE`                    |  ✅   |  ✅   |  ❌   |
-| `WAREHOUSES_ARCHIVE`: archive and restore          |  ✅   |  ✅   |  ❌   |
-| `INVENTORY_READ`, `STOCK_MOVEMENTS_READ`           |  ✅   |  ✅   |  ✅   |
-| `INVENTORY_RECEIVE`, `INVENTORY_ISSUE` (+ damage)  |  ✅   |  ✅   |  ✅   |
-| `INVENTORY_ADJUST`, `INVENTORY_TRANSFER`           |  ✅   |  ✅   |  ❌   |
+| Permission                                           | OWNER | ADMIN | STAFF |
+| ---------------------------------------------------- | :---: | :---: | :---: |
+| `ORGANIZATION_READ`: view the organization           |  ✅   |  ✅   |  ✅   |
+| `ORGANIZATION_UPDATE`: rename                        |  ✅   |  ✅   |  ❌   |
+| `MEMBERS_READ`: view members                         |  ✅   |  ✅   |  ✅   |
+| `MEMBERS_INVITE`: create, list, revoke invitations   |  ✅   | ✅\*  |  ❌   |
+| `MEMBERS_UPDATE_ROLE`: change roles                  |  ✅   | ✅\*  |  ❌   |
+| `MEMBERS_REMOVE`: remove members                     |  ✅   | ✅\*  |  ❌   |
+| `OWNERSHIP_TRANSFER`                                 |  ✅   |  ❌   |  ❌   |
+| `PRODUCTS_READ` / `_CREATE` / `_UPDATE`              |  ✅   |  ✅   |  ✅   |
+| `PRODUCTS_ARCHIVE`: archive and restore              |  ✅   |  ✅   |  ❌   |
+| `CATEGORIES_READ` / `_CREATE` / `_UPDATE`            |  ✅   |  ✅   |  ✅   |
+| `CATEGORIES_DELETE`                                  |  ✅   |  ✅   |  ❌   |
+| `WAREHOUSES_READ`                                    |  ✅   |  ✅   |  ✅   |
+| `WAREHOUSES_CREATE` / `_UPDATE`                      |  ✅   |  ✅   |  ❌   |
+| `WAREHOUSES_ARCHIVE`: archive and restore            |  ✅   |  ✅   |  ❌   |
+| `INVENTORY_READ`, `STOCK_MOVEMENTS_READ`             |  ✅   |  ✅   |  ✅   |
+| `INVENTORY_RECEIVE`, `INVENTORY_ISSUE` (+ damage)    |  ✅   |  ✅   |  ✅   |
+| `INVENTORY_ADJUST`, `INVENTORY_TRANSFER`             |  ✅   |  ✅   |  ❌   |
+| `CUSTOMERS_READ` / `_CREATE` / `_UPDATE`             |  ✅   |  ✅   |  ✅   |
+| `CUSTOMERS_ARCHIVE`: archive and restore             |  ✅   |  ✅   |  ❌   |
+| `ORDERS_READ` / `_CREATE` / `_UPDATE` / `_CONFIRM`   |  ✅   |  ✅   |  ✅   |
+| `ORDERS_PROCESS` / `_SHIP` / `_COMPLETE` / `_CANCEL` |  ✅   |  ✅   |  ❌   |
+| `DASHBOARD_READ`: read-only dashboard aggregates     |  ✅   |  ✅   |  ✅   |
+| `REPORTS_READ`: sales, orders, inventory reports     |  ✅   |  ✅   |  ✅   |
+| `REPORTS_EXPORT`: CSV export of reports              |  ✅   |  ✅   |  ✅   |
 
 \* Also restricted by the role hierarchy below.
 
-Catalog permissions are described in [products-categories.md](products-categories.md), warehouse and inventory permissions in [warehouses-inventory.md](warehouses-inventory.md).
+Catalog permissions are described in [products-categories.md](products-categories.md), warehouse and inventory permissions in [warehouses-inventory.md](warehouses-inventory.md), and the dashboard and report permissions in [dashboard-reporting.md](dashboard-reporting.md).
 
 ### Role hierarchy
 

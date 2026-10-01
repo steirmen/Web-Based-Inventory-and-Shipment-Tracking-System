@@ -2,7 +2,7 @@
 
 A business operations SaaS platform for small and medium-sized businesses: inventory, orders, customers, and reporting.
 
-> **Status: Phase 6 (warehouses & inventory).** The repository contains the technical foundation, the multi-tenant PostgreSQL domain schema, email/password **authentication** with database-backed sessions, **multi-tenant workspaces** (organization creation and switching, role-based access control for OWNER / ADMIN / STAFF, team management, invitation links, ownership transfer), the **product catalog** (categories and products with search, filters, sorting, pagination, and archive/restore), and **warehouses & inventory**: warehouses with archive/restore, stock per product and warehouse with low-stock states, stock operations (receive, issue, damage, adjust, transfer), and an immutable stock movement history. Customers, orders (and their link to inventory), the dashboard, and reporting come in later phases.
+> **Status: Phase 8 (dashboard and reporting).** The repository contains the technical foundation, the multi-tenant PostgreSQL domain schema, email/password **authentication** with database-backed sessions, **multi-tenant workspaces** (organization creation and switching, role-based access control for OWNER / ADMIN / STAFF, team management, invitation links, ownership transfer), the **product catalog** (categories and products with search, filters, sorting, pagination, and archive/restore), **warehouses & inventory** (warehouses with archive/restore, stock per product and warehouse with low-stock states, stock operations, and an immutable stock movement history), **customers & orders** (sales orders whose fulfillment deducts stock), **personal appearance settings**, the **dashboard** (the workspace overview: organization-scoped KPIs, sales and order charts, top products, recent orders, and stock summaries), and **reports** (sales, orders, and inventory with filters, sorting, pagination, and CSV export).
 
 ## Tech stack
 
@@ -140,6 +140,31 @@ Each user can change how Nexora looks for them under **Appearance** (palette ico
 
 Only the presentation changes: navigation, pages, and workflows are the same for everyone. Details: [docs/personalization-appearance.md](docs/personalization-appearance.md).
 
+## Dashboard (workspace overview)
+
+Opening a workspace shows its **Overview**: KPI cards (sales, orders, customers, products, units in stock, low stock), a sales-over-time chart (revenue or orders, with a data table), orders by status, an inventory and warehouse summary, the top 5 products, and the 5 newest orders. Pick a range (today, last 7 or 30 days, this month, previous month, this year, or custom dates); it is kept in the URL, so you can share or reload it. Every section links to the detailed page (for example, low stock opens the inventory filtered to low stock). The overview follows your appearance settings and only reads data.
+
+### Dashboard API
+
+`GET /organizations/:id/dashboard/summary` returns a workspace's dashboard numbers in one response, computed from its real data on every request:
+
+- **Sales** (realized revenue: only orders whose stock was deducted — processing, shipped, completed — at the prices on the order lines), **orders** (every status), realized orders, and new customers, each compared with the previous period of the same length.
+- **Current state:** active/archived customers and products, units in stock, low-stock and out-of-stock items, and every warehouse with its own stock summary.
+- **Order status distribution**, **top 5 products** by units sold, and a **time series** of orders and revenue (daily, weekly, or monthly depending on the range, with empty periods as zeros).
+- **Ranges:** today, last 7 or 30 days (default), this month, previous month, this year, or a custom range of up to 366 days, counted in the time zone you pass (`timeZone=Europe/Istanbul`; default UTC).
+
+Every member (owner, admin, staff) can read it; it never changes data. Details: [docs/dashboard-reporting.md](docs/dashboard-reporting.md).
+
+## Reports
+
+Under **Reports** (`/org/:id/reports`) every member can open three reports and download them as CSV:
+
+- **Sales**: realized sales (processing, shipped, and completed orders) with units and revenue at the prices on the order, filterable by date range, status, warehouse, customer, category, product, and a search across order numbers, customers, and products.
+- **Orders**: every order created in the period with its status and total, filterable by date range, status, warehouse, customer, and search.
+- **Inventory**: current stock per product and warehouse with its stock status (in stock, low stock, out of stock), filterable by warehouse, category, status, and search; archived products and warehouses on request.
+
+Filters, sorting, and pages run on the server and are kept in the URL. **Export CSV** downloads exactly the filtered report (up to 10,000 rows; narrow the filters for larger exports). Exported cells that look like spreadsheet formulas are neutralized. Reports use the same definitions as the dashboard, so the numbers agree. Details: [docs/dashboard-reporting.md](docs/dashboard-reporting.md#reports).
+
 ## Commands
 
 Run from the repository root.
@@ -189,5 +214,6 @@ docs/           Architecture, design system, local setup
 - [Products & categories](docs/products-categories.md)
 - [Warehouses & inventory](docs/warehouses-inventory.md)
 - [Personalization & appearance](docs/personalization-appearance.md)
+- [Dashboard & reporting](docs/dashboard-reporting.md)
 - [Design system](docs/design-system.md)
 - [CLAUDE.md](CLAUDE.md): conventions for AI-assisted development

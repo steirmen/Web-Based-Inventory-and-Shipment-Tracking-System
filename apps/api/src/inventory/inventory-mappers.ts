@@ -1,11 +1,21 @@
 import type { InventoryItem, StockMovement, StockStatus, Warehouse } from '@app/shared';
-import type { Prisma } from '../generated/prisma/client.js';
+import { Prisma } from '../generated/prisma/client.js';
 
 /** OUT_OF_STOCK at 0, LOW_STOCK up to and including the reorder level, IN_STOCK above it. */
 export function stockStatus(quantity: number, minimumStock: number): StockStatus {
   if (quantity === 0) return 'OUT_OF_STOCK';
   return quantity <= minimumStock ? 'LOW_STOCK' : 'IN_STOCK';
 }
+
+/**
+ * The same rule as SQL, for filters and aggregates (inventory list, dashboard):
+ * `i` is the inventory row and `p` its product. Keep both definitions in sync.
+ */
+export const STOCK_STATUS_SQL: Record<StockStatus, Prisma.Sql> = {
+  OUT_OF_STOCK: Prisma.sql`i.quantity = 0`,
+  LOW_STOCK: Prisma.sql`i.quantity > 0 AND i.quantity <= p.minimum_stock`,
+  IN_STOCK: Prisma.sql`i.quantity > p.minimum_stock`,
+};
 
 // --- Warehouses ----------------------------------------------------------------------
 

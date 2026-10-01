@@ -10,6 +10,8 @@ import {
   type OrganizationSummary,
 } from '@app/shared';
 import { vi } from 'vitest';
+import { RECENT_ORDERS_QUERY } from '@/lib/dashboard-params';
+import { emptyDashboardSummary } from './dashboard-fixtures';
 
 export const TEST_API_BASE_URL = 'http://api.test';
 
@@ -17,6 +19,32 @@ const defaultAppearance = () =>
   Response.json({ appearance: DEFAULT_APPEARANCE, updatedAt: null } satisfies AppearanceResponse);
 
 type Handler = (init: RequestInit | undefined, url: URL) => Response | Promise<Response>;
+
+/**
+ * Answers for requests that many pages make implicitly. A test's own handler
+ * for the same key always wins.
+ */
+function defaultHandler(key: string, url: URL): Handler | undefined {
+  // Every signed-in page loads the user's appearance; default to "never saved".
+  if (key === 'GET /me/appearance') return defaultAppearance;
+  // The workspace overview (dashboard) of any organization: an empty workspace…
+  if (/^GET \/organizations\/[^/]+\/dashboard\/summary$/.test(key)) {
+    return () => Response.json(emptyDashboardSummary());
+  }
+  // …and its "recent orders" box (only that exact query: orders pages still need their own mocks).
+  if (
+    /^GET \/organizations\/[^/]+\/orders$/.test(key) &&
+    url.searchParams.get('pageSize') === String(RECENT_ORDERS_QUERY.pageSize) &&
+    url.searchParams.get('sortBy') === RECENT_ORDERS_QUERY.sortBy
+  ) {
+    return () =>
+      Response.json({
+        items: [],
+        pagination: { page: 1, pageSize: 5, totalItems: 0, totalPages: 0 },
+      });
+  }
+  return undefined;
+}
 
 /**
  * Replaces `fetch` with a router keyed by "METHOD /path". Unhandled requests
@@ -28,8 +56,7 @@ export function mockApi(handlers: Record<string, Handler>) {
   const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
     const url = new URL(String(input));
     const key = `${init?.method ?? 'GET'} ${url.pathname}`;
-    // Every signed-in page loads the user's appearance; default to "never saved".
-    const handler = handlers[key] ?? (key === 'GET /me/appearance' ? defaultAppearance : undefined);
+    const handler = handlers[key] ?? defaultHandler(key, url);
     if (!handler) {
       throw new Error(`Unhandled API request in test: ${key}`);
     }

@@ -65,6 +65,12 @@ export const PERMISSIONS = [
   'ORDERS_COMPLETE',
   /** DRAFT/CONFIRMED → CANCELLED. */
   'ORDERS_CANCEL',
+  /** Read the dashboard's aggregated KPIs (read-only; there is no dashboard configuration). */
+  'DASHBOARD_READ',
+  /** View the sales, orders, and inventory reports (read-only). */
+  'REPORTS_READ',
+  /** Download reports as CSV. */
+  'REPORTS_EXPORT',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -107,6 +113,9 @@ export const ROLE_PERMISSIONS: Record<MemberRole, readonly Permission[]> = {
     'ORDERS_SHIP',
     'ORDERS_COMPLETE',
     'ORDERS_CANCEL',
+    'DASHBOARD_READ',
+    'REPORTS_READ',
+    'REPORTS_EXPORT',
   ],
   STAFF: [
     'ORGANIZATION_READ',
@@ -129,6 +138,9 @@ export const ROLE_PERMISSIONS: Record<MemberRole, readonly Permission[]> = {
     'ORDERS_CREATE',
     'ORDERS_UPDATE',
     'ORDERS_CONFIRM',
+    'DASHBOARD_READ',
+    'REPORTS_READ',
+    'REPORTS_EXPORT',
   ],
 };
 

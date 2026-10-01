@@ -18,7 +18,10 @@ Work is delivered in explicit phases. **Only implement what the current phase as
 - **Phase 6 (done): warehouses & inventory.** Warehouse CRUD with immutable codes and archive/restore (no delete), inventory list/detail with low-stock states, receive/issue/damage/adjust/transfer in one row-locked transaction each, immutable stock movement history (filters, transfer groups), inventory permissions, activity logging, warehouses/inventory/stock-movements UI, seed additions. No schema changes. See [docs/warehouses-inventory.md](docs/warehouses-inventory.md).
 - **Phase 7A (done): customers & orders.** Customer CRUD, sales orders with per-organization order numbers, status workflow, and fulfillment that issues stock through `StockOperationsService` (SALE movements) in the same transaction, sales permissions, activity logging, customers/orders UI. Migration `add_order_number_sequences`. (Detailed customers/orders docs are still to be written.)
 - **Phase 7B (done): personalization & appearance.** User-level appearance (mode, 10 theme presets + custom accent, background effects, animation intensity, density, corners, text size), saved appearance profiles, `/me/appearance` API, `UserAppearance`/`AppearanceProfile` models, theme engine with enforced contrast, single background-effect layer, Appearance page with live preview. See [docs/personalization-appearance.md](docs/personalization-appearance.md).
-- **Later phases:** dashboard/reporting (APIs and UI). Password reset, email verification, email delivery, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
+- **Phase 8A (done): dashboard API.** `GET /organizations/:id/dashboard/summary` (`DASHBOARD_READ`, all roles): date ranges (presets, CUSTOM ≤ 366 days, IANA `timeZone`), realized sales and order KPIs with previous-period comparison, status distribution, time series, top products, customer/product/stock/warehouse summaries; five grouped queries in one REPEATABLE READ snapshot; shared types in `packages/shared/src/dashboard.ts`. No schema changes. See [docs/dashboard-reporting.md](docs/dashboard-reporting.md).
+- **Phase 8B (done): dashboard UI.** The workspace overview (`/org/:organizationId`, `pages/dashboard-page.tsx`) replaces the Phase 4 placeholder home: KPI cards, SVG sales chart (no chart library), order status bars, inventory/warehouse summaries, top products, recent orders (orders list, `pageSize=5`), URL range state, skeletons/empty/error states. `inStockItems` added to the dashboard API. See [docs/dashboard-reporting.md](docs/dashboard-reporting.md#dashboard-ui).
+- **Phase 8C (done): reports.** Sales/Orders/Inventory reports (`/org/:id/reports/…`, `src/reports`) with server-side filters, whitelisted sorting, pagination, totals, and CSV export (`…/export`, max 10,000 rows, `REPORT_EXPORT_TOO_LARGE`), `REPORTS_READ`/`REPORTS_EXPORT` (all roles), `REPORT_FILTER_NOT_FOUND` for foreign filter ids. Same definitions as the dashboard. No schema changes. See [docs/dashboard-reporting.md](docs/dashboard-reporting.md#reports).
+- **Later phases:** not defined yet. PDF/XLSX exports, scheduled reports, and a report builder are out of scope until asked. Password reset, email verification, email delivery, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
 
 Environment constraints: **local development only. No Docker, no Docker Compose, no WSL.** PostgreSQL runs natively on the Windows host.
 
@@ -79,7 +82,7 @@ npm run db:seed      # idempotent demo data
 - Record organization mutations with `recordActivity(tx, …)` **inside the same transaction**. Never put passwords, hashes, session tokens, or invitation tokens in metadata.
 - Raw invitation tokens are returned once (in `inviteUrl`) and never persisted or logged. Store `hashToken(token)` (`src/common/security/secure-token.ts`).
 - Frontend permission checks (`<Can>`, `useCurrentOrganization().can/canManage`) are **UX only**. The API is authoritative.
-- Do not implement dashboard/reporting functionality until that phase.
+- The overview and the reports have fixed layouts: no widget or report builder, drag and drop, or hide/show configuration. No PDF/XLSX or scheduled exports until asked.
 
 ### Products & categories (read [docs/products-categories.md](docs/products-categories.md))
 
@@ -132,6 +135,18 @@ Read [docs/database-design.md](docs/database-design.md) before changing the sche
 - Styling: follow [docs/design-system.md](docs/design-system.md). Use semantic tokens (`bg-surface`, `text-muted-foreground`, `border-border`, `bg-primary`), never raw palette colors (`bg-white`, `text-slate-500`) in components. Compose with `cn()`. Reuse primitives from `src/components/ui` and `src/components/layout`.
 - Keep cva variant definitions in a separate non-component file when exported (for example `button-variants.ts`) so Fast Refresh keeps working.
 - Business-specific components belong to their feature phase, not to `components/ui`.
+
+### Dashboard & reports (read [docs/dashboard-reporting.md](docs/dashboard-reporting.md))
+
+- The dashboard is **read-only** and organization-scoped like everything else (route `organizations/:organizationId/dashboard`, `OrganizationAccessGuard`, `DASHBOARD_READ`). Never write from it, never take an organization id from the query.
+- **Realized sales** = orders in `REALIZED_ORDER_STATUSES` (PROCESSING, SHIPPED, COMPLETED), revenue = Σ `order_items.quantity × unit_price` summed in SQL (numeric) and returned as decimal strings. Never use current product prices or JS floats for money. The Orders KPI counts every status.
+- Reuse shared rules instead of re-implementing them: stock status via `STOCK_STATUS_SQL`/`stockStatus()` (`inventory-mappers.ts`), statuses from `@app/shared`. Aggregate with grouped SQL; no per-KPI/per-row queries, no N+1, no caching layers.
+- Date ranges are local days in the requested IANA time zone (default UTC), resolved to [start, end) by `resolveDashboardPeriods()` (pure; takes `now`). Percentage changes are `null` when the previous value is 0.
+- Web: the overview is `DashboardPage` at the organization index route; data via `useDashboardSummary` (`dashboardKeys` under `organizationKeys.detail`, `staleTime: 0`, placeholder only from the same organization). Charts are plain SVG in `components/dashboard/` using theme tokens (`fill-primary`, `stroke-border`, status tokens); never add hard-coded colors or a chart library without a strong reason. Money for chart geometry goes through `toCents()` (exact BigInt cents), never `Number()` on a decimal string. Every chart needs a text alternative (labels, data table, slider value text).
+- Reports reuse the dashboard's definitions: `REALIZED_ORDER_SQL` (`src/dashboard/sales-semantics.ts`), `resolveDashboardPeriods()` (the report DTOs extend the dashboard query DTO), `STOCK_STATUS_SQL`/`stockStatus()`. Never write a second definition of sales, date ranges, or stock status; a test asserts report totals equal the dashboard KPIs.
+- CSV only through `src/reports/csv.ts` (`toCsv`/`csvCell`: RFC 4180 quoting, BOM, CRLF, formula-injection neutralization). Exports take the report's query without paging, are capped by `REPORT_LIMITS.exportMaxRows`, and never include internal ids. Web downloads go through `apiDownload()` + `saveFile()`, never `fetch` in components.
+- Report filter ids (`warehouseId`, `customerId`, `productId`, `categoryId`) are verified with the organization id (`422 REPORT_FILTER_NOT_FOUND`); sort fields map to SQL through whitelists.
+- Timestamps: Prisma's pg adapter writes `DateTime` as zone-less UTC text read in the DB session time zone. Comparing columns with `Date` parameters is fine; raw SQL that needs the real instant (`AT TIME ZONE`, `now()`) must convert first (see `localCreatedAt` in `dashboard.service.ts`).
 
 ### Personalization & appearance (read [docs/personalization-appearance.md](docs/personalization-appearance.md))
 

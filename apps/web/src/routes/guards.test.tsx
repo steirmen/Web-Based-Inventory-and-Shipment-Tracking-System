@@ -35,7 +35,8 @@ describe('protected routes', () => {
     });
     const { router } = renderApp('/');
 
-    expect(await screen.findByRole('heading', { name: testOrganization.name })).toBeVisible();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    expect(document.title).toBe(`Overview · ${testOrganization.name} · Nexora`);
     expect(router.state.location.pathname).toBe(`/org/${testOrganization.id}`);
   });
 

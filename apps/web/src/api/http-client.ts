@@ -103,6 +103,49 @@ export async function apiRequest<T>(
   return (await response.json()) as T;
 }
 
+export interface DownloadedFile {
+  blob: Blob;
+  /** From `Content-Disposition`, when the API sends one. */
+  filename: string | null;
+}
+
+/**
+ * Downloads a file (e.g. a CSV export) with the same base URL, credentials,
+ * timeout, and error handling as `apiRequest`. Errors arrive as JSON and
+ * become `ApiError`s.
+ */
+export async function apiDownload(
+  path: string,
+  { signal, timeoutMs = 60_000 }: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<DownloadedFile> {
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'text/csv, application/json' },
+      credentials: 'include',
+      signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
+    });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    const reason = timeoutSignal.aborted
+      ? `did not respond within ${timeoutMs / 1000}s`
+      : 'could not be reached';
+    throw new ApiError(`The API at ${baseUrl} ${reason}.`, { status: null, url, cause: error });
+  }
+
+  if (!response.ok) {
+    throw await toApiError(response, url);
+  }
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? null;
+  return { blob: await response.blob(), filename };
+}
+
 /** Reads the API's `{ code, message, details }` error body, falling back to the status line. */
 async function toApiError(response: Response, url: string): Promise<ApiError> {
   const fallback = `Request failed with status ${response.status}${response.statusText ? ` ${response.statusText}` : ''}.`;

@@ -5,7 +5,6 @@ import {
   type InventorySortField,
   type SortOrder,
   type StockMovementListResponse,
-  type StockStatus,
 } from '@app/shared';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { AppException } from '../common/errors/app-exception.js';
@@ -26,6 +25,7 @@ import {
 import {
   INVENTORY_SELECT,
   STOCK_MOVEMENT_SELECT,
+  STOCK_STATUS_SQL,
   toInventoryItem,
   toStockMovement,
 } from './inventory-mappers.js';
@@ -36,13 +36,6 @@ const SORT_COLUMNS: Record<InventorySortField, Prisma.Sql> = {
   sku: Prisma.sql`p.sku`,
   quantity: Prisma.sql`i.quantity`,
   updatedAt: Prisma.sql`i.updated_at`,
-};
-
-/** Stock status as SQL, evaluated per warehouse against the product's reorder level. */
-const STATUS_CONDITIONS: Record<StockStatus, Prisma.Sql> = {
-  OUT_OF_STOCK: Prisma.sql`i.quantity = 0`,
-  LOW_STOCK: Prisma.sql`i.quantity > 0 AND i.quantity <= p.minimum_stock`,
-  IN_STOCK: Prisma.sql`i.quantity > p.minimum_stock`,
 };
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -87,7 +80,7 @@ export class InventoryService {
       const pattern = `%${escapeLikePattern(query.search)}%`;
       conditions.push(Prisma.sql`(p.name ILIKE ${pattern} OR p.sku ILIKE ${pattern})`);
     }
-    if (query.status) conditions.push(STATUS_CONDITIONS[query.status]);
+    if (query.status) conditions.push(STOCK_STATUS_SQL[query.status]);
 
     // Composite joins keep the rows inside the organization even at the SQL level.
     const from = Prisma.sql`

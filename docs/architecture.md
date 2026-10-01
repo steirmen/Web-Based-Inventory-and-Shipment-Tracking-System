@@ -30,6 +30,11 @@ src/
   organizations/     Organizations, members, invitations; OrganizationAccessGuard + @RequirePermissions (RBAC)
   catalog/           Categories and products (list/search/sort/paginate, archive/restore); see products-categories.md
   inventory/         Warehouses, inventory, stock operations (one transaction each), stock movement ledger; see warehouses-inventory.md
+  customers/         Customers (archive/restore)
+  orders/            Sales orders, lifecycle, fulfillment through StockOperationsService
+  dashboard/         Read-only dashboard aggregates (date ranges, KPIs, time series); see dashboard-reporting.md
+  reports/           Sales, orders, inventory reports and CSV export (csv.ts); see dashboard-reporting.md
+  appearance/        User-level appearance settings and profiles (/me/appearance); see personalization-appearance.md
   activity/          recordActivity(): audit entries written inside the caller's transaction
   health/            GET /health (public)
   generated/prisma/  Prisma client output (git-ignored, created by `prisma generate`)
@@ -48,6 +53,7 @@ test/database/       Database integration tests against the test database
 - **Authentication**: a global `SessionAuthGuard` requires a valid session cookie on every route not marked `@Public()`. See [authentication.md](authentication.md).
 - **Organizations & RBAC**: routes under `/organizations/:organizationId` are guarded by `OrganizationAccessGuard`, which verifies membership (404 for non-members) and the handler's `@RequirePermissions` (403). See [organizations-rbac.md](organizations-rbac.md).
 - **Database**: `PrismaService` extends the generated `PrismaClient` using the `@prisma/adapter-pg` driver adapter (Prisma 7). It connects lazily, so the API still starts when PostgreSQL is down. The schema, tenancy model, and constraints are described in [database-design.md](database-design.md).
+- **Read models / aggregates**: the dashboard (`src/dashboard`) and the reports (`src/reports`) answer with a few grouped or paginated SQL queries in one REPEATABLE READ snapshot instead of loading rows into memory; business rules they share (realized order statuses in `sales-semantics.ts`, date ranges in `dashboard-period.ts`, stock status SQL in `inventory-mappers.ts`) are imported, never re-implemented. CSV is written by `src/reports/csv.ts` only. See [dashboard-reporting.md](dashboard-reporting.md).
 - **Feature modules**: one folder per domain (`src/<domain>/`) containing its module, controller, service, DTOs, and tests.
 
 ### `GET /health`
@@ -102,23 +108,24 @@ Components never call `fetch`. The API base URL comes only from `VITE_API_BASE_U
 
 ### Routes
 
-| Path                                                           | Access                | Page                                                                       |
-| -------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------- |
-| `/`                                                            | authenticated         | Redirects to onboarding, the last or only workspace, or the workspace list |
-| `/onboarding`                                                  | authenticated         | Create a workspace                                                         |
-| `/organizations`                                               | authenticated         | The user's workspaces                                                      |
-| `/org/:organizationId`                                         | member (API-verified) | Workspace home                                                             |
-| `/org/:organizationId/products`, `…/categories`                | member                | Product catalog (see products-categories.md)                               |
-| `/org/:organizationId/inventory`                               | member                | Stock per product and warehouse, stock operations                          |
-| `/org/:organizationId/warehouses`, `…/warehouses/:warehouseId` | member                | Warehouses (see warehouses-inventory.md)                                   |
-| `/org/:organizationId/stock-movements`                         | member                | Read-only stock movement history                                           |
-| `/org/:organizationId/team`                                    | member                | Team, invitations, roles, ownership                                        |
-| `/org/:organizationId/settings`                                | member                | Workspace settings                                                         |
-| `/settings/appearance`                                         | authenticated         | Personal appearance (user-level, see personalization-appearance.md)        |
-| `/login`, `/register`                                          | guest only            | Sign in, create account                                                    |
-| `/invite/:token`                                               | public                | View and accept an invitation                                              |
-| `/health-check`                                                | public                | Technical frontend → API → database check                                  |
-| `*`                                                            | public                | 404                                                                        |
+| Path                                                            | Access                | Page                                                                       |
+| --------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------- |
+| `/`                                                             | authenticated         | Redirects to onboarding, the last or only workspace, or the workspace list |
+| `/onboarding`                                                   | authenticated         | Create a workspace                                                         |
+| `/organizations`                                                | authenticated         | The user's workspaces                                                      |
+| `/org/:organizationId`                                          | member (API-verified) | Workspace home                                                             |
+| `/org/:organizationId/products`, `…/categories`                 | member                | Product catalog (see products-categories.md)                               |
+| `/org/:organizationId/inventory`                                | member                | Stock per product and warehouse, stock operations                          |
+| `/org/:organizationId/warehouses`, `…/warehouses/:warehouseId`  | member                | Warehouses (see warehouses-inventory.md)                                   |
+| `/org/:organizationId/stock-movements`                          | member                | Read-only stock movement history                                           |
+| `/org/:organizationId/reports/sales`, `…/orders`, `…/inventory` | member                | Reports with filters and CSV export (`…/reports` opens Sales)              |
+| `/org/:organizationId/team`                                     | member                | Team, invitations, roles, ownership                                        |
+| `/org/:organizationId/settings`                                 | member                | Workspace settings                                                         |
+| `/settings/appearance`                                          | authenticated         | Personal appearance (user-level, see personalization-appearance.md)        |
+| `/login`, `/register`                                           | guest only            | Sign in, create account                                                    |
+| `/invite/:token`                                                | public                | View and accept an invitation                                              |
+| `/health-check`                                                 | public                | Technical frontend → API → database check                                  |
+| `*`                                                             | public                | 404                                                                        |
 
 ### Appearance
 

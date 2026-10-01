@@ -1,4 +1,4 @@
-import { createBrowserRouter, type RouteObject } from 'react-router';
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
 import { AppShell } from '@/layouts/app-shell';
 import { AuthLayout } from '@/layouts/auth-layout';
 import { OrganizationLayout } from '@/layouts/organization-layout';
@@ -17,7 +17,7 @@ import { OrderDetailPage } from '@/pages/order-detail-page';
 import { OrderEditPage } from '@/pages/order-edit-page';
 import { OrderNewPage } from '@/pages/order-new-page';
 import { OrdersPage } from '@/pages/orders-page';
-import { OrganizationHomePage } from '@/pages/organization-home-page';
+import { DashboardPage } from '@/pages/dashboard-page';
 import { OrganizationSettingsPage } from '@/pages/organization-settings-page';
 import { OrganizationsPage } from '@/pages/organizations-page';
 import { ProductDetailPage } from '@/pages/product-detail-page';
@@ -26,6 +26,9 @@ import { ProductNewPage } from '@/pages/product-new-page';
 import { ProductsPage } from '@/pages/products-page';
 import { RegisterPage } from '@/pages/register-page';
 import { RouteErrorPage } from '@/pages/route-error-page';
+import { InventoryReportPage } from '@/pages/reports/inventory-report-page';
+import { OrdersReportPage } from '@/pages/reports/orders-report-page';
+import { SalesReportPage } from '@/pages/reports/sales-report-page';
 import { StockMovementsPage } from '@/pages/stock-movements-page';
 import { TeamPage } from '@/pages/team-page';
 import { WarehouseDetailPage } from '@/pages/warehouse-detail-page';
@@ -75,7 +78,7 @@ export const routes: RouteObject[] = [
                 path: routePatterns.organization,
                 element: <OrganizationLayout />,
                 children: [
-                  { index: true, element: <OrganizationHomePage /> },
+                  { index: true, element: <DashboardPage /> },
                   { path: 'products', element: <ProductsPage /> },
                   { path: 'products/new', element: <ProductNewPage /> },
                   { path: 'products/:productId', element: <ProductDetailPage /> },
@@ -85,6 +88,15 @@ export const routes: RouteObject[] = [
                   { path: 'warehouses/:warehouseId', element: <WarehouseDetailPage /> },
                   { path: 'inventory', element: <InventoryPage /> },
                   { path: 'stock-movements', element: <StockMovementsPage /> },
+                  {
+                    path: 'reports',
+                    children: [
+                      { index: true, element: <Navigate to="sales" replace /> },
+                      { path: 'sales', element: <SalesReportPage /> },
+                      { path: 'orders', element: <OrdersReportPage /> },
+                      { path: 'inventory', element: <InventoryReportPage /> },
+                    ],
+                  },
                   { path: 'customers', element: <CustomersPage /> },
                   { path: 'customers/:customerId', element: <CustomerDetailPage /> },
                   { path: 'orders', element: <OrdersPage /> },

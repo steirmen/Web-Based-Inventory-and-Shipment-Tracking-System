@@ -66,7 +66,7 @@ Computed per inventory row (per warehouse) against the product's `minimumStock` 
 | `LOW_STOCK`    | `0 < quantity ≤ minimumStock` | 7, 10                |
 | `IN_STOCK`     | `quantity > minimumStock`     | 15                   |
 
-A quantity **equal to** the minimum is already `LOW_STOCK` (it is time to reorder). With `minimumStock = 0`, any stock is `IN_STOCK`. The same rule exists once in TypeScript (`stockStatus()` in `inventory-mappers.ts`, for responses) and once in SQL (`STATUS_CONDITIONS` in `inventory.service.ts`, for the `status` filter); a unit test pins the TypeScript side and the database tests pin the filter. The UI always shows the status as **text** in a badge (the colored dot is decoration only).
+A quantity **equal to** the minimum is already `LOW_STOCK` (it is time to reorder). With `minimumStock = 0`, any stock is `IN_STOCK`. The same rule exists once in TypeScript (`stockStatus()` in `inventory-mappers.ts`, for responses) and once in SQL (`STOCK_STATUS_SQL`, next to it, for the `status` filter and the dashboard aggregates); a unit test pins the TypeScript side and the database tests pin the filter and the dashboard counts. The UI always shows the status as **text** in a badge (the colored dot is decoration only).
 
 ## API
 

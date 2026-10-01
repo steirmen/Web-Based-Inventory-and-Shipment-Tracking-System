@@ -106,7 +106,8 @@ describe('/organizations', () => {
     await user.click(screen.getByRole('link', { name: 'Open workspace Warehouse Labs' }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe(`/org/${second.id}`));
-    expect(await screen.findByRole('heading', { name: 'Warehouse Labs' })).toBeVisible();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    expect(document.title).toBe(`Overview · ${'Warehouse Labs'} · Nexora`);
   });
 
   it('shows an error state with retry', async () => {
@@ -141,13 +142,14 @@ describe('workspace switcher', () => {
     await user.click(within(menu).getByRole('menuitem', { name: /Warehouse Labs/ }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe(`/org/${second.id}`));
-    expect(await screen.findByRole('heading', { name: 'Warehouse Labs' })).toBeVisible();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    expect(document.title).toBe(`Overview · ${'Warehouse Labs'} · Nexora`);
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 });
 
 describe('/org/:organizationId', () => {
-  it('shows the workspace from the route with the viewer’s role and member count', async () => {
+  it('shows the overview (dashboard) of the workspace from the route', async () => {
     mockApi({
       'GET /auth/me': signedIn(),
       'GET /organizations': organizationList([
@@ -157,10 +159,9 @@ describe('/org/:organizationId', () => {
     });
     renderApp(`/org/${testOrganization.id}`);
 
-    expect(await screen.findByRole('heading', { name: testOrganization.name })).toBeVisible();
-    expect(screen.getByText('Workspace setup is ready.')).toBeInTheDocument();
-    expect(screen.getByText('Admin')).toBeInTheDocument();
-    expect(await screen.findByLabelText('Member count')).toHaveTextContent('4');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    expect(document.title).toBe(`Overview · ${testOrganization.name} · Nexora`);
+    expect(await screen.findByRole('heading', { name: 'Total sales' })).toBeVisible();
     const tabs = screen.getByRole('navigation', { name: 'Workspace' });
     expect(within(tabs).getByRole('link', { name: 'Team' })).toHaveAttribute(
       'href',

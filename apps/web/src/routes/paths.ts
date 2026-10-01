@@ -1,3 +1,5 @@
+import type { ReportType } from '@app/shared';
+
 /** Route paths. Link with these helpers instead of string literals. */
 export const paths = {
   home: '/',
@@ -31,6 +33,9 @@ export const paths = {
   order: (organizationId: string, orderId: string) => `/org/${organizationId}/orders/${orderId}`,
   orderEdit: (organizationId: string, orderId: string) =>
     `/org/${organizationId}/orders/${orderId}/edit`,
+  /** Reports area (Sales, Orders, Inventory). */
+  reports: (organizationId: string) => `/org/${organizationId}/reports`,
+  report: (organizationId: string, type: ReportType) => `/org/${organizationId}/reports/${type}`,
   invitation: (token: string) => `/invite/${token}`,
 } as const;
 

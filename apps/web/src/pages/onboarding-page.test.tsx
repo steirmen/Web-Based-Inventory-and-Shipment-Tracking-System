@@ -102,7 +102,8 @@ describe('OnboardingPage', () => {
     await user.click(screen.getByRole('button', { name: 'Create workspace' }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe(`/org/${testOrganization.id}`));
-    expect(await screen.findByRole('heading', { name: testOrganization.name })).toBeVisible();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+    expect(document.title).toBe(`Overview · ${testOrganization.name} · Nexora`);
     expect(postBodies(fetchMock)).toEqual([{ name: 'Demo Trading Co.', slug: 'demo-trading-co' }]);
   });
 });
