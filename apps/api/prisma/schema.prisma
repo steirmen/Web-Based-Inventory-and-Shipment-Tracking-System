@@ -79,11 +79,13 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  memberships     OrganizationMember[]
-  sessions        Session[]
-  sentInvitations OrganizationInvitation[]
-  stockMovements  StockMovement[]
-  activityLogs    ActivityLog[]
+  memberships        OrganizationMember[]
+  sessions           Session[]
+  sentInvitations    OrganizationInvitation[]
+  stockMovements     StockMovement[]
+  activityLogs       ActivityLog[]
+  appearance         UserAppearance?
+  appearanceProfiles AppearanceProfile[]
 
   @@map("users")
 }
@@ -471,4 +473,55 @@ model ActivityLog {
   /// Backs the actor foreign key (ON DELETE SET NULL).
   @@index([actorUserId])
   @@map("activity_logs")
+}
+
+// -----------------------------------------------------------------------------
+// Personalization (Phase 7B) — user-level, presentation only, never per organization.
+// Allowed values are CHECK constraints in the migration, mirroring @app/shared (appearance.ts).
+// -----------------------------------------------------------------------------
+
+/// The user's current appearance. No row = the defaults (DEFAULT_APPEARANCE).
+model UserAppearance {
+  userId             String   @id @map("user_id") @db.Uuid
+  mode               String   @db.VarChar(16)
+  theme              String   @db.VarChar(32)
+  /// "#rrggbb", lower-case.
+  customAccent       String   @map("custom_accent") @db.VarChar(7)
+  customTone         String   @map("custom_tone") @db.VarChar(16)
+  backgroundEffect   String   @map("background_effect") @db.VarChar(32)
+  animationIntensity String   @map("animation_intensity") @db.VarChar(16)
+  density            String   @db.VarChar(16)
+  radius             String   @db.VarChar(16)
+  fontScale          String   @map("font_scale") @db.VarChar(16)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  /// Personal preferences go away with the user.
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_appearances")
+}
+
+/// A named, saved appearance of one user ("Night work", "Office", …).
+model AppearanceProfile {
+  id                 String   @id @default(uuid(7)) @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  /// Unique per user, case-insensitively (expression index in the migration).
+  name               String   @db.VarChar(60)
+  mode               String   @db.VarChar(16)
+  theme              String   @db.VarChar(32)
+  customAccent       String   @map("custom_accent") @db.VarChar(7)
+  customTone         String   @map("custom_tone") @db.VarChar(16)
+  backgroundEffect   String   @map("background_effect") @db.VarChar(32)
+  animationIntensity String   @map("animation_intensity") @db.VarChar(16)
+  density            String   @db.VarChar(16)
+  radius             String   @db.VarChar(16)
+  fontScale          String   @map("font_scale") @db.VarChar(16)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// A user's profiles in creation order; also backs the user foreign key.
+  @@index([userId, createdAt])
+  @@map("appearance_profiles")
 }

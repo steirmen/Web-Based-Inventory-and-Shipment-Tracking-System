@@ -1,5 +1,5 @@
-import { LogOut } from 'lucide-react';
-import { Link, Outlet } from 'react-router';
+import { LogOut, Palette } from 'lucide-react';
+import { Link, NavLink, Outlet } from 'react-router';
 import { BrandMark } from '@/components/layout/brand-mark';
 import { Container } from '@/components/layout/container';
 import { OrganizationSwitcher } from '@/components/organization/organization-switcher';
@@ -82,7 +82,7 @@ export function AppShell() {
   );
 }
 
-/** Signed-in user and sign-out action. A full account menu arrives with later phases. */
+/** Signed-in user, personal appearance settings, and sign-out. */
 function UserMenu({ name }: { name: string }) {
   const logout = useLogout();
 
@@ -95,6 +95,21 @@ function UserMenu({ name }: { name: string }) {
         {initials(name)}
       </span>
       <span className="hidden max-w-40 truncate text-sm font-medium lg:inline">{name}</span>
+      <NavLink
+        to={paths.appearance}
+        className={({ isActive }) =>
+          buttonVariants({
+            variant: 'ghost',
+            size: 'sm',
+            className: isActive ? 'bg-surface-muted text-foreground' : undefined,
+          })
+        }
+        aria-label="Appearance"
+        title="Appearance"
+      >
+        <Palette aria-hidden="true" />
+        <span className="hidden sm:inline">Appearance</span>
+      </NavLink>
       <Button
         variant="ghost"
         size="sm"

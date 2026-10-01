@@ -9,6 +9,11 @@
  *
  * Raw values live on :root; `@theme inline` exposes them as Tailwind utilities.
  * See docs/design-system.md for usage rules.
+ *
+ * The values on :root are the Default theme in light mode. The theme engine
+ * (src/lib/appearance/themes.ts) sets the same variables on <html> for the
+ * user's theme and mode (Phase 7B, docs/personalization-appearance.md), so
+ * components never reference a specific theme.
  */
 
 :root {
@@ -35,6 +40,9 @@
 
   /* Focus */
   --ring: oklch(58.5% 0.233 277.117); /* indigo-500 */
+
+  /* Scrim behind dialogs */
+  --overlay: oklch(20.8% 0.042 265.755 / 0.4);
 
   /* Status */
   --success: oklch(59.6% 0.145 163.225);
@@ -75,6 +83,7 @@
   --color-primary-soft: var(--primary-soft);
   --color-primary-soft-foreground: var(--primary-soft-foreground);
   --color-ring: var(--ring);
+  --color-overlay: var(--overlay);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-success-soft-foreground: var(--success-soft-foreground);
@@ -102,6 +111,42 @@
 
   /* Layout: max width of page content (`max-w-page`). */
   --container-page: 72rem;
+}
+
+/*
+ * Personalization (Phase 7B): attributes set on <html> by the theme engine.
+ * They scale existing tokens, so every component follows without changes.
+ */
+
+/* Density: Tailwind spacing (padding, gaps, control heights) derives from --spacing. */
+:root[data-density='compact'] {
+  --spacing: 0.22rem;
+}
+:root[data-density='spacious'] {
+  --spacing: 0.28rem;
+}
+
+/* Corner radius: only these three steps exist. */
+:root[data-radius='sharp'] {
+  --radius-control: 0.1875rem;
+  --radius-card: 0.25rem;
+}
+:root[data-radius='round'] {
+  --radius-control: 0.75rem;
+  --radius-card: 1.25rem;
+}
+
+/* Text and UI scale (rem-based). Breakpoints are unaffected: media queries use the browser default. */
+:root[data-font-scale='small'] {
+  font-size: 93.75%;
+}
+:root[data-font-scale='large'] {
+  font-size: 106.25%;
+}
+
+/* Native controls, scrollbars, and date pickers follow the mode. */
+:root[data-mode='dark'] {
+  color-scheme: dark;
 }
 
 /* Consistent, keyboard-only focus indicator for every interactive element. */

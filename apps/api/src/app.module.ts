@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { AppearanceModule } from './appearance/appearance.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { CustomersModule } from './customers/customers.module.js';
@@ -23,6 +24,7 @@ import { OrganizationsModule } from './organizations/organizations.module.js';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     DatabaseModule,
     AuthModule,
+    AppearanceModule,
     OrganizationsModule,
     CatalogModule,
     InventoryModule,

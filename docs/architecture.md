@@ -70,16 +70,16 @@ Always responds `200` while the process is alive:
 ```text
 src/
   main.tsx           Entry: global CSS, font, <App />
-  app/               App root, providers, QueryClient configuration
+  app/               App root, providers (QueryClient, AppearanceProvider), QueryClient configuration
   api/               HTTP client + one module per backend resource (endpoint functions, query keys)
   hooks/             TanStack Query hooks wrapping api/ functions
   components/ui/     Design-system primitives (Button, Input, Card, ...)
   components/layout/ Page-structure primitives (Container, PageHeader, page states, PaginationBar)
-  components/<feature>/ Feature components (organization, team, products, categories, warehouses, inventory)
+  components/<feature>/ Feature components (organization, team, products, categories, warehouses, inventory, appearance)
   layouts/           Route layouts (AppShell for the app, AuthLayout for sign-in/register)
   pages/             Route components
   routes/            Route table (router.tsx), path constants (paths.ts), RequireAuth/RequireGuest guards
-  lib/               Framework-agnostic helpers (cn, env, app-config)
+  lib/               Framework-agnostic helpers (cn, env, app-config); lib/appearance: theme engine, effects, apply
   styles/            globals.css: Tailwind entry + design tokens
   test/              Test setup and render helpers
 ```
@@ -114,10 +114,15 @@ Components never call `fetch`. The API base URL comes only from `VITE_API_BASE_U
 | `/org/:organizationId/stock-movements`                         | member                | Read-only stock movement history                                           |
 | `/org/:organizationId/team`                                    | member                | Team, invitations, roles, ownership                                        |
 | `/org/:organizationId/settings`                                | member                | Workspace settings                                                         |
+| `/settings/appearance`                                         | authenticated         | Personal appearance (user-level, see personalization-appearance.md)        |
 | `/login`, `/register`                                          | guest only            | Sign in, create account                                                    |
 | `/invite/:token`                                               | public                | View and accept an invitation                                              |
 | `/health-check`                                                | public                | Technical frontend → API → database check                                  |
 | `*`                                                            | public                | 404                                                                        |
+
+### Appearance
+
+The look of the app is user-level presentation state, owned by one `AppearanceProvider` (inside `QueryClientProvider`, around the router). It loads `GET /me/appearance` for the signed-in user, applies it as CSS custom properties and data attributes on `<html>` (`lib/appearance/apply.ts`), renders the app's single background-effect canvas, and lets the Appearance page preview unsaved settings. Components only consume semantic tokens, so they follow every theme, density, radius, and text size without knowing about appearance. An inline script in `index.html` re-applies a presentation-only cache before React starts to avoid a theme flash. See [personalization-appearance.md](personalization-appearance.md).
 
 ## Environment
 

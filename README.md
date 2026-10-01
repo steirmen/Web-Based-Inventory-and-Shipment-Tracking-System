@@ -127,6 +127,19 @@ Try it locally with the seeded demo workspace: `MAIN`, `EAST`, and `NORTH` hold 
 
 Stock operations are not idempotent: resending a request records it again (the UI prevents double submission). Details: [docs/warehouses-inventory.md](docs/warehouses-inventory.md).
 
+## Personalization and appearance
+
+Each user can change how Nexora looks for them under **Appearance** (palette icon next to your name, `/settings/appearance`).
+
+- **Mode and themes.** Light or dark, ten designed themes (Default, Ocean, Forest, Sunset, Graphite, Plum, Paper, Mint, Lavender, Rose), or a **Custom** theme from one accent color and a tone. Colors are adjusted automatically when needed so text, buttons, and focus outlines stay readable.
+- **Background effects.** Off, rain, snow, fireflies, starry night, autumn leaves, cherry blossoms, soft lights, or aurora, at low, medium, or high intensity. Effects stay behind the content and never block clicks; with the system's "reduce motion" setting they are shown as a still image.
+- **Interface.** Compact, comfortable, or spacious density; sharp, medium, or round corners; small, default, or large text.
+- **Live preview.** Changes show immediately; **Save** keeps them, **Cancel** goes back, **Reset to default** restores the original look.
+- **Saved profiles.** Save up to 12 named looks (for example "Night work") and switch with one click.
+- **Personal, not per workspace.** Your appearance is stored on the server with your account, so it follows you across workspaces, reloads, and devices. Other users never see it.
+
+Only the presentation changes: navigation, pages, and workflows are the same for everyone. Details: [docs/personalization-appearance.md](docs/personalization-appearance.md).
+
 ## Commands
 
 Run from the repository root.
@@ -175,5 +188,6 @@ docs/           Architecture, design system, local setup
 - [Organizations & RBAC](docs/organizations-rbac.md)
 - [Products & categories](docs/products-categories.md)
 - [Warehouses & inventory](docs/warehouses-inventory.md)
+- [Personalization & appearance](docs/personalization-appearance.md)
 - [Design system](docs/design-system.md)
 - [CLAUDE.md](CLAUDE.md): conventions for AI-assisted development

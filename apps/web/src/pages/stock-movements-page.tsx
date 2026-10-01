@@ -249,7 +249,13 @@ export function StockMovementsPage() {
 
 function Change({ delta }: { delta: number }) {
   return (
-    <span className={cn('font-medium tabular-nums', delta > 0 ? 'text-success' : 'text-danger')}>
+    <span
+      className={cn(
+        'font-medium tabular-nums',
+        // The soft foreground is the readable (4.5:1) green for text; --success is for dots and icons.
+        delta > 0 ? 'text-success-soft-foreground' : 'text-danger',
+      )}
+    >
       {formatDelta(delta)}
     </span>
   );

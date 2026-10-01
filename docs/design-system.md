@@ -4,6 +4,8 @@ A restrained B2B SaaS visual language: neutral slate surfaces, a single indigo a
 
 All tokens are defined in [`apps/web/src/styles/globals.css`](../apps/web/src/styles/globals.css). Primitives live in `apps/web/src/components/ui` and `apps/web/src/components/layout`.
 
+The values below are the **Default light** theme. Users can switch mode, theme, density, corners, and text size ([personalization-appearance.md](personalization-appearance.md)): the theme engine then overrides the same tokens at runtime, so components must use tokens (never palette colors or fixed pixel spacing) to follow every theme.
+
 ## Rules
 
 1. **Use semantic tokens, not palette colors.** Write `bg-surface`, `text-muted-foreground`, `border-border`, `bg-primary`, not `bg-white`, `text-slate-600`, `bg-indigo-600`. Palette colors are allowed only inside `globals.css`.
@@ -26,6 +28,7 @@ All tokens are defined in [`apps/web/src/styles/globals.css`](../apps/web/src/st
 | `primary-soft`, `primary-soft-foreground`               | Informational tints                                                    |
 | `success-*`, `warning-*`, `danger-*`                    | Status: `-soft` background, `-soft-foreground` text, `-border` outline |
 | `ring`                                                  | Focus indicator                                                        |
+| `overlay`                                               | Dialog backdrop                                                        |
 
 ### Typography
 
@@ -92,18 +95,19 @@ Borders are 1px `border-border` (containers) or `border-border-strong` (controls
 
 ## Primitives
 
-| Component                                              | File                                     | Notes                                                                                                               |
-| ------------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `Button`, `buttonVariants`                             | `ui/button.tsx`, `ui/button-variants.ts` | Variants: `primary`, `secondary`, `ghost`, `danger`; sizes `sm`, `md`, `lg`. Use `buttonVariants()` to style links. |
-| `Input`                                                | `ui/input.tsx`                           | Mark errors with `aria-invalid`                                                                                     |
-| `Label`                                                | `ui/label.tsx`                           | Always pair with `htmlFor`                                                                                          |
-| `FormField`                                            | `ui/form-field.tsx`                      | Label + control + hint/error; render prop passes `id`, `aria-invalid`, and `aria-describedby` to the control        |
-| `PasswordInput`                                        | `ui/password-input.tsx`                  | `Input` with a show/hide toggle (`aria-pressed`)                                                                    |
-| `Card` + `CardHeader/Title/Description/Content/Footer` | `ui/card.tsx`                            |                                                                                                                     |
-| `Badge`                                                | `ui/badge.tsx`                           | Tones: `neutral`, `primary`, `success`, `warning`, `danger`; optional `dot`                                         |
-| `Alert`                                                | `ui/alert.tsx`                           | Tones: `info`, `success`, `warning`, `danger`                                                                       |
-| `Spinner`                                              | `ui/spinner.tsx`                         | `label={null}` when the surrounding UI already announces loading                                                    |
-| `Container`                                            | `layout/container.tsx`                   | Page width and gutters                                                                                              |
-| `PageHeader`                                           | `layout/page-header.tsx`                 | `eyebrow`, `title` (h1), `description`, `actions`                                                                   |
+| Component                                              | File                                     | Notes                                                                                                                 |
+| ------------------------------------------------------ | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `Button`, `buttonVariants`                             | `ui/button.tsx`, `ui/button-variants.ts` | Variants: `primary`, `secondary`, `ghost`, `danger`; sizes `sm`, `md`, `lg`. Use `buttonVariants()` to style links.   |
+| `Input`                                                | `ui/input.tsx`                           | Mark errors with `aria-invalid`                                                                                       |
+| `Label`                                                | `ui/label.tsx`                           | Always pair with `htmlFor`                                                                                            |
+| `FormField`                                            | `ui/form-field.tsx`                      | Label + control + hint/error; render prop passes `id`, `aria-invalid`, and `aria-describedby` to the control          |
+| `PasswordInput`                                        | `ui/password-input.tsx`                  | `Input` with a show/hide toggle (`aria-pressed`)                                                                      |
+| `Card` + `CardHeader/Title/Description/Content/Footer` | `ui/card.tsx`                            |                                                                                                                       |
+| `Badge`                                                | `ui/badge.tsx`                           | Tones: `neutral`, `primary`, `success`, `warning`, `danger`; optional `dot`                                           |
+| `Alert`                                                | `ui/alert.tsx`                           | Tones: `info`, `success`, `warning`, `danger`                                                                         |
+| `Spinner`                                              | `ui/spinner.tsx`                         | `label={null}` when the surrounding UI already announces loading                                                      |
+| `SegmentedControl`                                     | `ui/segmented-control.tsx`               | A few mutually exclusive options as an accessible radio group (arrow keys); `radioOptionProps` for custom radio cards |
+| `Container`                                            | `layout/container.tsx`                   | Page width and gutters                                                                                                |
+| `PageHeader`                                           | `layout/page-header.tsx`                 | `eyebrow`, `title` (h1), `description`, `actions`                                                                     |
 
 Business-specific components (product cards, order tables, dashboard widgets, and so on) belong in their feature phases, not here.

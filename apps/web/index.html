@@ -6,6 +6,38 @@
     <meta name="theme-color" content="#f8fafc" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Nexora</title>
+    <script>
+      // Personalization: re-apply the last saved appearance before the app starts, so a
+      // reload does not flash the default theme. Presentation data only (see
+      // src/lib/appearance/apply.ts); the API stays the source of truth.
+      (function () {
+        try {
+          var cached = JSON.parse(localStorage.getItem('app:appearance') || 'null');
+          if (!cached || typeof cached !== 'object') return;
+          var root = document.documentElement;
+          var vars = cached.vars || {};
+          for (var name in vars) {
+            var value = vars[name];
+            // Only plain color/shadow values: no url(), image(), attr(), etc.
+            if (
+              /^--[a-z-]+$/.test(name) &&
+              typeof value === 'string' &&
+              /^[\w\s%().\/,#-]+$/.test(value) &&
+              !/(url|image|attr)\s*\(/i.test(value)
+            ) {
+              root.style.setProperty(name, value);
+            }
+          }
+          var data = cached.data || {};
+          ['mode', 'theme', 'density', 'radius', 'fontScale'].forEach(function (key) {
+            if (typeof data[key] === 'string' && /^[a-z-]+$/.test(data[key]))
+              root.dataset[key] = data[key];
+          });
+        } catch (error) {
+          // Ignore: the default theme is used until the saved appearance loads.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

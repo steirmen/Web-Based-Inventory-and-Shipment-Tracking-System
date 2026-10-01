@@ -2,6 +2,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router';
 import { AppShell } from '@/layouts/app-shell';
 import { AuthLayout } from '@/layouts/auth-layout';
 import { OrganizationLayout } from '@/layouts/organization-layout';
+import { AppearancePage } from '@/pages/appearance-page';
 import { CategoriesPage } from '@/pages/categories-page';
 import { CustomerDetailPage } from '@/pages/customer-detail-page';
 import { CustomersPage } from '@/pages/customers-page';
@@ -69,6 +70,7 @@ export const routes: RouteObject[] = [
               { path: paths.home, element: <HomeRedirectPage /> },
               { path: paths.organizations, element: <OrganizationsPage /> },
               { path: paths.onboarding, element: <OnboardingPage /> },
+              { path: paths.appearance, element: <AppearancePage /> },
               {
                 path: routePatterns.organization,
                 element: <OrganizationLayout />,

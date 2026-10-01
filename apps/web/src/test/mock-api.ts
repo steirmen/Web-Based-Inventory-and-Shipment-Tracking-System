@@ -1,15 +1,20 @@
-import type {
-  ApiErrorBody,
-  ApiErrorCode,
-  ApiFieldError,
-  AuthUser,
-  MemberRole,
-  Organization,
-  OrganizationSummary,
+import {
+  type ApiErrorBody,
+  type ApiErrorCode,
+  type ApiFieldError,
+  type AppearanceResponse,
+  type AuthUser,
+  DEFAULT_APPEARANCE,
+  type MemberRole,
+  type Organization,
+  type OrganizationSummary,
 } from '@app/shared';
 import { vi } from 'vitest';
 
 export const TEST_API_BASE_URL = 'http://api.test';
+
+const defaultAppearance = () =>
+  Response.json({ appearance: DEFAULT_APPEARANCE, updatedAt: null } satisfies AppearanceResponse);
 
 type Handler = (init: RequestInit | undefined, url: URL) => Response | Promise<Response>;
 
@@ -23,7 +28,8 @@ export function mockApi(handlers: Record<string, Handler>) {
   const fetchMock = vi.fn<typeof fetch>(async (input, init) => {
     const url = new URL(String(input));
     const key = `${init?.method ?? 'GET'} ${url.pathname}`;
-    const handler = handlers[key];
+    // Every signed-in page loads the user's appearance; default to "never saved".
+    const handler = handlers[key] ?? (key === 'GET /me/appearance' ? defaultAppearance : undefined);
     if (!handler) {
       throw new Error(`Unhandled API request in test: ${key}`);
     }

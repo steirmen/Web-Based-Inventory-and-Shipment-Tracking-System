@@ -6,6 +6,8 @@ export const paths = {
   healthCheck: '/health-check',
   organizations: '/organizations',
   onboarding: '/onboarding',
+  /** Personal (user-level) appearance settings. */
+  appearance: '/settings/appearance',
   organization: (organizationId: string) => `/org/${organizationId}`,
   organizationTeam: (organizationId: string) => `/org/${organizationId}/team`,
   organizationSettings: (organizationId: string) => `/org/${organizationId}/settings`,

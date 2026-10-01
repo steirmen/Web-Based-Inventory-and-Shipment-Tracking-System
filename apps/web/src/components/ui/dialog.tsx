@@ -84,7 +84,7 @@ export function Dialog({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
       <div
-        className="absolute inset-0 bg-foreground/40"
+        className="absolute inset-0 bg-overlay"
         aria-hidden="true"
         onClick={() => dismissible && onClose()}
       />

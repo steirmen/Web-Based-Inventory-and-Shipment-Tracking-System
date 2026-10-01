@@ -16,7 +16,9 @@ Work is delivered in explicit phases. **Only implement what the current phase as
 - **Phase 4 (done): organizations & RBAC.** Organization creation/listing/switching (`/org/:organizationId` routes), OrganizationAccessGuard + `@RequirePermissions`, OWNER/ADMIN/STAFF matrix, team management, invitation links, ownership transfer, organization activity logging. See [docs/organizations-rbac.md](docs/organizations-rbac.md).
 - **Phase 5 (done): products & categories.** Category CRUD (delete only when unused), products with server-side search/filter/sort/pagination, archive/restore (no product delete), catalog permissions, activity logging, product list/create/edit/detail and categories UI, seed additions. See [docs/products-categories.md](docs/products-categories.md).
 - **Phase 6 (done): warehouses & inventory.** Warehouse CRUD with immutable codes and archive/restore (no delete), inventory list/detail with low-stock states, receive/issue/damage/adjust/transfer in one row-locked transaction each, immutable stock movement history (filters, transfer groups), inventory permissions, activity logging, warehouses/inventory/stock-movements UI, seed additions. No schema changes. See [docs/warehouses-inventory.md](docs/warehouses-inventory.md).
-- **Later phases:** customers, orders (including order/inventory integration), dashboard/reporting (APIs and UI). Password reset, email verification, email delivery, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
+- **Phase 7A (done): customers & orders.** Customer CRUD, sales orders with per-organization order numbers, status workflow, and fulfillment that issues stock through `StockOperationsService` (SALE movements) in the same transaction, sales permissions, activity logging, customers/orders UI. Migration `add_order_number_sequences`. (Detailed customers/orders docs are still to be written.)
+- **Phase 7B (done): personalization & appearance.** User-level appearance (mode, 10 theme presets + custom accent, background effects, animation intensity, density, corners, text size), saved appearance profiles, `/me/appearance` API, `UserAppearance`/`AppearanceProfile` models, theme engine with enforced contrast, single background-effect layer, Appearance page with live preview. See [docs/personalization-appearance.md](docs/personalization-appearance.md).
+- **Later phases:** dashboard/reporting (APIs and UI). Password reset, email verification, email delivery, OAuth, and 2FA are also not built. Do not add these, or placeholder routes or modules, until asked.
 
 Environment constraints: **local development only. No Docker, no Docker Compose, no WSL.** PostgreSQL runs natively on the Windows host.
 
@@ -77,7 +79,7 @@ npm run db:seed      # idempotent demo data
 - Record organization mutations with `recordActivity(tx, …)` **inside the same transaction**. Never put passwords, hashes, session tokens, or invitation tokens in metadata.
 - Raw invitation tokens are returned once (in `inviteUrl`) and never persisted or logged. Store `hashToken(token)` (`src/common/security/secure-token.ts`).
 - Frontend permission checks (`<Can>`, `useCurrentOrganization().can/canManage`) are **UX only**. The API is authoritative.
-- Do not implement customer, order, or dashboard functionality until those phases.
+- Do not implement dashboard/reporting functionality until that phase.
 
 ### Products & categories (read [docs/products-categories.md](docs/products-categories.md))
 
@@ -100,7 +102,7 @@ npm run db:seed      # idempotent demo data
 - **Archived products and inactive warehouses take no new stock movements** (`INVENTORY_PRODUCT_INACTIVE` / `INVENTORY_WAREHOUSE_INACTIVE`); their history stays readable.
 - Frontend stock checks and previews are **UX only**; the backend is authoritative and re-validates against the locked row. Keep inventory query keys under `organizationKeys.detail(organizationId)` (`inventoryKeys`), and invalidate inventory, movements, and warehouses after an operation.
 - Stock operations are not idempotent; don't claim otherwise. Don't add Redis, queues, CQRS, or event sourcing for inventory.
-- **Do not integrate orders with inventory before Phase 7** (no automatic SALE movements from orders, no reservations).
+- Orders change stock only through `StockOperationsService` (fulfillment issues SALE movements in the order's transaction); there are no reservations.
 
 ### Database schema (`apps/api/prisma`)
 
@@ -130,6 +132,17 @@ Read [docs/database-design.md](docs/database-design.md) before changing the sche
 - Styling: follow [docs/design-system.md](docs/design-system.md). Use semantic tokens (`bg-surface`, `text-muted-foreground`, `border-border`, `bg-primary`), never raw palette colors (`bg-white`, `text-slate-500`) in components. Compose with `cn()`. Reuse primitives from `src/components/ui` and `src/components/layout`.
 - Keep cva variant definitions in a separate non-component file when exported (for example `button-variants.ts`) so Fast Refresh keeps working.
 - Business-specific components belong to their feature phase, not to `components/ui`.
+
+### Personalization & appearance (read [docs/personalization-appearance.md](docs/personalization-appearance.md))
+
+- Appearance is **user-level presentation only**. It never changes navigation, routes, page structure, table columns, permissions, or workflows. Don't add layout customization (draggable/hidden navigation, widgets, page builders, user-defined layouts).
+- IDs and defaults live only in `packages/shared/src/appearance.ts` (`THEME_IDS`, `BACKGROUND_EFFECTS`, …, `DEFAULT_APPEARANCE`); display names only in the web app. Never persist localized names. A new id also needs a migration that updates the CHECK constraints of `user_appearances` and `appearance_profiles`.
+- API: `/me/appearance` only, always scoped to `@CurrentUser()`; never accept `userId`/`organizationId` in bodies. Another user's profile is `404 APPEARANCE_PROFILE_NOT_FOUND`. Appearance is not tenant data (no `organizationId`, no activity log).
+- **`AppearanceProvider` is the only owner** of appearance state (`useAppearance()`), and `applyAppearance()` (`lib/appearance/apply.ts`) the only code that writes tokens to `<html>`. Pages never apply themes or start effects; `BackgroundEffectLayer` is rendered once, by the provider.
+- Components must use semantic tokens so every theme works: never raw colors, inline hex/rgb, or fixed pixel spacing/radius. New tokens go into `globals.css` **and** `buildPalette()` (`lib/appearance/themes.ts`) with a contrast rule in `themes.test.ts`. Status colors (success/warning/danger) stay fixed per mode, not per theme.
+- The `localStorage` `app:appearance` cache is a presentation-only startup cache (never user or auth data), cleared for guests; the API is the source of truth. The inline script in `index.html` must keep validating cached names and values.
+- Effects: one rAF loop (≤ 30 fps), paused when hidden, still frame under `prefers-reduced-motion`, everything removed on change/unmount; canvas `fixed -z-10 pointer-events-none aria-hidden`.
+- `renderApp()` includes `AppearanceProvider`, and `mockApi` answers `GET /me/appearance` with the defaults unless a test overrides it. `test/setup.ts` resets `<html>` styles/data attributes and `localStorage` after each test.
 
 ## Gotchas
 
