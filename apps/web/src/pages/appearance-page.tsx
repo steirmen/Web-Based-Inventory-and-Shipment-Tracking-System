@@ -7,8 +7,19 @@ import {
   FONT_SCALES,
   RADII,
 } from '@app/shared';
-import { Moon, RotateCcw, Sun } from 'lucide-react';
+import {
+  Bookmark,
+  Contrast,
+  type LucideIcon,
+  Moon,
+  Palette,
+  RotateCcw,
+  SlidersHorizontal,
+  Sparkles,
+  Sun,
+} from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
+import { AppearancePreview } from '@/components/appearance/appearance-preview';
 import { AppearanceProfiles } from '@/components/appearance/appearance-profiles';
 import { CustomThemeEditor } from '@/components/appearance/custom-theme-editor';
 import { EffectPicker } from '@/components/appearance/effect-picker';
@@ -94,109 +105,129 @@ export function AppearancePage() {
         description="Personalize how Nexora looks for you, in every workspace. Changes preview instantly and are kept when you save."
       />
 
-      {notice && <Alert tone="success">{notice}</Alert>}
-
-      <Section title="Mode" description="Light or dark interface.">
-        <SegmentedControl
-          label="Mode"
-          value={value.mode}
-          options={APPEARANCE_MODES.map((mode) => ({
-            value: mode,
-            label: MODE_LABELS[mode],
-            icon: MODE_ICONS[mode],
-          }))}
-          onChange={(mode) => change({ mode })}
-        />
-      </Section>
-
-      <Section
-        title="Theme"
-        description="A complete color palette, shown here in the current mode."
-      >
-        <ThemePicker config={value} onChange={(theme) => change({ theme })} />
-        {value.theme === 'custom' && (
-          <div className="mt-5 border-t border-border pt-5">
-            <CustomThemeEditor config={value} onChange={change} />
-          </div>
-        )}
-      </Section>
-
-      <Section
-        title="Background"
-        description="A subtle animated background behind your pages. Content always stays on top."
-      >
-        <div className="flex flex-col gap-5">
-          <EffectPicker
-            value={value.backgroundEffect}
-            onChange={(backgroundEffect) => change({ backgroundEffect })}
-          />
-          <Setting label="Animation">
-            <SegmentedControl
-              label="Animation"
-              value={value.animationIntensity}
-              options={ANIMATION_INTENSITIES.map((intensity) => ({
-                value: intensity,
-                label: INTENSITY_LABELS[intensity],
-              }))}
-              onChange={(animationIntensity) => change({ animationIntensity })}
-            />
-          </Setting>
-          {appearance.reducedMotion && (
-            <Alert tone="info">
-              Your device asks for reduced motion, so background effects are shown as a still image.
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-start">
+        <div className="flex min-w-0 flex-col gap-6">
+          {notice && (
+            <Alert tone="success" onDismiss={() => setNotice(null)}>
+              {notice}
             </Alert>
           )}
-        </div>
-      </Section>
 
-      <Section title="Interface" description="Spacing, corners, and text size.">
-        <div className="grid gap-5 lg:grid-cols-3">
-          <Setting label="Density">
+          <Section icon={Contrast} title="Mode" description="Light or dark interface.">
             <SegmentedControl
-              label="Density"
-              value={value.density}
-              options={DENSITIES.map((density) => ({
-                value: density,
-                label: DENSITY_LABELS[density],
+              label="Mode"
+              value={value.mode}
+              options={APPEARANCE_MODES.map((mode) => ({
+                value: mode,
+                label: MODE_LABELS[mode],
+                icon: MODE_ICONS[mode],
               }))}
-              onChange={(density) => change({ density })}
+              onChange={(mode) => change({ mode })}
             />
-          </Setting>
-          <Setting label="Corners">
-            <SegmentedControl
-              label="Corners"
-              value={value.radius}
-              options={RADII.map((radius) => ({ value: radius, label: RADIUS_LABELS[radius] }))}
-              onChange={(radius) => change({ radius })}
-            />
-          </Setting>
-          <Setting label="Text size">
-            <SegmentedControl
-              label="Text size"
-              value={value.fontScale}
-              options={FONT_SCALES.map((fontScale) => ({
-                value: fontScale,
-                label: FONT_SCALE_LABELS[fontScale],
-              }))}
-              onChange={(fontScale) => change({ fontScale })}
-            />
-          </Setting>
-        </div>
-      </Section>
+          </Section>
 
-      <Section
-        title="Saved profiles"
-        description="Keep looks you like and switch between them. Profiles store appearance only."
-      >
-        <AppearanceProfiles
-          current={value}
-          saved={saved}
-          onApplied={() => {
-            discard();
-            setNotice(null);
-          }}
-        />
-      </Section>
+          <Section
+            icon={Palette}
+            title="Theme"
+            description="A complete color palette, shown here in the current mode."
+          >
+            <ThemePicker config={value} onChange={(theme) => change({ theme })} />
+            {value.theme === 'custom' && (
+              <div className="mt-5 border-t border-border pt-5">
+                <CustomThemeEditor config={value} onChange={change} />
+              </div>
+            )}
+          </Section>
+
+          <Section
+            icon={Sparkles}
+            title="Background"
+            description="A subtle animated background behind your pages. Content always stays on top."
+          >
+            <div className="flex flex-col gap-5">
+              <EffectPicker
+                value={value.backgroundEffect}
+                onChange={(backgroundEffect) => change({ backgroundEffect })}
+              />
+              <Setting label="Animation">
+                <SegmentedControl
+                  label="Animation"
+                  value={value.animationIntensity}
+                  options={ANIMATION_INTENSITIES.map((intensity) => ({
+                    value: intensity,
+                    label: INTENSITY_LABELS[intensity],
+                  }))}
+                  onChange={(animationIntensity) => change({ animationIntensity })}
+                />
+              </Setting>
+              {appearance.reducedMotion && (
+                <Alert tone="info">
+                  Your device asks for reduced motion, so background effects are shown as a still
+                  image.
+                </Alert>
+              )}
+            </div>
+          </Section>
+
+          <Section
+            icon={SlidersHorizontal}
+            title="Interface"
+            description="Spacing, corners, and text size."
+          >
+            <div className="grid gap-5 lg:grid-cols-3">
+              <Setting label="Density">
+                <SegmentedControl
+                  label="Density"
+                  value={value.density}
+                  options={DENSITIES.map((density) => ({
+                    value: density,
+                    label: DENSITY_LABELS[density],
+                  }))}
+                  onChange={(density) => change({ density })}
+                />
+              </Setting>
+              <Setting label="Corners">
+                <SegmentedControl
+                  label="Corners"
+                  value={value.radius}
+                  options={RADII.map((radius) => ({ value: radius, label: RADIUS_LABELS[radius] }))}
+                  onChange={(radius) => change({ radius })}
+                />
+              </Setting>
+              <Setting label="Text size">
+                <SegmentedControl
+                  label="Text size"
+                  value={value.fontScale}
+                  options={FONT_SCALES.map((fontScale) => ({
+                    value: fontScale,
+                    label: FONT_SCALE_LABELS[fontScale],
+                  }))}
+                  onChange={(fontScale) => change({ fontScale })}
+                />
+              </Setting>
+            </div>
+          </Section>
+
+          <Section
+            icon={Bookmark}
+            title="Saved profiles"
+            description="Keep looks you like and switch between them. Profiles store appearance only."
+          >
+            <AppearanceProfiles
+              current={value}
+              saved={saved}
+              onApplied={() => {
+                discard();
+                setNotice(null);
+              }}
+            />
+          </Section>
+        </div>
+        {/* The whole app previews the draft; this sample shows it next to the controls. */}
+        <aside aria-label="Preview" className="hidden xl:sticky xl:top-20 xl:block">
+          <AppearancePreview />
+        </aside>
+      </div>
 
       <div className="sticky bottom-0 z-30 -mx-4 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur-sm sm:mx-0 sm:rounded-card sm:border">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -259,19 +290,26 @@ export function AppearancePage() {
 }
 
 function Section({
+  icon: Icon,
   title,
   description,
   children,
 }: {
+  icon: LucideIcon;
   title: string;
   description: string;
   children: ReactNode;
 }) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+      <CardHeader className="flex-row items-start gap-3">
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-control bg-primary-soft text-primary-soft-foreground">
+          <Icon className="size-4" aria-hidden="true" />
+        </span>
+        <div className="flex min-w-0 flex-col gap-1">
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </div>
       </CardHeader>
       <CardContent>{children}</CardContent>
     </Card>

@@ -40,7 +40,7 @@ export function CustomerFormDialog({
       onClose={onClose}
       title={customer ? 'Edit customer' : 'New customer'}
       description={customer ? undefined : 'Someone you sell to: a person or a business contact.'}
-      className="max-w-lg"
+      size="md"
     >
       {open && (
         <CustomerForm

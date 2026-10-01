@@ -3,7 +3,7 @@ import { PackageSearch, Plus, Search, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/layout/page-state';
 import { PaginationBar } from '@/components/layout/pagination-bar';
 import { Can } from '@/components/organization/can';
 import { ArchiveProductDialog } from '@/components/products/archive-product-dialog';
@@ -13,9 +13,17 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { SearchInput } from '@/components/ui/search-input';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useCategories, useProducts, useProductStatusChange } from '@/hooks/use-catalog';
 import { apiErrorMessage } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
@@ -126,21 +134,14 @@ export function ProductsPage() {
       />
 
       <search className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="relative lg:max-w-sm lg:flex-1">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            type="search"
-            aria-label="Search products"
-            placeholder="Search products by name or SKU…"
-            className="pl-9"
-            maxLength={100}
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-          />
-        </div>
+        <SearchInput
+          wrapperClassName="lg:max-w-sm lg:flex-1"
+
+          aria-label="Search products"
+          placeholder="Search products by name or SKU…"
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+        />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:flex lg:flex-none">
           <Select
             aria-label="Category"
@@ -195,12 +196,16 @@ export function ProductsPage() {
         </div>
       </search>
 
-      {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && (
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
       {statusChange.isError && !archiveTarget && (
         <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
       )}
 
-      {products.isPending && <LoadingState label="Loading products" />}
+      {products.isPending && <ListSkeleton label="Loading products" />}
 
       {products.isError && (
         <ErrorState
@@ -292,76 +297,63 @@ function ProductTable({ items, pendingId, onStatusChange }: TableProps) {
 
   return (
     <>
-      <table className="hidden w-full text-sm xl:table">
-        <thead className="border-b border-border bg-surface-muted/60 text-left text-xs font-medium text-muted-foreground">
+      <Table className="hidden @4xl:table">
+        <TableHeader>
           <tr>
-            <th scope="col" className="px-4 py-2.5 font-medium">
-              Product
-            </th>
-            <th scope="col" className="px-4 py-2.5 font-medium">
-              SKU
-            </th>
-            <th scope="col" className="px-4 py-2.5 font-medium">
-              Category
-            </th>
-            <th scope="col" className="px-4 py-2.5 text-right font-medium">
-              Price
-            </th>
-            <th scope="col" className="px-4 py-2.5 text-right font-medium">
-              Cost
-            </th>
-            <th scope="col" className="px-4 py-2.5 text-right font-medium">
-              Min.&nbsp;stock
-            </th>
-            <th scope="col" className="px-4 py-2.5 font-medium">
-              Status
-            </th>
-            <th scope="col" className="px-4 py-2.5 text-right font-medium">
+            <TableHead>Product</TableHead>
+            <TableHead>SKU</TableHead>
+            <TableHead>Category</TableHead>
+            <TableHead align="right">Price</TableHead>
+            <TableHead align="right">Cost</TableHead>
+            <TableHead align="right">Min.&nbsp;stock</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead align="right">
               <span className="sr-only">Actions</span>
-            </th>
+            </TableHead>
           </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
+        </TableHeader>
+        <TableBody>
           {items.map((product) => (
-            <tr
+            <TableRow
               key={product.id}
               className={cn(product.status === 'ARCHIVED' && 'text-muted-foreground')}
             >
-              <td className="max-w-64 px-4 py-3">
+              <TableCell className="max-w-64">
                 <Link
                   to={paths.product(organization.id, product.id)}
                   className="block truncate rounded-sm font-medium text-foreground focus-ring hover:underline"
                 >
                   {product.name}
                 </Link>
-              </td>
-              <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">{product.sku}</td>
-              <td className="max-w-40 truncate px-4 py-3 whitespace-nowrap">
+              </TableCell>
+              <TableCell className="font-mono text-xs whitespace-nowrap">{product.sku}</TableCell>
+              <TableCell className="max-w-40 truncate whitespace-nowrap">
                 {product.category?.name ?? <span className="text-subtle-foreground">—</span>}
-              </td>
-              <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+              </TableCell>
+              <TableCell align="right" className="whitespace-nowrap">
                 {formatMoney(product.price)}
-              </td>
-              <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+              </TableCell>
+              <TableCell align="right" className="whitespace-nowrap">
                 {formatMoney(product.cost)}
-              </td>
-              <td className="px-4 py-3 text-right tabular-nums">{product.minimumStock}</td>
-              <td className="px-4 py-3">
+              </TableCell>
+              <TableCell align="right">{product.minimumStock}</TableCell>
+              <TableCell>
                 <ProductStatusBadge status={product.status} />
-              </td>
-              <td className="px-4 py-2">
+              </TableCell>
+              <TableCell className="py-2">
                 <ProductActions
                   product={product}
                   pending={pendingId === product.id}
                   onStatusChange={(action) => onStatusChange(product, action)}
+                  compact
                 />
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
 
-      <ul className="divide-y divide-border xl:hidden" aria-label="Products">
+      <ul className="divide-y divide-border @4xl:hidden" aria-label="Products">
         {items.map((product) => (
           <li key={product.id} className="flex flex-col gap-3 p-4">
             <div className="flex items-start justify-between gap-3">

@@ -1,20 +1,28 @@
 import type { Customer } from '@app/shared';
-import { Archive, ArchiveRestore, Pencil, Plus, Search, Users, X } from 'lucide-react';
+import { Archive, ArchiveRestore, Pencil, Plus, Users, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { ArchiveCustomerDialog } from '@/components/customers/archive-customer-dialog';
 import { CustomerFormDialog } from '@/components/customers/customer-form-dialog';
 import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/layout/page-state';
 import { PaginationBar } from '@/components/layout/pagination-bar';
 import { ActiveBadge } from '@/components/orders/order-status-badge';
 import { Can } from '@/components/organization/can';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { SearchInput } from '@/components/ui/search-input';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useCustomers, useCustomerStatusChange } from '@/hooks/use-sales';
 import { apiErrorMessage } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
@@ -118,21 +126,14 @@ export function CustomersPage() {
       />
 
       <search className="flex flex-col gap-3 md:flex-row md:items-center">
-        <div className="relative md:max-w-sm md:flex-1">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            type="search"
-            aria-label="Search customers"
-            placeholder="Name, company, email, or phone…"
-            className="pl-9"
-            maxLength={100}
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-          />
-        </div>
+        <SearchInput
+          wrapperClassName="md:max-w-sm md:flex-1"
+
+          aria-label="Search customers"
+          placeholder="Name, company, email, or phone…"
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+        />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:flex md:flex-none">
           <Select
             aria-label="Status"
@@ -172,12 +173,16 @@ export function CustomersPage() {
         </div>
       </search>
 
-      {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && (
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
       {statusChange.isError && !archiveTarget && (
         <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
       )}
 
-      {customers.isPending && <LoadingState label="Loading customers" />}
+      {customers.isPending && <ListSkeleton label="Loading customers" />}
       {customers.isError && (
         <ErrorState
           title="We couldn't load customers"
@@ -206,61 +211,51 @@ export function CustomersPage() {
       {data && data.items.length > 0 && (
         <>
           <Card className={cn('overflow-hidden', customers.isPlaceholderData && 'opacity-70')}>
-            <table className="hidden w-full text-sm lg:table">
-              <thead className="border-b border-border bg-surface-muted/60 text-left text-xs font-medium text-muted-foreground">
+            <Table className="hidden @4xl:table">
+              <TableHeader>
                 <tr>
-                  <th scope="col" className="px-4 py-2.5 font-medium">
-                    Name
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">
-                    Company
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">
-                    Contact
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 text-right font-medium">
-                    Orders
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">
-                    Status
-                  </th>
-                  <th scope="col" className="px-4 py-2.5">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead align="right">Orders</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>
                     <span className="sr-only">Actions</span>
-                  </th>
+                  </TableHead>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+              </TableHeader>
+              <TableBody>
                 {data.items.map((customer) => (
-                  <tr key={customer.id}>
-                    <td className="max-w-52 px-4 py-3">
+                  <TableRow key={customer.id}>
+                    <TableCell className="max-w-52">
                       <Link
                         to={paths.customer(organization.id, customer.id)}
                         className="block truncate rounded-sm font-medium focus-ring hover:underline"
                       >
                         {customer.name}
                       </Link>
-                    </td>
-                    <td className="max-w-52 truncate px-4 py-3">
+                    </TableCell>
+                    <TableCell className="max-w-52 truncate">
                       {customer.companyName ?? <span className="text-subtle-foreground">—</span>}
-                    </td>
-                    <td className="max-w-60 px-4 py-3 text-muted-foreground">
+                    </TableCell>
+                    <TableCell className="max-w-60 text-muted-foreground">
                       <span className="block truncate">{customer.email ?? '—'}</span>
                       {customer.phone && (
                         <span className="block truncate text-xs">{customer.phone}</span>
                       )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{customer.orderCount}</td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell align="right">{customer.orderCount}</TableCell>
+                    <TableCell>
                       <ActiveBadge isActive={customer.isActive} />
-                    </td>
-                    <td className="px-4 py-2">
+                    </TableCell>
+                    <TableCell className="py-2">
                       <CustomerActions customer={customer} actions={actions} compact />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-            <ul className="divide-y divide-border lg:hidden" aria-label="Customers">
+              </TableBody>
+            </Table>
+            <ul className="divide-y divide-border @4xl:hidden" aria-label="Customers">
               {data.items.map((customer) => (
                 <li key={customer.id} className="flex flex-col gap-2 p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -336,14 +331,13 @@ function CustomerActions({
   compact?: boolean;
 }) {
   const { can } = useCurrentOrganization();
-  const iconOnly = cn(compact && 'size-8 px-0');
+  const size = compact ? 'icon-sm' : 'sm';
   return (
-    <div className="flex flex-wrap items-center gap-1 lg:flex-nowrap lg:justify-end">
+    <div className="flex flex-wrap items-center gap-1 @4xl:flex-nowrap @4xl:justify-end">
       {can('CUSTOMERS_UPDATE') && (
         <Button
           variant="ghost"
-          size="sm"
-          className={iconOnly}
+          size={size}
           onClick={() => actions.edit(customer)}
           aria-label={`Edit ${customer.name}`}
           title={compact ? 'Edit' : undefined}
@@ -356,8 +350,7 @@ function CustomerActions({
         (customer.isActive ? (
           <Button
             variant="ghost"
-            size="sm"
-            className={iconOnly}
+            size={size}
             onClick={() => actions.archive(customer)}
             aria-label={`Archive ${customer.name}`}
             title={compact ? 'Archive' : undefined}
@@ -368,8 +361,7 @@ function CustomerActions({
         ) : (
           <Button
             variant="ghost"
-            size="sm"
-            className={iconOnly}
+            size={size}
             onClick={() => actions.restore(customer)}
             aria-label={`Restore ${customer.name}`}
             title={compact ? 'Restore' : undefined}

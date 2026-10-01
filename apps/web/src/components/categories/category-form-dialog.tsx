@@ -38,6 +38,7 @@ export function CategoryFormDialog({
       open={open}
       onClose={onClose}
       title={category ? 'Edit category' : 'New category'}
+      size="md"
       description={
         category ? undefined : 'Group related products, e.g. "Office supplies" or "Packaging".'
       }

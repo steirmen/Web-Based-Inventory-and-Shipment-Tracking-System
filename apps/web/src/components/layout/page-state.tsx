@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { apiErrorMessage } from '@/lib/api-errors';
 import { cn } from '@/lib/cn';
@@ -16,6 +17,55 @@ export function LoadingState({ label, className }: { label: string; className?: 
     >
       <Spinner size="lg" label={null} />
       <p aria-live="polite">{label}</p>
+    </div>
+  );
+}
+
+/**
+ * Placeholder in the shape of a list (a card of rows) while its first page
+ * loads. The label is announced; the shapes are decorative.
+ */
+export function ListSkeleton({ label, rows = 6 }: { label: string; rows?: number }) {
+  return (
+    <div className="flex flex-col overflow-hidden rounded-card border border-border bg-surface shadow-card">
+      <p className="sr-only" aria-live="polite">
+        {label}
+      </p>
+      <div className="flex items-center gap-6 border-b border-border bg-surface-muted/60 px-4 py-3">
+        <Skeleton className="h-3 w-32" />
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="ml-auto h-3 w-16" />
+      </div>
+      {Array.from({ length: rows }, (_, index) => (
+        <div
+          key={index}
+          className="flex items-center gap-6 border-b border-border px-4 py-4 last:border-b-0"
+        >
+          <Skeleton className="h-4 w-1/3 max-w-56" />
+          <Skeleton className="hidden h-4 w-24 sm:block" />
+          <Skeleton className="ml-auto h-4 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Placeholder for a detail page (header and two sections) while it loads. */
+export function DetailSkeleton({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <p className="sr-only" aria-live="polite">
+        {label}
+      </p>
+      <Skeleton className="h-4 w-24" />
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-7 w-64 max-w-full" />
+        <Skeleton className="h-4 w-80 max-w-full" />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Skeleton className="h-56 rounded-card lg:col-span-2" />
+        <Skeleton className="h-56 rounded-card" />
+      </div>
     </div>
   );
 }

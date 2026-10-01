@@ -1,9 +1,8 @@
-import { ArrowLeft } from 'lucide-react';
-import { Link, useParams } from 'react-router';
+import { useParams } from 'react-router';
+import { BackLink } from '@/components/layout/back-link';
 import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import { EmptyState, ErrorState, DetailSkeleton } from '@/components/layout/page-state';
 import { OrderBuilder } from '@/components/orders/order-builder';
-import { buttonVariants } from '@/components/ui/button-variants';
 import { useOrder } from '@/hooks/use-sales';
 import { hasErrorCode } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
@@ -17,17 +16,9 @@ export function OrderEditPage() {
   const { orderId = '' } = useParams();
   const query = useOrder(organization.id, orderId);
 
-  const back = (
-    <Link
-      to={paths.order(organization.id, orderId)}
-      className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'self-start' })}
-    >
-      <ArrowLeft aria-hidden="true" />
-      Back to the order
-    </Link>
-  );
+  const back = <BackLink to={paths.order(organization.id, orderId)} label="Back to order" />;
 
-  if (query.isPending) return <LoadingState label="Loading order" />;
+  if (query.isPending) return <DetailSkeleton label="Loading order" />;
   if (query.isError) {
     return (
       <div className="flex flex-col gap-6">

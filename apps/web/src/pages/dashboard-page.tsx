@@ -9,7 +9,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { useMemo } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { ChangeIndicator, KpiCard } from '@/components/dashboard/kpi-card';
 import { InventoryOverview, WarehouseOverview } from '@/components/dashboard/inventory-overview';
 import { OrderStatusChart } from '@/components/dashboard/order-status-chart';
@@ -37,14 +37,11 @@ import {
   toDashboardQuery,
   writeDashboardParams,
 } from '@/lib/dashboard-params';
+import { useFlashNotice } from '@/lib/flash-notice';
 import { formatMoney } from '@/lib/money';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import { salesReportPath } from '@/lib/report-params';
 import { paths } from '@/routes/paths';
-
-interface HomeLocationState {
-  notice?: string;
-}
 
 /**
  * The workspace overview (`/org/:organizationId`): real, read-only numbers
@@ -55,8 +52,8 @@ interface HomeLocationState {
 export function DashboardPage() {
   const { organization } = useCurrentOrganization();
   const [searchParams, setSearchParams] = useSearchParams();
-  const location = useLocation();
-  const notice = (location.state as HomeLocationState | null)?.notice;
+  // E.g. "Workspace created." after onboarding; shown once.
+  const [notice, setNotice] = useFlashNotice();
 
   const params = readDashboardParams(searchParams);
   const paramsKey = writeDashboardParams(params).toString();
@@ -73,8 +70,6 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <title>{pageTitle(`Overview · ${organization.name}`)}</title>
-      {notice && <Alert tone="success">{notice}</Alert>}
-
       <PageHeader
         eyebrow={organization.name}
         title="Overview"
@@ -88,6 +83,12 @@ export function DashboardPage() {
           />
         }
       />
+
+      {notice && (
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
 
       {summary.isError && !data ? (
         <ErrorState

@@ -20,7 +20,7 @@ export function ThemePicker({
     <div
       role="radiogroup"
       aria-label="Theme"
-      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
+      className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6"
     >
       {THEMES.map((theme) => {
         const colors = themePreview(theme.id, config);

@@ -1,17 +1,10 @@
-import {
-  Archive,
-  ArchiveRestore,
-  ArrowLeft,
-  History,
-  Package,
-  Pencil,
-  SearchX,
-} from 'lucide-react';
+import { Archive, ArchiveRestore, History, Package, Pencil, SearchX } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { BackLink } from '@/components/layout/back-link';
 import { WarehouseStatusBadge } from '@/components/inventory/inventory-badges';
 import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import { EmptyState, ErrorState, DetailSkeleton } from '@/components/layout/page-state';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -35,7 +28,7 @@ export function WarehouseDetailPage() {
   const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  if (query.isPending) return <LoadingState label="Loading warehouse" />;
+  if (query.isPending) return <DetailSkeleton label="Loading warehouse" />;
 
   if (query.isError) {
     if (hasErrorCode(query.error, 'WAREHOUSE_NOT_FOUND')) {
@@ -94,7 +87,7 @@ export function WarehouseDetailPage() {
         title={<span className="break-words">{warehouse.name}</span>}
         description={
           <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[13px]">{warehouse.code}</span>
+            <span className="font-mono text-[0.8125rem]">{warehouse.code}</span>
             <WarehouseStatusBadge isActive={warehouse.isActive} />
           </span>
         }
@@ -138,7 +131,11 @@ export function WarehouseDetailPage() {
         }
       />
 
-      {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && (
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
       {statusChange.isError && !confirmingArchive && (
         <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
       )}
@@ -242,15 +239,7 @@ export function WarehouseDetailPage() {
 
 function BackToWarehouses() {
   const { organization } = useCurrentOrganization();
-  return (
-    <Link
-      to={paths.warehouses(organization.id)}
-      className="inline-flex items-center gap-1.5 self-start rounded-sm text-sm font-medium text-muted-foreground focus-ring hover:text-foreground"
-    >
-      <ArrowLeft className="size-4" aria-hidden="true" />
-      Warehouses
-    </Link>
-  );
+  return <BackLink to={paths.warehouses(organization.id)} label="Warehouses" />;
 }
 
 function Field({

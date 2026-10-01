@@ -1,6 +1,6 @@
 # Personalization & appearance
 
-Every signed-in user can change how Nexora **looks** for them: light or dark mode, a theme, an optional animated background, and interface density, corners, and text size. They can also save named looks as profiles. The page is **Appearance** (`/settings/appearance`), reached from the palette icon next to the user's name in the top bar.
+Every signed-in user can change how Nexora **looks** for them: light or dark mode, a theme, an optional animated background, and interface density, corners, and text size. They can also save named looks as profiles. The page is **Appearance** (`/settings/appearance`), reached from the account menu (the user's name in the top bar).
 
 Appearance is **personal and user-level**. It belongs to the account, not to a workspace: it is the same in every organization, survives reloads and sign-in on another device, and never depends on roles, pages, or business data.
 
@@ -115,6 +115,7 @@ After applying the saved appearance, the provider caches the computed tokens and
 `pages/appearance-page.tsx`, built from existing primitives (`Card`, `Button`, `Alert`, `FormField`, `ConfirmDialog`, `Dialog`) plus two small generic ones: `SegmentedControl` and `radioOptionProps` (`components/ui`). Feature components are in `components/appearance/` (theme picker, effect picker, custom theme editor, profiles).
 
 - **Live preview, explicit save.** Every change is applied immediately through `preview()` but nothing is sent until **Save** (one `PUT`). A sticky bar shows "Unsaved changes — you are seeing a preview." with **Reset to default**, **Cancel**, and **Save**, and stays reachable on phones.
+- **Sections and sample.** Mode, Theme, Background, Interface, and Saved profiles are separate cards with icons. From `xl`, a sticky **Preview** column shows a small sample of real interface parts (buttons, field, badges, table rows, a figure, an alert) built from the same components, so color, density, corners, and text size can be judged next to the controls. The sample is inert and hidden from assistive technology; the whole app previews the draft anyway.
 - **Cancel** returns to the saved appearance. **Leaving the page** also ends an unsaved preview.
 - **Reset to default** saves the defaults (`POST …/reset`). It asks for confirmation only when it would discard unsaved changes, and is disabled when the saved appearance is already the default. Profiles are kept.
 - **Profiles**: "Save current look" stores what you see (including an unsaved preview). Each profile shows a swatch and summary, **Apply** (or "In use" when it equals the saved appearance), **Rename** (dialog), and **Delete** (confirmation). Loading, error, empty, and "limit reached" states are shown.

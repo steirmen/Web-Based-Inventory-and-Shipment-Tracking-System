@@ -192,6 +192,29 @@ describe('New order (builder)', () => {
   });
 });
 
+describe('New order (layout)', () => {
+  it('reads as numbered steps that end with the total and the save actions', async () => {
+    await renderCatalog(`${ORDERS_APP}/new`, 'STAFF', builderApi(), {
+      waitForHeading: 'New order',
+    });
+
+    const steps = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(steps).toEqual(['1Customer and warehouse', '2Products', '3Review and save']);
+    const review = screen
+      .getByRole('heading', { level: 2, name: 'Review and save' })
+      .closest('.rounded-card') as HTMLElement;
+    expect(within(review).getByLabelText('Order total')).toHaveTextContent(formatMoney('0.00'));
+    expect(within(review).getByRole('button', { name: 'Create draft' })).toBeVisible();
+    // Back to the list, above the page header.
+    expect(screen.getByRole('link', { name: 'Orders', current: false })).toHaveAttribute(
+      'href',
+      ORDERS_APP,
+    );
+  });
+});
+
 describe('Edit order (builder)', () => {
   it('keeps the saved price, sends only the changed lines, and returns to the order', async () => {
     const draft = testOrder({

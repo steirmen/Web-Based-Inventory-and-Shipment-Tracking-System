@@ -1,8 +1,7 @@
-import { Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { FieldControlProps } from '@/components/ui/form-field';
-import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { SearchInput } from '@/components/ui/search-input';
 import { useProducts } from '@/hooks/use-catalog';
 import { useCurrentOrganization } from '@/lib/organization-context';
 
@@ -56,21 +55,12 @@ export function ProductPicker({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative">
-        <Search
-          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
-          aria-hidden="true"
-        />
-        <Input
-          type="search"
-          aria-label="Search products by name or SKU"
-          placeholder="Search by name or SKU…"
-          className="pl-9"
-          maxLength={100}
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-        />
-      </div>
+      <SearchInput
+        aria-label="Search products by name or SKU"
+        placeholder="Search by name or SKU…"
+        value={input}
+        onChange={(event) => setInput(event.target.value)}
+      />
       <Select
         {...control}
         name="productId"

@@ -41,6 +41,7 @@ export function WarehouseFormDialog({
       open={open}
       onClose={onClose}
       title={warehouse ? 'Edit warehouse' : 'New warehouse'}
+      size="md"
       description={
         warehouse ? undefined : 'A place where you keep stock, such as a store room or depot.'
       }

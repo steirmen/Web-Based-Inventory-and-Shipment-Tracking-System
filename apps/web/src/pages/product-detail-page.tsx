@@ -2,7 +2,7 @@ import { Archive, ArchiveRestore, Pencil } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { PageHeader } from '@/components/layout/page-header';
-import { ErrorState, LoadingState } from '@/components/layout/page-state';
+import { ErrorState, DetailSkeleton } from '@/components/layout/page-state';
 import { ArchiveProductDialog } from '@/components/products/archive-product-dialog';
 import { BackToProducts, ProductNotFound } from '@/components/products/product-page-parts';
 import { ProductStatusBadge } from '@/components/products/product-status-badge';
@@ -45,7 +45,7 @@ export function ProductDetailPage() {
   }, [location.state, location.pathname, navigate]);
 
   if (product.isPending) {
-    return <LoadingState label="Loading product" />;
+    return <DetailSkeleton label="Loading product" />;
   }
 
   if (product.isError) {
@@ -87,7 +87,7 @@ export function ProductDetailPage() {
         title={<span className="break-words">{current.name}</span>}
         description={
           <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[13px] break-all">{current.sku}</span>
+            <span className="font-mono text-[0.8125rem] break-all">{current.sku}</span>
             <ProductStatusBadge status={current.status} />
           </span>
         }
@@ -128,7 +128,11 @@ export function ProductDetailPage() {
         }
       />
 
-      {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && (
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
       {statusChange.isError && !confirmingArchive && (
         <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
       )}

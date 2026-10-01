@@ -3,7 +3,7 @@ import { ArrowLeftRight, History, X } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
 import { MovementTypeBadge } from '@/components/inventory/inventory-badges';
 import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/layout/page-state';
 import { PaginationBar } from '@/components/layout/pagination-bar';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,14 @@ import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useProducts } from '@/hooks/use-catalog';
 import { useStockMovements, useWarehouses } from '@/hooks/use-inventory';
 import { pageTitle } from '@/lib/app-config';
@@ -190,7 +198,7 @@ export function StockMovementsPage() {
         </Alert>
       )}
 
-      {movements.isPending && <LoadingState label="Loading stock movements" />}
+      {movements.isPending && <ListSkeleton label="Loading stock movements" />}
       {movements.isError && (
         <ErrorState
           title="We couldn't load stock movements"
@@ -288,87 +296,75 @@ function TransferLink({ movement }: { movement: StockMovement }) {
 
 function MovementTable({ items }: { items: StockMovement[] }) {
   return (
-    <table className="hidden w-full text-sm xl:table">
-      <thead className="border-b border-border bg-surface-muted/60 text-left text-xs font-medium text-muted-foreground">
+    <Table className="hidden @5xl:table">
+      <TableHeader>
         <tr>
-          <th scope="col" className="px-3 py-2.5 font-medium">
-            Date
-          </th>
-          <th scope="col" className="px-3 py-2.5 font-medium">
-            Product
-          </th>
-          <th scope="col" className="px-3 py-2.5 font-medium">
-            Warehouse
-          </th>
-          <th scope="col" className="px-3 py-2.5 font-medium">
-            Type
-          </th>
-          <th scope="col" className="px-3 py-2.5 text-right font-medium">
+          <TableHead className="px-3 @5xl:px-3">Date</TableHead>
+          <TableHead className="px-3 @5xl:px-3">Product</TableHead>
+          <TableHead className="px-3 @5xl:px-3">Warehouse</TableHead>
+          <TableHead className="px-3 @5xl:px-3">Type</TableHead>
+          <TableHead align="right" className="px-3 @5xl:px-3">
             Change
-          </th>
-          <th scope="col" className="px-3 py-2.5 text-right font-medium">
+          </TableHead>
+          <TableHead align="right" className="px-3 @5xl:px-3">
             Before
-          </th>
-          <th scope="col" className="px-3 py-2.5 text-right font-medium">
+          </TableHead>
+          <TableHead align="right" className="px-3 @5xl:px-3">
             After
-          </th>
-          <th scope="col" className="px-3 py-2.5 font-medium">
-            By
-          </th>
-          <th scope="col" className="px-3 py-2.5 font-medium">
-            Reason
-          </th>
+          </TableHead>
+          <TableHead className="px-3 @5xl:px-3">By</TableHead>
+          <TableHead className="px-3 @5xl:px-3">Reason</TableHead>
         </tr>
-      </thead>
-      <tbody className="divide-y divide-border">
+      </TableHeader>
+      <TableBody>
         {items.map((movement) => (
-          <tr key={movement.id}>
-            <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
+          <TableRow key={movement.id}>
+            <TableCell className="px-3 whitespace-nowrap text-muted-foreground @5xl:px-3">
               {formatDateTime(movement.createdAt)}
-            </td>
-            <td className="max-w-44 px-3 py-3">
+            </TableCell>
+            <TableCell className="max-w-44 px-3">
               <span className="block truncate font-medium">{movement.product.name}</span>
               <span className="block truncate font-mono text-xs text-muted-foreground">
                 {movement.product.sku}
               </span>
-            </td>
-            <td className="px-3 py-3 font-mono text-xs whitespace-nowrap">
+            </TableCell>
+            <TableCell className="px-3 font-mono text-xs whitespace-nowrap @5xl:px-3">
               {movement.warehouse.code}
-            </td>
-            <td className="px-3 py-3">
+            </TableCell>
+            <TableCell className="px-3 @5xl:px-3">
               <div className="flex flex-col items-start gap-1">
                 <MovementTypeBadge type={movement.movementType} />
                 <TransferLink movement={movement} />
               </div>
-            </td>
-            <td className="px-3 py-3 text-right">
+            </TableCell>
+            <TableCell align="right" className="px-3 @5xl:px-3">
               <Change delta={movement.quantityDelta} />
-            </td>
-            <td className="px-3 py-3 text-right text-muted-foreground tabular-nums">
+            </TableCell>
+            <TableCell align="right" className="px-3 text-muted-foreground @5xl:px-3">
               {movement.quantityBefore.toLocaleString()}
-            </td>
-            <td className="px-3 py-3 text-right tabular-nums">
+            </TableCell>
+            <TableCell align="right" className="px-3 @5xl:px-3">
               {movement.quantityAfter.toLocaleString()}
-            </td>
-            <td className="max-w-28 truncate px-3 py-3">
+            </TableCell>
+            <TableCell className="max-w-28 truncate px-3">
               {movement.actor?.name ?? <span className="text-subtle-foreground">System</span>}
-            </td>
-            <td
-              className="max-w-40 truncate px-3 py-3 text-muted-foreground"
+            </TableCell>
+            <TableCell
+              className="max-w-40 truncate px-3 text-muted-foreground"
               title={movement.reason ?? undefined}
             >
               {movement.reason ?? <span className="text-subtle-foreground">—</span>}
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
 function MovementCards({ items }: { items: StockMovement[] }) {
   return (
-    <ul className="divide-y divide-border xl:hidden" aria-label="Stock movements">
+    <ul className="divide-y divide-border @5xl:hidden" aria-label="Stock movements">
       {items.map((movement) => (
         <li key={movement.id} className="flex flex-col gap-2 p-4">
           <div className="flex items-start justify-between gap-3">

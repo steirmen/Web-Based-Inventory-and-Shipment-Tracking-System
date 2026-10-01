@@ -1,40 +1,31 @@
+import type { ComponentType } from 'react';
 import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
+import { RouteLoading } from '@/components/layout/route-loading';
 import { AppShell } from '@/layouts/app-shell';
 import { AuthLayout } from '@/layouts/auth-layout';
 import { OrganizationLayout } from '@/layouts/organization-layout';
-import { AppearancePage } from '@/pages/appearance-page';
-import { CategoriesPage } from '@/pages/categories-page';
-import { CustomerDetailPage } from '@/pages/customer-detail-page';
-import { CustomersPage } from '@/pages/customers-page';
-import { HealthCheckPage } from '@/pages/health-check-page';
 import { HomeRedirectPage } from '@/pages/home-redirect-page';
-import { InventoryPage } from '@/pages/inventory-page';
-import { InvitationPage } from '@/pages/invitation-page';
 import { LoginPage } from '@/pages/login-page';
 import { NotFoundPage } from '@/pages/not-found-page';
-import { OnboardingPage } from '@/pages/onboarding-page';
-import { OrderDetailPage } from '@/pages/order-detail-page';
-import { OrderEditPage } from '@/pages/order-edit-page';
-import { OrderNewPage } from '@/pages/order-new-page';
-import { OrdersPage } from '@/pages/orders-page';
-import { DashboardPage } from '@/pages/dashboard-page';
-import { OrganizationSettingsPage } from '@/pages/organization-settings-page';
-import { OrganizationsPage } from '@/pages/organizations-page';
-import { ProductDetailPage } from '@/pages/product-detail-page';
-import { ProductEditPage } from '@/pages/product-edit-page';
-import { ProductNewPage } from '@/pages/product-new-page';
-import { ProductsPage } from '@/pages/products-page';
 import { RegisterPage } from '@/pages/register-page';
 import { RouteErrorPage } from '@/pages/route-error-page';
-import { InventoryReportPage } from '@/pages/reports/inventory-report-page';
-import { OrdersReportPage } from '@/pages/reports/orders-report-page';
-import { SalesReportPage } from '@/pages/reports/sales-report-page';
-import { StockMovementsPage } from '@/pages/stock-movements-page';
-import { TeamPage } from '@/pages/team-page';
-import { WarehouseDetailPage } from '@/pages/warehouse-detail-page';
-import { WarehousesPage } from '@/pages/warehouses-page';
 import { RequireAuth, RequireGuest } from './guards';
 import { paths, routePatterns } from './paths';
+
+/**
+ * Route-level code splitting: a page module is downloaded the first time one
+ * of its routes is visited (one chunk per page, shared code in common chunks).
+ * The router loads the chunk BEFORE it switches pages, so the current page
+ * stays on screen and `RouteProgress` (in the shell) shows a slim progress bar
+ * instead of a blank fallback. Shell, layouts, guards, and the sign-in pages
+ * stay in the entry bundle.
+ */
+function page<Name extends string>(
+  load: () => Promise<Record<Name, ComponentType>>,
+  name: Name,
+): RouteObject['lazy'] {
+  return async () => ({ Component: (await load())[name] });
+}
 
 /**
  * - Guest-only (signed-in users are redirected away): /login, /register
@@ -47,6 +38,8 @@ import { paths, routePatterns } from './paths';
 export const routes: RouteObject[] = [
   {
     errorElement: <RouteErrorPage />,
+    // Shown only on a cold start whose first route is still downloading.
+    hydrateFallbackElement: <RouteLoading />,
     children: [
       {
         element: <RequireGuest />,
@@ -62,7 +55,12 @@ export const routes: RouteObject[] = [
       },
       {
         element: <AuthLayout />,
-        children: [{ path: routePatterns.invitation, element: <InvitationPage /> }],
+        children: [
+          {
+            path: routePatterns.invitation,
+            lazy: page(() => import('@/pages/invitation-page'), 'InvitationPage'),
+          },
+        ],
       },
       {
         element: <AppShell />,
@@ -71,45 +69,132 @@ export const routes: RouteObject[] = [
             element: <RequireAuth />,
             children: [
               { path: paths.home, element: <HomeRedirectPage /> },
-              { path: paths.organizations, element: <OrganizationsPage /> },
-              { path: paths.onboarding, element: <OnboardingPage /> },
-              { path: paths.appearance, element: <AppearancePage /> },
+              {
+                path: paths.organizations,
+                lazy: page(() => import('@/pages/organizations-page'), 'OrganizationsPage'),
+              },
+              {
+                path: paths.onboarding,
+                lazy: page(() => import('@/pages/onboarding-page'), 'OnboardingPage'),
+              },
+              {
+                path: paths.appearance,
+                lazy: page(() => import('@/pages/appearance-page'), 'AppearancePage'),
+              },
               {
                 path: routePatterns.organization,
                 element: <OrganizationLayout />,
                 children: [
-                  { index: true, element: <DashboardPage /> },
-                  { path: 'products', element: <ProductsPage /> },
-                  { path: 'products/new', element: <ProductNewPage /> },
-                  { path: 'products/:productId', element: <ProductDetailPage /> },
-                  { path: 'products/:productId/edit', element: <ProductEditPage /> },
-                  { path: 'categories', element: <CategoriesPage /> },
-                  { path: 'warehouses', element: <WarehousesPage /> },
-                  { path: 'warehouses/:warehouseId', element: <WarehouseDetailPage /> },
-                  { path: 'inventory', element: <InventoryPage /> },
-                  { path: 'stock-movements', element: <StockMovementsPage /> },
+                  {
+                    index: true,
+                    lazy: page(() => import('@/pages/dashboard-page'), 'DashboardPage'),
+                  },
+                  {
+                    path: 'products',
+                    lazy: page(() => import('@/pages/products-page'), 'ProductsPage'),
+                  },
+                  {
+                    path: 'products/new',
+                    lazy: page(() => import('@/pages/product-new-page'), 'ProductNewPage'),
+                  },
+                  {
+                    path: 'products/:productId',
+                    lazy: page(() => import('@/pages/product-detail-page'), 'ProductDetailPage'),
+                  },
+                  {
+                    path: 'products/:productId/edit',
+                    lazy: page(() => import('@/pages/product-edit-page'), 'ProductEditPage'),
+                  },
+                  {
+                    path: 'categories',
+                    lazy: page(() => import('@/pages/categories-page'), 'CategoriesPage'),
+                  },
+                  {
+                    path: 'warehouses',
+                    lazy: page(() => import('@/pages/warehouses-page'), 'WarehousesPage'),
+                  },
+                  {
+                    path: 'warehouses/:warehouseId',
+                    lazy: page(
+                      () => import('@/pages/warehouse-detail-page'),
+                      'WarehouseDetailPage',
+                    ),
+                  },
+                  {
+                    path: 'inventory',
+                    lazy: page(() => import('@/pages/inventory-page'), 'InventoryPage'),
+                  },
+                  {
+                    path: 'stock-movements',
+                    lazy: page(() => import('@/pages/stock-movements-page'), 'StockMovementsPage'),
+                  },
                   {
                     path: 'reports',
                     children: [
                       { index: true, element: <Navigate to="sales" replace /> },
-                      { path: 'sales', element: <SalesReportPage /> },
-                      { path: 'orders', element: <OrdersReportPage /> },
-                      { path: 'inventory', element: <InventoryReportPage /> },
+                      {
+                        path: 'sales',
+                        lazy: page(
+                          () => import('@/pages/reports/sales-report-page'),
+                          'SalesReportPage',
+                        ),
+                      },
+                      {
+                        path: 'orders',
+                        lazy: page(
+                          () => import('@/pages/reports/orders-report-page'),
+                          'OrdersReportPage',
+                        ),
+                      },
+                      {
+                        path: 'inventory',
+                        lazy: page(
+                          () => import('@/pages/reports/inventory-report-page'),
+                          'InventoryReportPage',
+                        ),
+                      },
                     ],
                   },
-                  { path: 'customers', element: <CustomersPage /> },
-                  { path: 'customers/:customerId', element: <CustomerDetailPage /> },
-                  { path: 'orders', element: <OrdersPage /> },
-                  { path: 'orders/new', element: <OrderNewPage /> },
-                  { path: 'orders/:orderId', element: <OrderDetailPage /> },
-                  { path: 'orders/:orderId/edit', element: <OrderEditPage /> },
-                  { path: 'team', element: <TeamPage /> },
-                  { path: 'settings', element: <OrganizationSettingsPage /> },
+                  {
+                    path: 'customers',
+                    lazy: page(() => import('@/pages/customers-page'), 'CustomersPage'),
+                  },
+                  {
+                    path: 'customers/:customerId',
+                    lazy: page(() => import('@/pages/customer-detail-page'), 'CustomerDetailPage'),
+                  },
+                  {
+                    path: 'orders',
+                    lazy: page(() => import('@/pages/orders-page'), 'OrdersPage'),
+                  },
+                  {
+                    path: 'orders/new',
+                    lazy: page(() => import('@/pages/order-new-page'), 'OrderNewPage'),
+                  },
+                  {
+                    path: 'orders/:orderId',
+                    lazy: page(() => import('@/pages/order-detail-page'), 'OrderDetailPage'),
+                  },
+                  {
+                    path: 'orders/:orderId/edit',
+                    lazy: page(() => import('@/pages/order-edit-page'), 'OrderEditPage'),
+                  },
+                  { path: 'team', lazy: page(() => import('@/pages/team-page'), 'TeamPage') },
+                  {
+                    path: 'settings',
+                    lazy: page(
+                      () => import('@/pages/organization-settings-page'),
+                      'OrganizationSettingsPage',
+                    ),
+                  },
                 ],
               },
             ],
           },
-          { path: paths.healthCheck, element: <HealthCheckPage /> },
+          {
+            path: paths.healthCheck,
+            lazy: page(() => import('@/pages/health-check-page'), 'HealthCheckPage'),
+          },
           { path: '*', element: <NotFoundPage /> },
         ],
       },

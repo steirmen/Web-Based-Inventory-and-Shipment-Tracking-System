@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from 'class-variance-authority';
-import { CircleAlert, CircleCheck, Info, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { CircleAlert, CircleCheck, Info, TriangleAlert, X, type LucideIcon } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
@@ -29,10 +29,25 @@ const icons: Record<AlertTone, LucideIcon> = {
 export interface AlertProps
   extends Omit<ComponentProps<'div'>, 'title'>, VariantProps<typeof alertVariants> {
   title?: ReactNode;
+  /** Adds a close button (for feedback the user may want to clear, e.g. "Product saved."). */
+  onDismiss?: () => void;
 }
 
-/** Inline message for page- or section-level feedback. `danger` alerts are announced immediately. */
-export function Alert({ tone = 'info', title, className, children, role, ...props }: AlertProps) {
+/**
+ * Inline message for page- or section-level feedback: success after an
+ * action, warnings, and errors (`danger` alerts are announced immediately,
+ * the others politely). The app's one feedback pattern: shown next to what
+ * it is about, never a browser alert().
+ */
+export function Alert({
+  tone = 'info',
+  title,
+  className,
+  children,
+  role,
+  onDismiss,
+  ...props
+}: AlertProps) {
   const Icon = icons[tone ?? 'info'];
 
   return (
@@ -42,10 +57,20 @@ export function Alert({ tone = 'info', title, className, children, role, ...prop
       {...props}
     >
       <Icon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-      <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         {title && <p className="leading-5 font-medium">{title}</p>}
         {children && <div className="leading-5 opacity-90">{children}</div>}
       </div>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="-my-1 -mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-control opacity-70 focus-ring transition-opacity duration-150 hover:opacity-100"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }

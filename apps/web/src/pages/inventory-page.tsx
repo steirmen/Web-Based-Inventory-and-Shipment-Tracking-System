@@ -18,16 +18,24 @@ import {
   type StockOperationStart,
 } from '@/components/inventory/stock-operation-dialog';
 import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/layout/page-state';
 import { PaginationBar } from '@/components/layout/pagination-bar';
 import { Can } from '@/components/organization/can';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { SearchInput } from '@/components/ui/search-input';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useInventory, useWarehouses } from '@/hooks/use-inventory';
 import { pageTitle } from '@/lib/app-config';
 import { cn } from '@/lib/cn';
@@ -120,21 +128,14 @@ export function InventoryPage() {
       />
 
       <search className="flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="relative lg:max-w-sm lg:flex-1">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            type="search"
-            aria-label="Search inventory"
-            placeholder="Search products by name or SKU…"
-            className="pl-9"
-            maxLength={100}
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-          />
-        </div>
+        <SearchInput
+          wrapperClassName="lg:max-w-sm lg:flex-1"
+
+          aria-label="Search inventory"
+          placeholder="Search products by name or SKU…"
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+        />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:flex lg:flex-none">
           <Select
             aria-label="Warehouse"
@@ -191,9 +192,13 @@ export function InventoryPage() {
         </div>
       </search>
 
-      {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && (
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
 
-      {inventory.isPending && <LoadingState label="Loading inventory" />}
+      {inventory.isPending && <ListSkeleton label="Loading inventory" />}
       {inventory.isError && (
         <ErrorState
           title="We couldn't load inventory"
@@ -232,70 +237,58 @@ export function InventoryPage() {
       {data && data.items.length > 0 && (
         <>
           <Card className={cn('overflow-hidden', inventory.isPlaceholderData && 'opacity-70')}>
-            <table className="hidden w-full text-sm xl:table">
-              <thead className="border-b border-border bg-surface-muted/60 text-left text-xs font-medium text-muted-foreground">
+            <Table className="hidden @5xl:table">
+              <TableHeader>
                 <tr>
-                  <th scope="col" className="px-4 py-2.5 font-medium">
-                    Product
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">
-                    SKU
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">
-                    Warehouse
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 text-right font-medium">
-                    Quantity
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 text-right font-medium">
-                    Minimum
-                  </th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">
-                    Status
-                  </th>
-                  <th scope="col" className="px-4 py-2.5">
+                  <TableHead>Product</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Warehouse</TableHead>
+                  <TableHead align="right">Quantity</TableHead>
+                  <TableHead align="right">Minimum</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>
                     <span className="sr-only">Actions</span>
-                  </th>
+                  </TableHead>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+              </TableHeader>
+              <TableBody>
                 {data.items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="max-w-56 px-4 py-3">
+                  <TableRow key={item.id}>
+                    <TableCell className="max-w-56">
                       <Link
                         to={paths.product(organization.id, item.product.id)}
                         className="block truncate rounded-sm font-medium text-foreground focus-ring hover:underline"
                       >
                         {item.product.name}
                       </Link>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="font-mono text-xs whitespace-nowrap">
                       {item.product.sku}
-                    </td>
-                    <td className="max-w-44 truncate px-4 py-3 whitespace-nowrap">
+                    </TableCell>
+                    <TableCell className="max-w-44 truncate whitespace-nowrap">
                       {item.warehouse.name}{' '}
                       <span className="font-mono text-xs text-muted-foreground">
                         {item.warehouse.code}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium tabular-nums">
+                    </TableCell>
+                    <TableCell align="right" className="font-medium">
                       {item.quantity.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-right text-muted-foreground tabular-nums">
+                    </TableCell>
+                    <TableCell align="right" className="text-muted-foreground">
                       {item.minimumStock.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell>
                       <StockStatusBadge status={item.status} />
-                    </td>
-                    <td className="px-4 py-2">
+                    </TableCell>
+                    <TableCell className="py-2">
                       <InventoryActions item={item} onOpen={open} compact />
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
 
-            <ul className="divide-y divide-border xl:hidden" aria-label="Inventory">
+            <ul className="divide-y divide-border @5xl:hidden" aria-label="Inventory">
               {data.items.map((item) => (
                 <li key={item.id} className="flex flex-col gap-3 p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -402,7 +395,7 @@ function InventoryActions({
   const empty = item.quantity === 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-1 xl:flex-nowrap xl:justify-end">
+    <div className="flex flex-wrap items-center gap-1 @5xl:flex-nowrap @5xl:justify-end">
       {blocked ? (
         <span className="px-2 text-xs text-muted-foreground">{blocked}</span>
       ) : (
@@ -414,8 +407,7 @@ function InventoryActions({
               <Button
                 key={kind}
                 variant="ghost"
-                size="sm"
-                className={cn(compact && 'size-8 px-0')}
+                size={compact ? 'icon-sm' : 'sm'}
                 disabled={nothingToMove}
                 title={nothingToMove ? 'No stock in this warehouse' : compact ? label : undefined}
                 aria-label={`${label} ${item.product.name} in ${item.warehouse.code}`}
@@ -445,8 +437,7 @@ function InventoryActions({
         })}
         className={buttonVariants({
           variant: 'ghost',
-          size: 'sm',
-          className: cn(compact && 'size-8 px-0'),
+          size: compact ? 'icon-sm' : 'sm',
         })}
         aria-label={`History of ${item.product.name} in ${item.warehouse.code}`}
         title={compact ? 'History' : undefined}

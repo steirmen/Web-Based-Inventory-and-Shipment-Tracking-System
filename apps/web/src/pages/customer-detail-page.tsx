@@ -1,10 +1,16 @@
-import { Archive, ArchiveRestore, ArrowLeft, ClipboardList, Pencil, Plus } from 'lucide-react';
+import { Archive, ArchiveRestore, ClipboardList, Pencil, Plus } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { BackLink } from '@/components/layout/back-link';
 import { ArchiveCustomerDialog } from '@/components/customers/archive-customer-dialog';
 import { CustomerFormDialog } from '@/components/customers/customer-form-dialog';
 import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  DetailSkeleton,
+} from '@/components/layout/page-state';
 import { ActiveBadge, OrderStatusBadge } from '@/components/orders/order-status-badge';
 import { Can } from '@/components/organization/can';
 import { Alert } from '@/components/ui/alert';
@@ -31,17 +37,9 @@ export function CustomerDetailPage() {
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const back = (
-    <Link
-      to={paths.customers(organization.id)}
-      className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'self-start' })}
-    >
-      <ArrowLeft aria-hidden="true" />
-      All customers
-    </Link>
-  );
+  const back = <BackLink to={paths.customers(organization.id)} label="Customers" />;
 
-  if (query.isPending) return <LoadingState label="Loading customer" />;
+  if (query.isPending) return <DetailSkeleton label="Loading customer" />;
   if (query.isError) {
     return (
       <div className="flex flex-col gap-6">
@@ -128,7 +126,11 @@ export function CustomerDetailPage() {
         }
       />
 
-      {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && (
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
       {statusChange.isError && !confirmArchive && (
         <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
       )}

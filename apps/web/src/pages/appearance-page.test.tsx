@@ -61,6 +61,17 @@ describe('AppearancePage', () => {
     expect(await screen.findByRole('radiogroup', { name: 'Theme' })).toBeVisible();
   });
 
+  it('shows a sample of the interface next to the settings, hidden from assistive technology', async () => {
+    await renderAppearancePage();
+
+    const preview = await screen.findByRole('complementary', { name: 'Preview' });
+    const sample = within(preview).getByText('Orders').closest('[aria-hidden="true"]');
+    expect(sample).not.toBeNull();
+    expect(sample).toHaveAttribute('inert');
+    // Nothing in the sample can be reached with the keyboard.
+    expect(within(preview).queryAllByRole('button')).toHaveLength(0);
+  });
+
   it('shows the saved appearance as the selected options', async () => {
     await renderAppearancePage({
       saved: appearance({

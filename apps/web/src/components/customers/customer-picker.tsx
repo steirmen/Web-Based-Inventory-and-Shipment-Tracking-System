@@ -123,8 +123,7 @@ export function CustomerPicker({
         </Button>
         <Button
           variant="ghost"
-          size="sm"
-          className="size-8 px-0"
+          size="icon-sm"
           aria-label="Remove the customer"
           onClick={() => {
             onChange(null);

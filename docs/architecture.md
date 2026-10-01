@@ -80,16 +80,22 @@ src/
   app/               App root, providers (QueryClient, AppearanceProvider), QueryClient configuration
   api/               HTTP client + one module per backend resource (endpoint functions, query keys)
   hooks/             TanStack Query hooks wrapping api/ functions
-  components/ui/     Design-system primitives (Button, Input, Card, ...)
-  components/layout/ Page-structure primitives (Container, PageHeader, page states, PaginationBar)
-  components/<feature>/ Feature components (organization, team, products, categories, warehouses, inventory, appearance)
-  layouts/           Route layouts (AppShell for the app, AuthLayout for sign-in/register)
+  components/ui/     Design-system primitives (Button, Input, Card, Table, Dialog, Menu, ...)
+  components/layout/ Page-structure primitives (Container, PageHeader, BackLink, page states, skeletons, PaginationBar, route loading)
+  components/<feature>/ Feature components (organization incl. WorkspaceNav, team, products, categories, warehouses, inventory, customers, orders, dashboard, reports, appearance)
+  layouts/           Route layouts (AppShell: header + account menu; OrganizationLayout: workspace sidebar; AuthLayout: sign-in/register)
   pages/             Route components
-  routes/            Route table (router.tsx), path constants (paths.ts), RequireAuth/RequireGuest guards
+  routes/            Route table (router.tsx, lazy-loaded pages), path constants (paths.ts), RequireAuth/RequireGuest guards
   lib/               Framework-agnostic helpers (cn, env, app-config); lib/appearance: theme engine, effects, apply
   styles/            globals.css: Tailwind entry + design tokens
   test/              Test setup and render helpers
 ```
+
+### Routing and code splitting
+
+`routes/router.tsx` is a React Router data router (`createBrowserRouter`). The shell, layouts, guards, and the sign-in/register pages are in the entry bundle; **every other page is a separate chunk** loaded with the route's `lazy` property (`page(() => import('@/pages/x'), 'XPage')`). The router downloads the chunk before it switches pages, so the current page stays on screen and `RouteProgress` shows a slim progress bar; `hydrateFallbackElement` covers a cold start on a lazy route, and `RouteErrorPage` explains a chunk that failed to download. Shared code (UI primitives, hooks, React Query) is split into common chunks automatically. A new page is added the same way (lazy), not imported into `router.tsx`.
+
+Workspace pages render inside `OrganizationLayout`: the workspace sidebar plus a content column that is a CSS container, so lists switch between table and card layouts by the space they actually have (see [design-system.md](design-system.md#layout)).
 
 ### Data flow
 

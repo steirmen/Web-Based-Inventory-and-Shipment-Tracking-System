@@ -117,7 +117,7 @@ export function OnboardingPage() {
                   autoCapitalize="none"
                   maxLength={ORGANIZATION_LIMITS.slugMaxLength}
                   placeholder="acme-supplies"
-                  className="font-mono text-[13px]"
+                  className="font-mono text-[0.8125rem]"
                   value={values.slug}
                   onChange={onSlugChange}
                 />

@@ -115,7 +115,11 @@ export function AppearanceProfiles({
         </Button>
       </form>
 
-      {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && (
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
       {apply.isError && <Alert tone="danger">{apiErrorMessage(apply.error)}</Alert>}
 
       {profiles.isPending && <LoadingState label="Loading profiles" />}
@@ -182,9 +186,8 @@ export function AppearanceProfiles({
                     </Button>
                   )}
                   <Button
-                    size="sm"
+                    size="icon-sm"
                     variant="ghost"
-                    className="size-8 px-0"
                     onClick={() => setRenaming(profile)}
                     aria-label={`Rename ${profile.name}`}
                     title="Rename"
@@ -192,9 +195,8 @@ export function AppearanceProfiles({
                     <Pencil aria-hidden="true" />
                   </Button>
                   <Button
-                    size="sm"
+                    size="icon-sm"
                     variant="ghost"
-                    className="size-8 px-0"
                     onClick={() => {
                       remove.reset();
                       setDeleting(profile);

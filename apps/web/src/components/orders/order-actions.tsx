@@ -161,7 +161,7 @@ function ProcessDialog({
       title={info.title}
       description={info.description}
       dismissible={!pending}
-      className="max-w-lg"
+      size="md"
       footer={
         <>
           <Button variant="secondary" onClick={onCancel} disabled={pending} data-autofocus>

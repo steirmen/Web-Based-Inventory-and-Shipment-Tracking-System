@@ -5,11 +5,19 @@ import { Link } from 'react-router';
 import { CategoryFormDialog } from '@/components/categories/category-form-dialog';
 import { DeleteCategoryDialog } from '@/components/categories/delete-category-dialog';
 import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/layout/page-state';
 import { Can } from '@/components/organization/can';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useCategories, useDeleteCategory } from '@/hooks/use-catalog';
 import { pageTitle } from '@/lib/app-config';
 import { useCurrentOrganization } from '@/lib/organization-context';
@@ -75,9 +83,13 @@ export function CategoriesPage() {
         actions={addButton}
       />
 
-      {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && (
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
 
-      {categories.isPending && <LoadingState label="Loading categories" />}
+      {categories.isPending && <ListSkeleton label="Loading categories" />}
 
       {categories.isError && (
         <ErrorState
@@ -98,50 +110,46 @@ export function CategoriesPage() {
 
       {list.length > 0 && (
         <Card className="overflow-hidden">
-          <table className="hidden w-full text-sm md:table">
-            <thead className="border-b border-border bg-surface-muted/60 text-left text-xs font-medium text-muted-foreground">
+          <Table className="hidden @2xl:table">
+            <TableHeader>
               <tr>
-                <th scope="col" className="px-4 py-2.5 font-medium">
-                  Name
-                </th>
-                <th scope="col" className="px-4 py-2.5 font-medium">
-                  Description
-                </th>
-                <th scope="col" className="px-4 py-2.5 text-right font-medium">
-                  Products
-                </th>
+                <TableHead>Name</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead align="right">Products</TableHead>
                 {showActions && (
-                  <th scope="col" className="px-4 py-2.5">
+                  <TableHead>
                     <span className="sr-only">Actions</span>
-                  </th>
+                  </TableHead>
                 )}
               </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+            </TableHeader>
+            <TableBody>
               {list.map((category) => (
-                <tr key={category.id}>
-                  <td className="max-w-56 px-4 py-3 font-medium break-words">{category.name}</td>
-                  <td className="max-w-md px-4 py-3 break-words text-muted-foreground">
+                <TableRow key={category.id}>
+                  <TableCell className="max-w-56 font-medium break-words">
+                    {category.name}
+                  </TableCell>
+                  <TableCell className="max-w-md break-words text-muted-foreground">
                     {category.description ?? <span className="text-subtle-foreground">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">
+                  </TableCell>
+                  <TableCell align="right" className="whitespace-nowrap">
                     <ProductCountLink category={category} />
-                  </td>
+                  </TableCell>
                   {showActions && (
-                    <td className="px-4 py-2">
+                    <TableCell className="py-2">
                       <CategoryActions
                         category={category}
                         onEdit={startEdit}
                         onDelete={startDelete}
                       />
-                    </td>
+                    </TableCell>
                   )}
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
 
-          <ul className="divide-y divide-border md:hidden" aria-label="Categories">
+          <ul className="divide-y divide-border @2xl:hidden" aria-label="Categories">
             {list.map((category) => (
               <li key={category.id} className="flex flex-col gap-2 p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -213,7 +221,7 @@ function CategoryActions({
   onDelete: (category: Category) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1 md:flex-nowrap md:justify-end">
+    <div className="flex flex-wrap items-center gap-1 @2xl:flex-nowrap @2xl:justify-end">
       <Can permission="CATEGORIES_UPDATE">
         <Button
           variant="ghost"

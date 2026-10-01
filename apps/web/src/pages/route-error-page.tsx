@@ -10,9 +10,11 @@ export function RouteErrorPage() {
   const error = useRouteError();
   const message = isRouteErrorResponse(error)
     ? `${error.status} ${error.statusText}`
-    : error instanceof Error
-      ? error.message
-      : 'An unexpected error occurred.';
+    : isChunkLoadError(error)
+      ? 'This page could not be loaded. Check your connection, then reload the app.'
+      : error instanceof Error
+        ? error.message
+        : 'An unexpected error occurred.';
 
   return (
     <div className="flex min-h-dvh items-center justify-center p-4">
@@ -30,5 +32,19 @@ export function RouteErrorPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Pages are downloaded on demand (route-level code splitting). A failed
+ * download (offline, or an old tab after a new version was deployed) is not
+ * a bug in the page: reloading fetches the current files.
+ */
+function isChunkLoadError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /dynamically imported module|Importing a module script failed|error loading dynamically/i.test(
+      error.message,
+    )
   );
 }

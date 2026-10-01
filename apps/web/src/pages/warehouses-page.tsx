@@ -11,12 +11,20 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { WarehouseStatusBadge } from '@/components/inventory/inventory-badges';
 import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/layout/page-state';
 import { Can } from '@/components/organization/can';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { ArchiveWarehouseDialog } from '@/components/warehouses/archive-warehouse-dialog';
 import { WarehouseFormDialog } from '@/components/warehouses/warehouse-form-dialog';
 import { useWarehouses, useWarehouseStatusChange } from '@/hooks/use-inventory';
@@ -87,12 +95,16 @@ export function WarehousesPage() {
         actions={addButton}
       />
 
-      {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && (
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
       {statusChange.isError && !archiveTarget && (
         <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
       )}
 
-      {warehouses.isPending && <LoadingState label="Loading warehouses" />}
+      {warehouses.isPending && <ListSkeleton label="Loading warehouses" />}
       {warehouses.isError && (
         <ErrorState
           title="We couldn't load warehouses"
@@ -115,63 +127,48 @@ export function WarehousesPage() {
 
       {list.length > 0 && (
         <Card className="overflow-hidden">
-          <table className="hidden w-full text-sm lg:table">
-            <thead className="border-b border-border bg-surface-muted/60 text-left text-xs font-medium text-muted-foreground">
+          <Table className="hidden @4xl:table">
+            <TableHeader>
               <tr>
-                <th scope="col" className="px-4 py-2.5 font-medium">
-                  Name
-                </th>
-                <th scope="col" className="px-4 py-2.5 font-medium">
-                  Code
-                </th>
-                <th scope="col" className="px-4 py-2.5 font-medium">
-                  Address
-                </th>
-                <th scope="col" className="px-4 py-2.5 font-medium">
-                  Status
-                </th>
-                <th scope="col" className="px-4 py-2.5 text-right font-medium">
-                  Products
-                </th>
-                <th scope="col" className="px-4 py-2.5 text-right font-medium">
-                  Units
-                </th>
-                <th scope="col" className="px-4 py-2.5">
+                <TableHead>Name</TableHead>
+                <TableHead>Code</TableHead>
+                <TableHead>Address</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead align="right">Products</TableHead>
+                <TableHead align="right">Units</TableHead>
+                <TableHead>
                   <span className="sr-only">Actions</span>
-                </th>
+                </TableHead>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+            </TableHeader>
+            <TableBody>
               {list.map((warehouse) => (
-                <tr
+                <TableRow
                   key={warehouse.id}
                   className={cn(!warehouse.isActive && 'text-muted-foreground')}
                 >
-                  <td className="max-w-56 px-4 py-3">
+                  <TableCell className="max-w-56">
                     <Link
                       to={paths.warehouse(organization.id, warehouse.id)}
                       className="block truncate rounded-sm font-medium text-foreground focus-ring hover:underline"
                     >
                       {warehouse.name}
                     </Link>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">
+                  </TableCell>
+                  <TableCell className="font-mono text-xs whitespace-nowrap">
                     {warehouse.code}
-                  </td>
-                  <td className="max-w-64 truncate px-4 py-3">
+                  </TableCell>
+                  <TableCell className="max-w-64 truncate">
                     {warehouse.address ?? <span className="text-subtle-foreground">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
+                  </TableCell>
+                  <TableCell>
                     <WarehouseStatusBadge isActive={warehouse.isActive} />
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {warehouse.productCount.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {warehouse.totalUnits.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-2">
+                  </TableCell>
+                  <TableCell align="right">{warehouse.productCount.toLocaleString()}</TableCell>
+                  <TableCell align="right">{warehouse.totalUnits.toLocaleString()}</TableCell>
+                  <TableCell className="py-2">
                     <WarehouseRowActions
+                      compact
                       warehouse={warehouse}
                       manage={manage}
                       pending={
@@ -180,13 +177,13 @@ export function WarehousesPage() {
                       }
                       {...actions}
                     />
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
 
-          <ul className="divide-y divide-border lg:hidden" aria-label="Warehouses">
+          <ul className="divide-y divide-border @4xl:hidden" aria-label="Warehouses">
             {list.map((warehouse) => (
               <li key={warehouse.id} className="flex flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -248,7 +245,10 @@ export function WarehousesPage() {
   );
 }
 
-/** View for everyone; Edit and Archive/Restore only with the matching permissions (UX only). */
+/**
+ * View for everyone; Edit and Archive/Restore only with the matching
+ * permissions (UX only). `compact` (table rows): icon-only with tooltips.
+ */
 function WarehouseRowActions({
   warehouse,
   manage,
@@ -256,7 +256,9 @@ function WarehouseRowActions({
   edit,
   archive,
   restore,
+  compact = false,
 }: {
+  compact?: boolean;
   warehouse: Warehouse;
   manage: boolean;
   pending: boolean;
@@ -265,25 +267,28 @@ function WarehouseRowActions({
   restore: (warehouse: Warehouse) => void;
 }) {
   const { organization, can } = useCurrentOrganization();
+  const size = compact ? 'icon-sm' : 'sm';
   return (
-    <div className="flex flex-wrap items-center gap-1 lg:flex-nowrap lg:justify-end">
+    <div className="flex flex-wrap items-center gap-1 @4xl:flex-nowrap @4xl:justify-end">
       <Link
         to={paths.warehouse(organization.id, warehouse.id)}
-        className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+        className={buttonVariants({ variant: 'ghost', size })}
         aria-label={`View ${warehouse.name}`}
+        title={compact ? 'View' : undefined}
       >
         <Eye aria-hidden="true" />
-        View
+        {!compact && 'View'}
       </Link>
       {manage && can('WAREHOUSES_UPDATE') && (
         <Button
           variant="ghost"
-          size="sm"
+          size={size}
           onClick={() => edit(warehouse)}
           aria-label={`Edit ${warehouse.name}`}
+          title={compact ? 'Edit' : undefined}
         >
           <Pencil aria-hidden="true" />
-          Edit
+          {!compact && 'Edit'}
         </Button>
       )}
       {manage &&
@@ -291,23 +296,25 @@ function WarehouseRowActions({
         (warehouse.isActive ? (
           <Button
             variant="ghost"
-            size="sm"
+            size={size}
             onClick={() => archive(warehouse)}
             aria-label={`Archive ${warehouse.name}`}
+            title={compact ? 'Archive' : undefined}
           >
             <Archive aria-hidden="true" />
-            Archive
+            {!compact && 'Archive'}
           </Button>
         ) : (
           <Button
             variant="ghost"
-            size="sm"
+            size={size}
             isLoading={pending}
             onClick={() => restore(warehouse)}
             aria-label={`Restore ${warehouse.name}`}
+            title={compact ? 'Restore' : undefined}
           >
             {!pending && <ArchiveRestore aria-hidden="true" />}
-            Restore
+            {!compact && 'Restore'}
           </Button>
         ))}
     </div>

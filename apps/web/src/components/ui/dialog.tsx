@@ -15,14 +15,21 @@ export interface DialogProps {
   footer?: ReactNode;
   /** Set false while an action is in progress so the dialog can't be dismissed mid-request. */
   dismissible?: boolean;
+  /** `sm`: confirmations (default); `md`: forms; `lg`: wide forms and previews. */
+  size?: keyof typeof SIZES;
   className?: string;
 }
+
+const SIZES = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl' } as const;
 
 /**
  * Accessible modal dialog: labelled by its title, traps focus while open,
  * closes with Escape or the close button, and returns focus to the element
  * that opened it. Put `data-autofocus` on the element that should get focus
  * first (defaults to the first focusable element).
+ *
+ * The title and the footer (actions) stay visible; only the body scrolls, so
+ * the actions remain reachable on small screens and in long forms.
  */
 export function Dialog({
   open,
@@ -32,6 +39,7 @@ export function Dialog({
   children,
   footer,
   dismissible = true,
+  size = 'sm',
   className,
 }: DialogProps) {
   const titleId = useId();
@@ -84,7 +92,7 @@ export function Dialog({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
       <div
-        className="absolute inset-0 bg-overlay"
+        className="absolute inset-0 animate-overlay-in bg-overlay"
         aria-hidden="true"
         onClick={() => dismissible && onClose()}
       />
@@ -96,11 +104,12 @@ export function Dialog({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          'relative m-0 flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-y-auto rounded-card border border-border bg-surface p-0 text-foreground shadow-raised outline-none',
+          'relative m-0 flex max-h-[calc(100dvh-2rem)] w-full animate-dialog-in flex-col overflow-hidden rounded-card border border-border bg-surface p-0 text-foreground shadow-raised outline-none',
+          SIZES[size],
           className,
         )}
       >
-        <div className="flex items-start justify-between gap-4 px-6 pt-6">
+        <div className="flex shrink-0 items-start justify-between gap-4 px-6 pt-6">
           <div className="flex flex-col gap-1.5">
             <h2 id={titleId} className="text-base leading-6 font-semibold">
               {title}
@@ -121,13 +130,15 @@ export function Dialog({
             <X className="size-4" aria-hidden="true" />
           </button>
         </div>
-        {children && <div className="px-6 pt-4">{children}</div>}
+        {children && (
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-4 pb-1">{children}</div>
+        )}
         {footer && (
-          <div className="flex flex-col-reverse gap-2 px-6 pt-6 pb-6 sm:flex-row sm:justify-end">
+          <div className="flex shrink-0 flex-col-reverse gap-2 px-6 pt-5 pb-6 sm:flex-row sm:justify-end">
             {footer}
           </div>
         )}
-        {!footer && <div className="pb-6" />}
+        {!footer && <div className="shrink-0 pb-6" />}
       </dialog>
     </div>,
     document.body,

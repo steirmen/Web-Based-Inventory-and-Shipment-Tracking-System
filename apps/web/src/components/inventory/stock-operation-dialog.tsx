@@ -92,7 +92,7 @@ export function StockOperationDialog({
       onClose={onClose}
       title={start ? COPY[start.kind].title : ''}
       description={start ? COPY[start.kind].description : undefined}
-      className="max-w-lg"
+      size="md"
     >
       {start && (
         <StockOperationForm

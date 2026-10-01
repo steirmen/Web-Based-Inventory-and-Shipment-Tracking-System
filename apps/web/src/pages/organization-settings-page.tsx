@@ -48,7 +48,7 @@ export function OrganizationSettingsPage() {
           <dl className="grid gap-4 text-sm sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <dt className="font-medium">Slug</dt>
-              <dd className="font-mono text-[13px] break-all text-muted-foreground">
+              <dd className="font-mono text-[0.8125rem] break-all text-muted-foreground">
                 {organization.slug}
               </dd>
               <dd className="text-xs text-subtle-foreground">The slug can&apos;t be changed.</dd>

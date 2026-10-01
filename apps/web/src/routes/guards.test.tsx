@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { authQueryKeys } from '@/api/auth';
 import {
@@ -15,8 +15,7 @@ import {
   testOrganization,
 } from '@/test/mock-api';
 import { renderApp } from '@/test/render-app';
-
-const header = async () => (await screen.findAllByRole('banner'))[0]; // the shell header comes first
+import { signOutFromMenu } from '@/test/shell';
 
 describe('protected routes', () => {
   it('redirects unauthenticated visitors to /login', async () => {
@@ -87,7 +86,7 @@ describe('logout', () => {
     });
     const { user, router, queryClient } = renderApp('/onboarding');
 
-    await user.click(await within(await header()).findByRole('button', { name: 'Sign out' }));
+    await signOutFromMenu(user);
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
     expect(await screen.findByRole('heading', { name: /sign in to/i })).toBeVisible();
@@ -109,7 +108,7 @@ describe('logout', () => {
     });
     const { user, router } = renderApp('/health-check');
 
-    await user.click(await within(await header()).findByRole('button', { name: 'Sign out' }));
+    await signOutFromMenu(user);
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
   });
@@ -122,7 +121,7 @@ describe('logout', () => {
     });
     const { user, router, queryClient } = renderApp('/onboarding');
 
-    await user.click(await within(await header()).findByRole('button', { name: 'Sign out' }));
+    await signOutFromMenu(user);
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
     expect(queryClient.getQueryData(authQueryKeys.me)).toBeNull();

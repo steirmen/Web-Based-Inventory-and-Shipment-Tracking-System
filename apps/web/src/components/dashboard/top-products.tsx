@@ -95,7 +95,6 @@ export function TopProducts({
   );
 }
 
-/** The five newest orders (any status, any date), from the regular orders list. */
 /**
  * The newest orders of the dashboard's period (any status), delivered with the
  * summary, so they always follow the selected range and time zone.

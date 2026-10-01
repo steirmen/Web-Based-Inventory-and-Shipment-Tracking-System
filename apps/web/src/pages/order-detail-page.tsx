@@ -1,15 +1,24 @@
 import type { Order } from '@app/shared';
-import { ArrowLeft, History } from 'lucide-react';
+import { History } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
+import { BackLink } from '@/components/layout/back-link';
 import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import { EmptyState, ErrorState, DetailSkeleton } from '@/components/layout/page-state';
 import { OrderActions } from '@/components/orders/order-actions';
 import { OrderStatusBadge } from '@/components/orders/order-status-badge';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useOrder } from '@/hooks/use-sales';
 import { hasErrorCode } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
@@ -37,15 +46,7 @@ const tookStock = (order: Order) =>
 
 function BackToOrders() {
   const { organization } = useCurrentOrganization();
-  return (
-    <Link
-      to={paths.orders(organization.id)}
-      className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'self-start' })}
-    >
-      <ArrowLeft aria-hidden="true" />
-      All orders
-    </Link>
-  );
+  return <BackLink to={paths.orders(organization.id)} label="Orders" />;
 }
 
 /**
@@ -58,7 +59,7 @@ export function OrderDetailPage() {
   const query = useOrder(organization.id, orderId);
   const [notice, setNotice] = useFlashNotice();
 
-  if (query.isPending) return <LoadingState label="Loading order" />;
+  if (query.isPending) return <DetailSkeleton label="Loading order" />;
   if (query.isError) {
     if (hasErrorCode(query.error, 'ORDER_NOT_FOUND')) {
       return (
@@ -111,7 +112,11 @@ export function OrderDetailPage() {
         }
       />
 
-      {notice && <Alert tone="success">{notice}</Alert>}
+      {notice && (
+        <Alert tone="success" onDismiss={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
       {order.status === 'DRAFT' && order.items.length === 0 && (
         <Alert tone="info">Add at least one product before confirming this order.</Alert>
       )}
@@ -126,32 +131,30 @@ export function OrderDetailPage() {
               <p className="text-sm text-muted-foreground">No products on this order yet.</p>
             ) : (
               <>
-                <table className="hidden w-full text-sm md:table">
-                  <thead className="border-b border-border text-left text-xs text-muted-foreground">
+                <Table className="hidden @2xl:table">
+                  <TableHeader className="bg-transparent">
                     <tr>
-                      <th scope="col" className="py-2 pr-3 font-medium">
-                        Product
-                      </th>
-                      <th scope="col" className="py-2 pr-3 text-right font-medium">
+                      <TableHead className="px-0 py-2 pr-3 @5xl:px-0">Product</TableHead>
+                      <TableHead align="right" className="px-0 py-2 pr-3 @5xl:px-0">
                         Quantity
-                      </th>
+                      </TableHead>
                       {stock && (
-                        <th scope="col" className="py-2 pr-3 text-right font-medium">
+                        <TableHead align="right" className="px-0 py-2 pr-3 @5xl:px-0">
                           In stock
-                        </th>
+                        </TableHead>
                       )}
-                      <th scope="col" className="py-2 pr-3 text-right font-medium">
+                      <TableHead align="right" className="px-0 py-2 pr-3 @5xl:px-0">
                         Unit price
-                      </th>
-                      <th scope="col" className="py-2 text-right font-medium">
+                      </TableHead>
+                      <TableHead align="right" className="px-0 py-2 @5xl:px-0">
                         Line total
-                      </th>
+                      </TableHead>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
+                  </TableHeader>
+                  <TableBody>
                     {order.items.map((item) => (
-                      <tr key={item.id}>
-                        <td className="max-w-64 py-2.5 pr-3">
+                      <TableRow key={item.id}>
+                        <TableCell className="max-w-64 px-0 py-2.5 pr-3">
                           <span className="block truncate font-medium">{item.productName}</span>
                           <span className="inline-flex items-center gap-2">
                             <span className="font-mono text-xs text-muted-foreground">
@@ -159,24 +162,26 @@ export function OrderDetailPage() {
                             </span>
                             {item.productStatus !== 'ACTIVE' && <Badge>Product archived</Badge>}
                           </span>
-                        </td>
-                        <td className="py-2.5 pr-3 text-right tabular-nums">{item.quantity}</td>
+                        </TableCell>
+                        <TableCell align="right" className="px-0 py-2.5 pr-3 @5xl:px-0">
+                          {item.quantity}
+                        </TableCell>
                         {stock && (
-                          <td className="py-2.5 pr-3 text-right tabular-nums">
+                          <TableCell align="right" className="px-0 py-2.5 pr-3 @5xl:px-0">
                             <StockCell available={item.availableQuantity} needed={item.quantity} />
-                          </td>
+                          </TableCell>
                         )}
-                        <td className="py-2.5 pr-3 text-right tabular-nums">
+                        <TableCell align="right" className="px-0 py-2.5 pr-3 @5xl:px-0">
                           {formatMoney(item.unitPrice)}
-                        </td>
-                        <td className="py-2.5 text-right font-medium tabular-nums">
+                        </TableCell>
+                        <TableCell align="right" className="px-0 py-2.5 font-medium @5xl:px-0">
                           {formatMoney(item.lineTotal)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-                <ul className="divide-y divide-border md:hidden" aria-label="Order lines">
+                  </TableBody>
+                </Table>
+                <ul className="divide-y divide-border @2xl:hidden" aria-label="Order lines">
                   {order.items.map((item) => (
                     <li key={item.id} className="flex flex-col gap-2 py-3">
                       <div className="min-w-0">

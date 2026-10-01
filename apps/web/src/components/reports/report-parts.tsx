@@ -1,8 +1,8 @@
 import { REPORT_TYPES, type SortOrder } from '@app/shared';
-import { ArrowDown, ArrowUp, ArrowUpDown, Download, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, X } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink } from 'react-router';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/layout/page-state';
 import { PaginationBar } from '@/components/layout/pagination-bar';
 import { Can } from '@/components/organization/can';
 import { Alert } from '@/components/ui/alert';
@@ -10,8 +10,16 @@ import { Button } from '@/components/ui/button';
 import { CustomerPicker } from '@/components/customers/customer-picker';
 import { Card } from '@/components/ui/card';
 import { type FieldControlProps, FormField } from '@/components/ui/form-field';
-import { Input } from '@/components/ui/input';
+import { SearchInput } from '@/components/ui/search-input';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useCustomer } from '@/hooks/use-sales';
 import { apiErrorMessage } from '@/lib/api-errors';
 import { useCurrentOrganization } from '@/lib/organization-context';
@@ -113,21 +121,12 @@ export function ReportSearch({
   return (
     <FormField label="Search">
       {(control) => (
-        <div className="relative">
-          <Search
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
-            aria-hidden="true"
-          />
-          <Input
-            {...control}
-            type="search"
-            placeholder={placeholder}
-            className="pl-9"
-            maxLength={100}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-          />
-        </div>
+        <SearchInput
+          {...control}
+          placeholder={placeholder}
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+        />
       )}
     </FormField>
   );
@@ -192,66 +191,53 @@ export function ReportTable<Row, Field extends string>({
 }) {
   return (
     <Card className={cn('overflow-hidden', dimmed && 'opacity-70')}>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[44rem] text-sm">
-          <caption className="sr-only">{caption}</caption>
-          <thead className="border-b border-border bg-surface-muted/60 text-left text-xs text-muted-foreground">
-            <tr>
-              {columns.map((column) => {
-                const active = column.sort !== undefined && column.sort === sort.field;
-                const Icon = !active ? ArrowUpDown : sort.order === 'asc' ? ArrowUp : ArrowDown;
-                return (
-                  <th
-                    key={column.key}
-                    scope="col"
-                    aria-sort={
-                      active ? (sort.order === 'asc' ? 'ascending' : 'descending') : undefined
-                    }
-                    className={cn(
-                      'px-4 py-2.5 font-medium whitespace-nowrap',
-                      column.align === 'right' && 'text-right',
-                    )}
-                  >
-                    {column.sort ? (
-                      <button
-                        type="button"
-                        onClick={() => onSort(column.sort!, column.defaultOrder ?? 'asc')}
-                        className={cn(
-                          'inline-flex items-center gap-1 rounded-sm focus-ring hover:text-foreground',
-                          active && 'text-foreground',
-                        )}
-                      >
-                        {column.header}
-                        <Icon className="size-3.5" aria-hidden="true" />
-                      </button>
-                    ) : (
-                      column.header
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {rows.map((row) => (
-              <tr key={rowKey(row)}>
-                {columns.map((column) => (
-                  <td
-                    key={column.key}
-                    className={cn(
-                      'px-4 py-3',
-                      column.align === 'right' && 'text-right tabular-nums',
-                      column.className,
-                    )}
-                  >
-                    {column.cell(row)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Table className="min-w-[44rem]">
+        <caption className="sr-only">{caption}</caption>
+        <TableHeader>
+          <tr>
+            {columns.map((column) => {
+              const active = column.sort !== undefined && column.sort === sort.field;
+              const Icon = !active ? ArrowUpDown : sort.order === 'asc' ? ArrowUp : ArrowDown;
+              return (
+                <TableHead
+                  key={column.key}
+                  align={column.align}
+                  aria-sort={
+                    active ? (sort.order === 'asc' ? 'ascending' : 'descending') : undefined
+                  }
+                >
+                  {column.sort ? (
+                    <button
+                      type="button"
+                      onClick={() => onSort(column.sort!, column.defaultOrder ?? 'asc')}
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-sm focus-ring hover:text-foreground',
+                        active && 'text-foreground',
+                      )}
+                    >
+                      {column.header}
+                      <Icon className="size-3.5" aria-hidden="true" />
+                    </button>
+                  ) : (
+                    column.header
+                  )}
+                </TableHead>
+              );
+            })}
+          </tr>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={rowKey(row)}>
+              {columns.map((column) => (
+                <TableCell key={column.key} align={column.align} className={column.className}>
+                  {column.cell(row)}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </Card>
   );
 }
@@ -296,7 +282,7 @@ export function ReportResults({
   totalPages: number;
   onPageChange: (page: number) => void;
 }) {
-  if (query.isPending) return <LoadingState label={`Loading the ${label}`} />;
+  if (query.isPending) return <ListSkeleton label={`Loading the ${label}`} rows={8} />;
   if (query.isError && totalItems === undefined) {
     return (
       <ErrorState

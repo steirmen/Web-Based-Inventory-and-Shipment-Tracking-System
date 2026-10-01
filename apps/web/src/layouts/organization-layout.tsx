@@ -1,13 +1,13 @@
 import { SearchX } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
-import { Link, NavLink, Outlet, useParams } from 'react-router';
+import { Link, Outlet, useParams } from 'react-router';
 import { ErrorState, LoadingState } from '@/components/layout/page-state';
+import { WorkspaceNav } from '@/components/organization/workspace-nav';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent } from '@/components/ui/card';
 import { useOrganization } from '@/hooks/use-organizations';
 import { hasErrorCode } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
-import { cn } from '@/lib/cn';
 import { rememberLastOrganizationId } from '@/lib/last-organization';
 import { createOrganizationContext, OrganizationContext } from '@/lib/organization-context';
 import { paths } from '@/routes/paths';
@@ -52,48 +52,15 @@ export function OrganizationLayout() {
     );
   }
 
-  const tabs = [
-    { to: paths.organization(organizationId), label: 'Overview', end: true },
-    { to: paths.orders(organizationId), label: 'Orders', end: false },
-    { to: paths.customers(organizationId), label: 'Customers', end: false },
-    { to: paths.products(organizationId), label: 'Products', end: false },
-    { to: paths.categories(organizationId), label: 'Categories', end: false },
-    { to: paths.inventory(organizationId), label: 'Inventory', end: false },
-    { to: paths.warehouses(organizationId), label: 'Warehouses', end: false },
-    { to: paths.stockMovements(organizationId), label: 'Stock movements', end: false },
-    { to: paths.reports(organizationId), label: 'Reports', end: false },
-    { to: paths.organizationTeam(organizationId), label: 'Team', end: false },
-    { to: paths.organizationSettings(organizationId), label: 'Settings', end: false },
-  ];
-
   return (
     <OrganizationContext value={context}>
-      <div className="flex flex-col gap-8">
-        <nav
-          aria-label="Workspace"
-          className="flex gap-1 overflow-x-auto shadow-[inset_0_-1px_0_var(--color-border)]"
-        >
-          {tabs.map((tab) => (
-            <NavLink
-              key={tab.label}
-              to={tab.to}
-              end={tab.end}
-              className={({ isActive }) =>
-                cn(
-                  'shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium focus-ring transition-colors duration-150',
-                  isActive
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:border-border-strong hover:text-foreground',
-                )
-              }
-            >
-              {tab.label}
-            </NavLink>
-          ))}
-        </nav>
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[12.5rem_minmax(0,1fr)] lg:gap-10">
+        <WorkspaceNav organizationId={organizationId} />
         {/* Keyed by organization: switching workspaces remounts the page, so no local state
             (search input, open dialogs, pending mutations) carries over to another workspace. */}
-        <Outlet key={organizationId} />
+        <div className="@container min-w-0">
+          <Outlet key={organizationId} />
+        </div>
       </div>
     </OrganizationContext>
   );

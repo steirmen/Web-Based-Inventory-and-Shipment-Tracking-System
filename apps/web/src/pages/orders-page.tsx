@@ -1,9 +1,9 @@
 import { ORDER_STATUSES, type OrderListItem } from '@app/shared';
-import { ClipboardList, Plus, Search, X } from 'lucide-react';
+import { ClipboardList, Plus, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { PageHeader } from '@/components/layout/page-header';
-import { EmptyState, ErrorState, LoadingState } from '@/components/layout/page-state';
+import { EmptyState, ErrorState, ListSkeleton } from '@/components/layout/page-state';
 import { PaginationBar } from '@/components/layout/pagination-bar';
 import { OrderStatusBadge } from '@/components/orders/order-status-badge';
 import { Can } from '@/components/organization/can';
@@ -14,7 +14,16 @@ import { Card } from '@/components/ui/card';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { SearchInput } from '@/components/ui/search-input';
 import { Spinner } from '@/components/ui/spinner';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { useWarehouses } from '@/hooks/use-inventory';
 import { useCustomer, useOrders } from '@/hooks/use-sales';
 import { pageTitle } from '@/lib/app-config';
@@ -97,21 +106,12 @@ export function OrdersPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
           <FormField label="Search">
             {(control) => (
-              <div className="relative">
-                <Search
-                  className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
-                  aria-hidden="true"
-                />
-                <Input
-                  {...control}
-                  type="search"
-                  placeholder="Order number or customer…"
-                  className="pl-9"
-                  maxLength={100}
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                />
-              </div>
+              <SearchInput
+                {...control}
+                placeholder="Order number or customer…"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+              />
             )}
           </FormField>
           <FormField label="Status">
@@ -216,7 +216,7 @@ export function OrdersPage() {
         </div>
       </search>
 
-      {orders.isPending && <LoadingState label="Loading orders" />}
+      {orders.isPending && <ListSkeleton label="Loading orders" />}
       {orders.isError && (
         <ErrorState
           title="We couldn't load orders"
@@ -298,73 +298,59 @@ const customerName = (order: OrderListItem) =>
 function OrderTable({ items }: { items: OrderListItem[] }) {
   const { organization } = useCurrentOrganization();
   return (
-    <table className="hidden w-full text-sm lg:table">
-      <thead className="border-b border-border bg-surface-muted/60 text-left text-xs font-medium text-muted-foreground">
+    <Table className="hidden @3xl:table">
+      <TableHeader>
         <tr>
-          <th scope="col" className="px-4 py-2.5 font-medium">
-            Order
-          </th>
-          <th scope="col" className="px-4 py-2.5 font-medium">
-            Customer
-          </th>
-          <th scope="col" className="px-4 py-2.5 font-medium">
-            Warehouse
-          </th>
-          <th scope="col" className="px-4 py-2.5 font-medium">
-            Status
-          </th>
-          <th scope="col" className="px-4 py-2.5 text-right font-medium">
-            Lines
-          </th>
-          <th scope="col" className="px-4 py-2.5 text-right font-medium">
-            Total
-          </th>
-          <th scope="col" className="px-4 py-2.5 font-medium">
-            Created
-          </th>
+          <TableHead>Order</TableHead>
+          <TableHead>Customer</TableHead>
+          <TableHead>Warehouse</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead align="right">Lines</TableHead>
+          <TableHead align="right">Total</TableHead>
+          <TableHead>Created</TableHead>
         </tr>
-      </thead>
-      <tbody className="divide-y divide-border">
+      </TableHeader>
+      <TableBody>
         {items.map((order) => (
-          <tr key={order.id}>
-            <td className="px-4 py-3">
+          <TableRow key={order.id}>
+            <TableCell>
               <Link
                 to={paths.order(organization.id, order.id)}
                 className="rounded-sm font-medium focus-ring hover:underline"
               >
                 {order.orderNumber}
               </Link>
-            </td>
-            <td className="max-w-56 truncate px-4 py-3">
+            </TableCell>
+            <TableCell className="max-w-56 truncate">
               {customerName(order)}
               {order.customer?.companyName && (
                 <span className="block truncate text-xs text-muted-foreground">
                   {order.customer.name}
                 </span>
               )}
-            </td>
-            <td className="px-4 py-3 font-mono text-xs">{order.warehouse.code}</td>
-            <td className="px-4 py-3">
+            </TableCell>
+            <TableCell className="font-mono text-xs">{order.warehouse.code}</TableCell>
+            <TableCell>
               <OrderStatusBadge status={order.status} />
-            </td>
-            <td className="px-4 py-3 text-right tabular-nums">{order.itemCount}</td>
-            <td className="px-4 py-3 text-right font-medium tabular-nums">
+            </TableCell>
+            <TableCell align="right">{order.itemCount}</TableCell>
+            <TableCell align="right" className="font-medium">
               {formatMoney(order.total)}
-            </td>
-            <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+            </TableCell>
+            <TableCell className="whitespace-nowrap text-muted-foreground">
               {formatDate(order.createdAt)}
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
 function OrderCards({ items }: { items: OrderListItem[] }) {
   const { organization } = useCurrentOrganization();
   return (
-    <ul className="divide-y divide-border lg:hidden" aria-label="Orders">
+    <ul className="divide-y divide-border @3xl:hidden" aria-label="Orders">
       {items.map((order) => (
         <li key={order.id} className="flex flex-col gap-2 p-4">
           <div className="flex items-start justify-between gap-3">

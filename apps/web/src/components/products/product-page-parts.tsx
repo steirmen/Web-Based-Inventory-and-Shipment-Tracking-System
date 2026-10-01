@@ -1,5 +1,6 @@
-import { ArrowLeft, Lock, SearchX } from 'lucide-react';
+import { Lock, SearchX } from 'lucide-react';
 import { Link } from 'react-router';
+import { BackLink } from '@/components/layout/back-link';
 import { PageHeader } from '@/components/layout/page-header';
 import { EmptyState } from '@/components/layout/page-state';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -10,15 +11,7 @@ import { paths } from '@/routes/paths';
 /** "← Products" link above product pages. */
 export function BackToProducts() {
   const { organization } = useCurrentOrganization();
-  return (
-    <Link
-      to={paths.products(organization.id)}
-      className="inline-flex items-center gap-1.5 self-start rounded-sm text-sm font-medium text-muted-foreground focus-ring hover:text-foreground"
-    >
-      <ArrowLeft className="size-4" aria-hidden="true" />
-      Products
-    </Link>
-  );
+  return <BackLink to={paths.products(organization.id)} label="Products" />;
 }
 
 /** Unknown product, or one from another organization (the API answers 404 for both). */

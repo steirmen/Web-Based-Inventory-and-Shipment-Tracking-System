@@ -136,7 +136,7 @@ export function OrderBuilder({ order }: { order: Order | null }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Customer and warehouse</CardTitle>
+          <StepTitle step={1}>Customer and warehouse</StepTitle>
           <CardDescription>The warehouse the order will be fulfilled from.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
@@ -178,7 +178,7 @@ export function OrderBuilder({ order }: { order: Order | null }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Products</CardTitle>
+          <StepTitle step={2}>Products</StepTitle>
           <CardDescription>
             Prices are taken from the product when it is added and stay fixed on this order.
           </CardDescription>
@@ -238,16 +238,17 @@ export function OrderBuilder({ order }: { order: Order | null }) {
               ))}
             </ul>
           )}
-
-          <dl className="flex items-baseline justify-end gap-4 text-sm" aria-label="Order total">
-            <dt className="text-muted-foreground">Subtotal (preview)</dt>
-            <dd className="text-lg font-semibold tabular-nums">{formatMoney(subtotal)}</dd>
-          </dl>
         </CardContent>
       </Card>
 
       <Card>
-        <CardContent className="pt-6">
+        <CardHeader>
+          <StepTitle step={3}>Review and save</StepTitle>
+          <CardDescription>
+            Saving keeps the order as a draft: nothing is reserved or deducted yet.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
           <FormField
             label="Notes"
             error={errors.fields.notes}
@@ -264,25 +265,47 @@ export function OrderBuilder({ order }: { order: Order | null }) {
               />
             )}
           </FormField>
+          <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <dl className="flex items-baseline gap-3 text-sm" aria-label="Order total">
+              <dt className="text-muted-foreground">
+                Total ({state.lines.length} {state.lines.length === 1 ? 'line' : 'lines'})
+              </dt>
+              <dd className="text-xl font-semibold tabular-nums">{formatMoney(subtotal)}</dd>
+            </dl>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Link
+                to={order ? paths.order(organization.id, order.id) : paths.orders(organization.id)}
+                className={buttonVariants({ variant: 'secondary' })}
+              >
+                Cancel
+              </Link>
+              <Button type="submit" isLoading={pending}>
+                {order ? 'Save draft' : 'Create draft'}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
-
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Link
-          to={order ? paths.order(organization.id, order.id) : paths.orders(organization.id)}
-          className={buttonVariants({ variant: 'secondary' })}
-        >
-          Cancel
-        </Link>
-        <Button type="submit" isLoading={pending}>
-          {order ? 'Save draft' : 'Create draft'}
-        </Button>
-      </div>
     </form>
   );
 }
 
 /** One line: product, current stock in the chosen warehouse, price, quantity, and line total. */
+/** Card title with its step number: the builder reads top to bottom, 1 → 3. */
+function StepTitle({ step, children }: { step: number; children: string }) {
+  return (
+    <CardTitle className="flex items-center gap-2.5">
+      <span
+        className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary-soft-foreground"
+        aria-hidden="true"
+      >
+        {step}
+      </span>
+      {children}
+    </CardTitle>
+  );
+}
+
 function OrderLineRow({
   line,
   warehouseId,
@@ -335,8 +358,8 @@ function OrderLineRow({
       </div>
       <Button
         variant="ghost"
-        size="sm"
-        className="size-8 justify-self-end px-0 sm:order-last"
+        size="icon-sm"
+        className="justify-self-end sm:order-last"
         onClick={onRemove}
         aria-label={`Remove ${line.name}`}
         title="Remove"

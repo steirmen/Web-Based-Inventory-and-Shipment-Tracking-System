@@ -25,6 +25,7 @@ import {
   testUser,
 } from '@/test/mock-api';
 import { renderApp } from '@/test/render-app';
+import { signOutFromMenu } from '@/test/shell';
 
 const appearanceCalls = (fetchMock: ReturnType<typeof mockApi>) =>
   fetchMock.mock.calls.filter(([input]) => new URL(String(input)).pathname === APPEARANCE_API);
@@ -138,7 +139,7 @@ describe('AppearanceProvider', () => {
     const { user } = renderApp('/');
 
     await waitFor(() => expect(applied()).toMatchObject({ mode: 'dark', theme: 'plum' }));
-    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    await signOutFromMenu(user);
 
     await screen.findByRole('heading', { name: /sign in/i });
     expect(applied()).toMatchObject({ mode: 'light', theme: 'default' });

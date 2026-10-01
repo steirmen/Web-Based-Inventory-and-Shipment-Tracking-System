@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from 'react-router';
 import { PageHeader } from '@/components/layout/page-header';
-import { ErrorState, LoadingState } from '@/components/layout/page-state';
+import { ErrorState, DetailSkeleton } from '@/components/layout/page-state';
 import { ProductForm } from '@/components/products/product-form';
 import {
   BackToProducts,
@@ -33,7 +33,7 @@ export function ProductEditPage() {
   }
 
   if (product.isPending) {
-    return <LoadingState label="Loading product" />;
+    return <DetailSkeleton label="Loading product" />;
   }
 
   if (product.isError) {
@@ -80,7 +80,7 @@ export function ProductEditPage() {
       <BackToProducts />
       <PageHeader
         title={`Edit ${current.name}`}
-        description={<span className="font-mono text-[13px]">{current.sku}</span>}
+        description={<span className="font-mono text-[0.8125rem]">{current.sku}</span>}
       />
       <ProductForm
         key={current.id}
