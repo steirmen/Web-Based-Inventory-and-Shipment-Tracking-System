@@ -121,17 +121,18 @@ model Organization {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  members        OrganizationMember[]
-  invitations    OrganizationInvitation[]
-  categories     Category[]
-  products       Product[]
-  warehouses     Warehouse[]
-  inventory      Inventory[]
-  stockMovements StockMovement[]
-  customers      Customer[]
-  orders         Order[]
-  orderItems     OrderItem[]
-  activityLogs   ActivityLog[]
+  members             OrganizationMember[]
+  invitations         OrganizationInvitation[]
+  categories          Category[]
+  products            Product[]
+  warehouses          Warehouse[]
+  inventory           Inventory[]
+  stockMovements      StockMovement[]
+  customers           Customer[]
+  orders              Order[]
+  orderItems          OrderItem[]
+  orderNumberSequence OrderNumberSequence?
+  activityLogs        ActivityLog[]
 
   @@map("organizations")
 }
@@ -419,11 +420,26 @@ model OrderItem {
   order        Order        @relation(fields: [organizationId, orderId], references: [organizationId, id], onDelete: Cascade)
   product      Product      @relation(fields: [organizationId, productId], references: [organizationId, id], onDelete: Restrict)
 
+  /// One line per product per order (Phase 7A).
+  @@unique([orderId, productId])
   /// Items of an order; also backs the order foreign key.
   @@index([organizationId, orderId])
   /// Sales history of a product; also backs the product foreign key.
   @@index([organizationId, productId])
   @@map("order_items")
+}
+
+/// Per-organization order number counter (Phase 7A). The next number is taken with one
+/// atomic upsert inside the order-creating transaction, so concurrent creates never collide.
+model OrderNumberSequence {
+  organizationId String   @id @map("organization_id") @db.Uuid
+  /// Numeric part of the last issued order number ("SO-1005" → 1005).
+  lastNumber     Int      @map("last_number")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@map("order_number_sequences")
 }
 
 // -----------------------------------------------------------------------------

@@ -14,6 +14,8 @@ export interface ProductChoice {
   id: string;
   name: string;
   sku: string;
+  /** Current price (decimal string), when chosen from the product search. */
+  price?: string;
 }
 
 /**

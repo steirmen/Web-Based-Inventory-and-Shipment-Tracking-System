@@ -53,11 +53,12 @@ export const inventoryProductNotFound = () =>
     'The selected product does not exist in this workspace.',
   );
 
-export const inventoryProductInactive = () =>
+/** `label` names the product (e.g. on an order line); without it the message says "This product". */
+export const inventoryProductInactive = (label?: string) =>
   new AppException(
     HttpStatus.CONFLICT,
     'INVENTORY_PRODUCT_INACTIVE',
-    'This product is archived. Restore it before changing its stock.',
+    `${label ?? 'This product'} is archived. Restore it before changing its stock.`,
   );
 
 export const inventoryQuantityLimit = (max: number) =>
@@ -72,6 +73,25 @@ export const insufficientStock = (available: number, warehouseCode: string) =>
     HttpStatus.CONFLICT,
     'INVENTORY_INSUFFICIENT_STOCK',
     `Not enough stock: ${available} ${available === 1 ? 'unit' : 'units'} available in ${warehouseCode}.`,
+  );
+
+/** An order can't be fulfilled: every short line, with what it needs and what is on hand. */
+export const inventoryOrderShortage = (
+  warehouseCode: string,
+  shortages: { itemId: string; label: string; quantity: number; available: number }[],
+) =>
+  new AppException(
+    HttpStatus.CONFLICT,
+    'INVENTORY_INSUFFICIENT_STOCK',
+    shortages.length === 1
+      ? `Not enough stock in ${warehouseCode} for ${shortages[0]!.label}: ${shortages[0]!.quantity} needed, ${shortages[0]!.available} available. Nothing was deducted.`
+      : `Not enough stock in ${warehouseCode} for ${shortages.length} lines. Nothing was deducted.`,
+    shortages.map((shortage) => ({
+      field: `items.${shortage.itemId}`,
+      messages: [
+        `${shortage.label}: ${shortage.quantity} needed, ${shortage.available} available in ${warehouseCode}.`,
+      ],
+    })),
   );
 
 export const inventorySameWarehouse = () =>

@@ -54,6 +54,8 @@ export function OrganizationLayout() {
 
   const tabs = [
     { to: paths.organization(organizationId), label: 'Overview', end: true },
+    { to: paths.orders(organizationId), label: 'Orders', end: false },
+    { to: paths.customers(organizationId), label: 'Customers', end: false },
     { to: paths.products(organizationId), label: 'Products', end: false },
     { to: paths.categories(organizationId), label: 'Categories', end: false },
     { to: paths.inventory(organizationId), label: 'Inventory', end: false },

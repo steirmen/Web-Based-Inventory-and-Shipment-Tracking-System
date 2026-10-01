@@ -17,3 +17,21 @@ export const toTrimmed = ({ value }: TransformFnParams): unknown =>
 /** Trims and upper-cases (codes such as "main " → "MAIN"). */
 export const toUpperCode = ({ value }: TransformFnParams): unknown =>
   typeof value === 'string' ? value.trim().toUpperCase() : value;
+
+/** Trims and collapses whitespace; a blank string becomes null (optional names). */
+export const toOptionalName = ({ value }: TransformFnParams): unknown => {
+  if (typeof value !== 'string') return value;
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  return normalized === '' ? null : normalized;
+};
+
+/** Trims and lower-cases; a blank string becomes null (optional contact emails). */
+export const toOptionalEmail = ({ value }: TransformFnParams): unknown => {
+  if (typeof value !== 'string') return value;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '' ? null : normalized;
+};
+
+/** Lower-cases ids so they compare equal to the (lower-case) ids PostgreSQL returns. */
+export const toLowerCaseId = ({ value }: TransformFnParams): unknown =>
+  typeof value === 'string' ? value.toLowerCase() : value;

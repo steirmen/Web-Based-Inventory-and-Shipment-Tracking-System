@@ -16,5 +16,7 @@ import { WarehousesService } from './warehouses.service.js';
   imports: [OrganizationsModule],
   controllers: [WarehousesController, InventoryController, StockMovementsController],
   providers: [WarehousesService, InventoryService, StockOperationsService],
+  /** Order fulfillment (Phase 7A) deducts stock through StockOperationsService.issueForOrder. */
+  exports: [StockOperationsService],
 })
 export class InventoryModule {}

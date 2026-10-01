@@ -3,6 +3,8 @@ import { AppShell } from '@/layouts/app-shell';
 import { AuthLayout } from '@/layouts/auth-layout';
 import { OrganizationLayout } from '@/layouts/organization-layout';
 import { CategoriesPage } from '@/pages/categories-page';
+import { CustomerDetailPage } from '@/pages/customer-detail-page';
+import { CustomersPage } from '@/pages/customers-page';
 import { HealthCheckPage } from '@/pages/health-check-page';
 import { HomeRedirectPage } from '@/pages/home-redirect-page';
 import { InventoryPage } from '@/pages/inventory-page';
@@ -10,6 +12,10 @@ import { InvitationPage } from '@/pages/invitation-page';
 import { LoginPage } from '@/pages/login-page';
 import { NotFoundPage } from '@/pages/not-found-page';
 import { OnboardingPage } from '@/pages/onboarding-page';
+import { OrderDetailPage } from '@/pages/order-detail-page';
+import { OrderEditPage } from '@/pages/order-edit-page';
+import { OrderNewPage } from '@/pages/order-new-page';
+import { OrdersPage } from '@/pages/orders-page';
 import { OrganizationHomePage } from '@/pages/organization-home-page';
 import { OrganizationSettingsPage } from '@/pages/organization-settings-page';
 import { OrganizationsPage } from '@/pages/organizations-page';
@@ -77,6 +83,12 @@ export const routes: RouteObject[] = [
                   { path: 'warehouses/:warehouseId', element: <WarehouseDetailPage /> },
                   { path: 'inventory', element: <InventoryPage /> },
                   { path: 'stock-movements', element: <StockMovementsPage /> },
+                  { path: 'customers', element: <CustomersPage /> },
+                  { path: 'customers/:customerId', element: <CustomerDetailPage /> },
+                  { path: 'orders', element: <OrdersPage /> },
+                  { path: 'orders/new', element: <OrderNewPage /> },
+                  { path: 'orders/:orderId', element: <OrderDetailPage /> },
+                  { path: 'orders/:orderId/edit', element: <OrderEditPage /> },
                   { path: 'team', element: <TeamPage /> },
                   { path: 'settings', element: <OrganizationSettingsPage /> },
                 ],

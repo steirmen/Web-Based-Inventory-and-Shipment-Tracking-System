@@ -7,7 +7,7 @@ import {
 } from '@app/shared';
 import { describe, expect, it } from 'vitest';
 
-/** Pins the role matrix (Phase 4 organization, Phase 5 catalog, Phase 6 inventory permissions) (docs/organizations-rbac.md). Changes here must be deliberate. */
+/** Pins the role matrix (Phase 4 organization, Phase 5 catalog, Phase 6 inventory, Phase 7A customer/order permissions) (docs/organizations-rbac.md). Changes here must be deliberate. */
 describe('role permissions', () => {
   const matrix: Record<Permission, Record<MemberRole, boolean>> = {
     ORGANIZATION_READ: { OWNER: true, ADMIN: true, STAFF: true },
@@ -35,6 +35,18 @@ describe('role permissions', () => {
     INVENTORY_ADJUST: { OWNER: true, ADMIN: true, STAFF: false },
     INVENTORY_TRANSFER: { OWNER: true, ADMIN: true, STAFF: false },
     STOCK_MOVEMENTS_READ: { OWNER: true, ADMIN: true, STAFF: true },
+    CUSTOMERS_READ: { OWNER: true, ADMIN: true, STAFF: true },
+    CUSTOMERS_CREATE: { OWNER: true, ADMIN: true, STAFF: true },
+    CUSTOMERS_UPDATE: { OWNER: true, ADMIN: true, STAFF: true },
+    CUSTOMERS_ARCHIVE: { OWNER: true, ADMIN: true, STAFF: false },
+    ORDERS_READ: { OWNER: true, ADMIN: true, STAFF: true },
+    ORDERS_CREATE: { OWNER: true, ADMIN: true, STAFF: true },
+    ORDERS_UPDATE: { OWNER: true, ADMIN: true, STAFF: true },
+    ORDERS_CONFIRM: { OWNER: true, ADMIN: true, STAFF: true },
+    ORDERS_PROCESS: { OWNER: true, ADMIN: true, STAFF: false },
+    ORDERS_SHIP: { OWNER: true, ADMIN: true, STAFF: false },
+    ORDERS_COMPLETE: { OWNER: true, ADMIN: true, STAFF: false },
+    ORDERS_CANCEL: { OWNER: true, ADMIN: true, STAFF: false },
   };
 
   for (const [permission, roles] of Object.entries(matrix)) {

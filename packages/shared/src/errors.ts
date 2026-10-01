@@ -43,6 +43,21 @@ export const API_ERROR_CODES = [
   'INVENTORY_SAME_WAREHOUSE',
   'INVENTORY_CONCURRENCY_CONFLICT',
   'STOCK_MOVEMENT_ACTOR_NOT_FOUND',
+  'CUSTOMER_NOT_FOUND',
+  'CUSTOMER_STATUS_INVALID',
+  'ORDER_NOT_FOUND',
+  'ORDER_NOT_EDITABLE',
+  'ORDER_STATUS_INVALID',
+  'ORDER_INVALID_TRANSITION',
+  'ORDER_EMPTY',
+  'ORDER_CUSTOMER_NOT_FOUND',
+  'ORDER_CUSTOMER_REQUIRED',
+  'ORDER_CUSTOMER_INACTIVE',
+  'ORDER_WAREHOUSE_NOT_FOUND',
+  'ORDER_WAREHOUSE_INACTIVE',
+  'ORDER_PRODUCT_NOT_FOUND',
+  'ORDER_PRODUCT_INACTIVE',
+  'ORDER_TOTAL_LIMIT',
   'RATE_LIMITED',
   'BAD_REQUEST',
   'FORBIDDEN',
@@ -64,6 +79,9 @@ export interface ApiErrorBody {
   statusCode: number;
   code: ApiErrorCode;
   message: string;
-  /** Present for VALIDATION_ERROR. */
+  /**
+   * Present for VALIDATION_ERROR, and for INVENTORY_INSUFFICIENT_STOCK when
+   * processing an order (one entry per short line, field `items.<orderItemId>`).
+   */
   details?: ApiFieldError[];
 }

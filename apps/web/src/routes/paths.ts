@@ -21,6 +21,14 @@ export const paths = {
     `/org/${organizationId}/warehouses/${warehouseId}`,
   inventory: (organizationId: string) => `/org/${organizationId}/inventory`,
   stockMovements: (organizationId: string) => `/org/${organizationId}/stock-movements`,
+  customers: (organizationId: string) => `/org/${organizationId}/customers`,
+  customer: (organizationId: string, customerId: string) =>
+    `/org/${organizationId}/customers/${customerId}`,
+  orders: (organizationId: string) => `/org/${organizationId}/orders`,
+  orderNew: (organizationId: string) => `/org/${organizationId}/orders/new`,
+  order: (organizationId: string, orderId: string) => `/org/${organizationId}/orders/${orderId}`,
+  orderEdit: (organizationId: string, orderId: string) =>
+    `/org/${organizationId}/orders/${orderId}/edit`,
   invitation: (token: string) => `/invite/${token}`,
 } as const;
 

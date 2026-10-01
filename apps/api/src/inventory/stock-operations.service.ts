@@ -7,7 +7,6 @@ import {
 } from '@app/shared';
 import { Injectable } from '@nestjs/common';
 import { ActivityAction, recordActivity } from '../activity/activity-log.js';
-import { isConcurrencyConflict } from '../common/errors/prisma-errors.js';
 import { uuidV7 } from '../common/ids/uuid-v7.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
@@ -20,7 +19,7 @@ import type {
 } from './dto/inventory.dto.js';
 import {
   insufficientStock,
-  inventoryConcurrencyConflict,
+  inventoryOrderShortage,
   inventoryProductInactive,
   inventoryProductNotFound,
   inventoryQuantityLimit,
@@ -34,6 +33,7 @@ import {
   toInventoryItem,
   toStockMovement,
 } from './inventory-mappers.js';
+import { runStockTransaction } from './stock-transaction.js';
 
 type Tx = Prisma.TransactionClient;
 
@@ -67,12 +67,19 @@ const ACTIVITY_FOR: Record<SingleMovementType, ActivityAction> = {
 const MAX = INVENTORY_LIMITS.quantityMax;
 
 /** Archived products keep their history but take no new stock activity of any kind. */
-function assertProductActive(product: LockedProduct): void {
-  if (product.status !== 'ACTIVE') throw inventoryProductInactive();
+function assertProductActive(product: LockedProduct, label?: string): void {
+  if (product.status !== 'ACTIVE') throw inventoryProductInactive(label);
 }
 
-/** Row locks may make a request wait for a concurrent one; allow for that. */
-const TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 15_000 };
+/** One order line to fulfill (see issueForOrder). */
+export interface OrderStockLine {
+  /** Order item id; reported back for shortages. */
+  itemId: string;
+  productId: string;
+  quantity: number;
+  /** Snapshot label for messages, e.g. "Wireless Mouse (ACC-MOUSE-WL)". */
+  label: string;
+}
 
 /**
  * Every stock change: inventory (current state) and stock_movements (history)
@@ -80,11 +87,13 @@ const TRANSACTION_OPTIONS = { maxWait: 10_000, timeout: 15_000 };
  * taken from the locked row, so the two can never disagree.
  *
  * Concurrency (READ COMMITTED + explicit row locks, all held until commit):
+ * 0. (order fulfillment only) the `orders` row FOR UPDATE, taken by the caller.
  * 1. `warehouses` row(s) FOR SHARE, in id order — an archive (UPDATE) waits.
- * 2. `products` row FOR SHARE — a product archive waits.
- * 3. `inventory` row(s) FOR UPDATE, in warehouse-id order (a missing row is
- *    first inserted with quantity 0) — concurrent changes to the same stock
- *    run one after another, and each reads the quantity its predecessor left.
+ * 2. `products` row(s) FOR SHARE, in id order — a product archive waits.
+ * 3. `inventory` row(s) FOR UPDATE, ordered by warehouse id, then product id
+ *    (a missing row is first inserted with quantity 0) — concurrent changes to
+ *    the same stock run one after another, and each reads the quantity its
+ *    predecessor left.
  * The quantity is read only after its lock is held, and every check and write
  * happens in the same transaction, so before/after values are never stale and
  * stock never goes negative (the CHECK constraint is the last line of defense).
@@ -99,7 +108,7 @@ export class StockOperationsService {
     return this.change(context, input, 'PURCHASE', input.quantity);
   }
 
-  /** SALE: remove stock (no order integration yet). */
+  /** SALE recorded by hand. Order fulfillment uses issueForOrder() instead. */
   issue(context: OrganizationContext, input: StockQuantityDto): Promise<StockOperationResponse> {
     return this.change(context, input, 'SALE', -input.quantity);
   }
@@ -239,18 +248,61 @@ export class StockOperationsService {
   }
 
   /**
-   * The one transaction boundary of every stock operation: all reads, locks,
-   * checks, and writes run inside `work`, and either all commit or none do.
-   * A lost lock race (deadlock, lock or transaction timeout) — which the lock
-   * ordering makes unlikely — answers 409 instead of a generic 500.
+   * Order fulfillment (Phase 7A): one SALE movement per order line, all from
+   * one warehouse, inside the CALLER's transaction (which already holds the
+   * order row lock and also changes the order status). Either every line has
+   * enough stock and all are deducted, or nothing is written: all shortages
+   * are reported together (409 INVENTORY_INSUFFICIENT_STOCK, one detail per line).
+   * Movements reference the order (`ORDER` + order id); the caller records the
+   * single ORDER_PROCESSING activity entry, so no per-line STOCK_ISSUED is logged.
    */
-  private async transaction<T>(work: (tx: Tx) => Promise<T>): Promise<T> {
-    try {
-      return await this.prisma.$transaction(work, TRANSACTION_OPTIONS);
-    } catch (error) {
-      if (isConcurrencyConflict(error)) throw inventoryConcurrencyConflict();
-      throw error;
+  async issueForOrder(
+    tx: Tx,
+    context: OrganizationContext,
+    order: { id: string; orderNumber: string; warehouseId: string; lines: OrderStockLine[] },
+  ): Promise<StockOperationResponse['movement'][]> {
+    const organizationId = context.organization.id;
+    const [warehouse] = await this.lockWarehouses(tx, organizationId, [order.warehouseId]);
+    if (!warehouse.isActive) throw inventoryWarehouseInactive(warehouse.code);
+
+    // Same lock order as every other stock operation: products by id, then their inventory rows.
+    const lines = [...order.lines].sort((a, b) => a.productId.localeCompare(b.productId));
+    const locked: { line: OrderStockLine; product: LockedProduct }[] = [];
+    for (const line of lines) {
+      const product = await this.lockProduct(tx, organizationId, line.productId);
+      assertProductActive(product, line.label);
+      locked.push({ line, product });
     }
+    const rows: (LockedInventory | null)[] = [];
+    for (const { product } of locked) {
+      rows.push(await this.lockInventory(tx, organizationId, warehouse.id, product.id, false));
+    }
+
+    const shortages = locked.flatMap(({ line }, index) => {
+      const available = rows[index]?.quantity ?? 0;
+      return available < line.quantity ? [{ ...line, available }] : [];
+    });
+    if (shortages.length > 0) throw inventoryOrderShortage(warehouse.code, shortages);
+
+    const movements: StockOperationResponse['movement'][] = [];
+    for (const [index, { line, product }] of locked.entries()) {
+      const { movement } = await this.record(tx, context, {
+        warehouse,
+        product,
+        inventory: rows[index]!,
+        movementType: 'SALE',
+        delta: -line.quantity,
+        reason: `Order ${order.orderNumber}`,
+        reference: { type: 'ORDER', id: order.id },
+        logActivity: false,
+      });
+      movements.push(movement);
+    }
+    return movements;
+  }
+
+  private transaction<T>(work: (tx: Tx) => Promise<T>): Promise<T> {
+    return runStockTransaction(this.prisma, work);
   }
 
   /** Receive, issue, or damage: one signed change to one inventory row. */
@@ -285,7 +337,7 @@ export class StockOperationsService {
 
   /**
    * Applies `delta` to the locked row and appends the matching movement (and,
-   * except for transfer legs, the activity entry).
+   * except for transfer legs and order lines, the activity entry).
    */
   private async record(
     tx: Tx,
@@ -298,6 +350,10 @@ export class StockOperationsService {
       delta: number;
       reason: string | null;
       transferGroupId?: string;
+      /** What caused the movement (e.g. an order); transfers reference themselves. */
+      reference?: { type: string; id: string };
+      /** Default true; false when the caller logs one entry for several movements. */
+      logActivity?: boolean;
     },
   ): Promise<StockOperationResponse> {
     const organizationId = context.organization.id;
@@ -329,13 +385,17 @@ export class StockOperationsService {
         reason: change.reason,
         transferGroupId: change.transferGroupId ?? null,
         // Both legs of a transfer reference the transfer itself.
-        referenceType: change.transferGroupId ? 'TRANSFER' : null,
-        referenceId: change.transferGroupId ?? null,
+        referenceType: change.reference?.type ?? (change.transferGroupId ? 'TRANSFER' : null),
+        referenceId: change.reference?.id ?? change.transferGroupId ?? null,
       },
       select: STOCK_MOVEMENT_SELECT,
     });
 
-    if (change.movementType !== 'TRANSFER_IN' && change.movementType !== 'TRANSFER_OUT') {
+    if (
+      change.logActivity !== false &&
+      change.movementType !== 'TRANSFER_IN' &&
+      change.movementType !== 'TRANSFER_OUT'
+    ) {
       await recordActivity(tx, {
         organizationId,
         actorUserId: context.user.id,

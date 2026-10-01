@@ -26,6 +26,17 @@ export const ActivityAction = {
   STOCK_DAMAGED: 'STOCK_DAMAGED',
   STOCK_ADJUSTED: 'STOCK_ADJUSTED',
   STOCK_TRANSFERRED: 'STOCK_TRANSFERRED',
+  CUSTOMER_CREATED: 'CUSTOMER_CREATED',
+  CUSTOMER_UPDATED: 'CUSTOMER_UPDATED',
+  CUSTOMER_ARCHIVED: 'CUSTOMER_ARCHIVED',
+  CUSTOMER_RESTORED: 'CUSTOMER_RESTORED',
+  ORDER_CREATED: 'ORDER_CREATED',
+  ORDER_UPDATED: 'ORDER_UPDATED',
+  ORDER_CONFIRMED: 'ORDER_CONFIRMED',
+  ORDER_PROCESSING: 'ORDER_PROCESSING',
+  ORDER_SHIPPED: 'ORDER_SHIPPED',
+  ORDER_COMPLETED: 'ORDER_COMPLETED',
+  ORDER_CANCELLED: 'ORDER_CANCELLED',
 } as const;
 export type ActivityAction = (typeof ActivityAction)[keyof typeof ActivityAction];
 
@@ -35,7 +46,9 @@ export type ActivityEntityType =
   | 'OrganizationInvitation'
   | 'Category'
   | 'Product'
-  | 'Warehouse';
+  | 'Warehouse'
+  | 'Customer'
+  | 'Order';
 
 export interface ActivityEntry {
   organizationId: string;

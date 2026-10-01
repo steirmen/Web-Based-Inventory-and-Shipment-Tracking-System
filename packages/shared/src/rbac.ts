@@ -45,6 +45,26 @@ export const PERMISSIONS = [
   /** Move stock between warehouses (TRANSFER_OUT + TRANSFER_IN). */
   'INVENTORY_TRANSFER',
   'STOCK_MOVEMENTS_READ',
+  'CUSTOMERS_READ',
+  'CUSTOMERS_CREATE',
+  'CUSTOMERS_UPDATE',
+  /** Archive and restore customers. */
+  'CUSTOMERS_ARCHIVE',
+  'ORDERS_READ',
+  /** Create DRAFT orders. */
+  'ORDERS_CREATE',
+  /** Edit DRAFT orders (customer, warehouse, lines, notes). */
+  'ORDERS_UPDATE',
+  /** DRAFT → CONFIRMED (no stock effect). */
+  'ORDERS_CONFIRM',
+  /** CONFIRMED → PROCESSING: deducts stock (SALE movements). */
+  'ORDERS_PROCESS',
+  /** PROCESSING → SHIPPED. */
+  'ORDERS_SHIP',
+  /** SHIPPED → COMPLETED. */
+  'ORDERS_COMPLETE',
+  /** DRAFT/CONFIRMED → CANCELLED. */
+  'ORDERS_CANCEL',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -75,6 +95,18 @@ export const ROLE_PERMISSIONS: Record<MemberRole, readonly Permission[]> = {
     'INVENTORY_ADJUST',
     'INVENTORY_TRANSFER',
     'STOCK_MOVEMENTS_READ',
+    'CUSTOMERS_READ',
+    'CUSTOMERS_CREATE',
+    'CUSTOMERS_UPDATE',
+    'CUSTOMERS_ARCHIVE',
+    'ORDERS_READ',
+    'ORDERS_CREATE',
+    'ORDERS_UPDATE',
+    'ORDERS_CONFIRM',
+    'ORDERS_PROCESS',
+    'ORDERS_SHIP',
+    'ORDERS_COMPLETE',
+    'ORDERS_CANCEL',
   ],
   STAFF: [
     'ORGANIZATION_READ',
@@ -90,6 +122,13 @@ export const ROLE_PERMISSIONS: Record<MemberRole, readonly Permission[]> = {
     'INVENTORY_RECEIVE',
     'INVENTORY_ISSUE',
     'STOCK_MOVEMENTS_READ',
+    'CUSTOMERS_READ',
+    'CUSTOMERS_CREATE',
+    'CUSTOMERS_UPDATE',
+    'ORDERS_READ',
+    'ORDERS_CREATE',
+    'ORDERS_UPDATE',
+    'ORDERS_CONFIRM',
   ],
 };
 

@@ -23,10 +23,11 @@ import { ROOT_ENV_FILE } from '../src/config/env.js';
 import {
   MemberRole,
   OrderStatus,
-  type Prisma,
+  Prisma,
   PrismaClient,
   StockMovementType,
 } from '../src/generated/prisma/client.js';
+import { nextOrderNumber } from '../src/orders/order-number.js';
 
 const SEED_ORGANIZATION_SLUG = 'demo-trading';
 
@@ -1003,6 +1004,348 @@ async function ensureInventoryAdditions(tx: Tx): Promise<string[]> {
 }
 
 /**
+ * Keeps the demo organization's order number counter ahead of its existing
+ * "SO-<number>" orders (the base seed inserts SO-1001 and SO-1002 directly).
+ */
+async function syncOrderNumberSequence(tx: Tx, organizationId: string): Promise<void> {
+  await tx.$executeRaw`
+    INSERT INTO order_number_sequences (organization_id, last_number, updated_at)
+    SELECT organization_id, MAX(CAST(substring(order_number FROM '^SO-([0-9]{1,9})$') AS INTEGER)), now()
+    FROM orders
+    WHERE organization_id = ${organizationId}::uuid AND order_number ~ '^SO-[0-9]{1,9}$'
+    GROUP BY organization_id
+    ON CONFLICT (organization_id) DO UPDATE
+    SET last_number = GREATEST(order_number_sequences.last_number, EXCLUDED.last_number)`;
+}
+
+/**
+ * Customers & orders (Phase 7A): four more customers (one archived) and six
+ * orders — one per status. The PROCESSING, SHIPPED, and COMPLETED orders were
+ * fulfilled, so each of their lines has a SALE movement (reference ORDER +
+ * order id) that continues the existing stock history of that product and
+ * warehouse. Order numbers come from the same counter the API uses.
+ * Applied once (keyed by the Northwind Café customer), and only while the
+ * affected stock is untouched since the seed (enough units, no later movements),
+ * so the movement history stays a consistent chain.
+ */
+const SALES_MARKER_EMAIL = 'orders@northwind-cafe.example';
+
+async function ensureSalesAdditions(tx: Tx): Promise<string[]> {
+  const organization = await tx.organization.findUniqueOrThrow({
+    where: { slug: SEED_ORGANIZATION_SLUG },
+    select: { id: true },
+  });
+  const organizationId = organization.id;
+  await syncOrderNumberSequence(tx, organizationId);
+  const marker = await tx.customer.findFirst({
+    where: { organizationId, email: SALES_MARKER_EMAIL },
+    select: { id: true },
+  });
+  if (marker) return [];
+
+  const skus = {
+    pen: 'OFF-PEN-BLK-12',
+    paper: 'OFF-PAP-A4-500',
+    box: 'PKG-BOX-M',
+    tape: 'PKG-TAPE-48',
+    cable: 'ELE-USB-C-1M',
+    keyboard: 'ACC-KB-US',
+    stand: 'ACC-STAND-AL',
+  } as const;
+  const products = await tx.product.findMany({
+    where: { organizationId, sku: { in: Object.values(skus) }, status: 'ACTIVE' },
+    select: { id: true, name: true, sku: true, price: true },
+  });
+  const warehouses = await tx.warehouse.findMany({
+    where: { organizationId, code: { in: ['MAIN', 'EAST', 'NORTH'] }, isActive: true },
+    select: { id: true, code: true },
+  });
+  const product = (key: keyof typeof skus) => products.find((p) => p.sku === skus[key]);
+  const warehouse = (code: string) => warehouses.find((w) => w.code === code);
+  if (products.length !== Object.keys(skus).length || warehouses.length !== 3) {
+    return ['skipped demo orders: demo products or warehouses were changed by hand'];
+  }
+  const users = await tx.user.findMany({
+    where: {
+      email: {
+        in: [
+          'owner@demo-trading.example',
+          'admin@demo-trading.example',
+          'staff@demo-trading.example',
+        ],
+      },
+    },
+    select: { id: true, email: true },
+  });
+  const userId = (email: string) => users.find((user) => user.email === email)?.id ?? null;
+  const owner = userId('owner@demo-trading.example');
+  const admin = userId('admin@demo-trading.example') ?? owner;
+  const staff = userId('staff@demo-trading.example') ?? owner;
+
+  type Line = { product: keyof typeof skus; quantity: number };
+  type Plan = {
+    customer: string;
+    warehouse: string;
+    status: OrderStatus;
+    notes?: string;
+    lines: Line[];
+    /** [day, hour] of each step, starting with creation. */
+    steps: [number, number][];
+  };
+  // Listed in creation order, so order numbers follow creation dates.
+  // prettier-ignore
+  const plans: Plan[] = [
+    { customer: 'harbor', warehouse: 'MAIN', status: OrderStatus.COMPLETED, lines: [{ product: 'paper', quantity: 30 }, { product: 'pen', quantity: 10 }], steps: [[20, 3], [20, 4], [21, 1], [21, 7], [24, 1]] },
+    { customer: 'harbor', warehouse: 'EAST', status: OrderStatus.CONFIRMED, lines: [{ product: 'paper', quantity: 20 }, { product: 'box', quantity: 40 }], steps: [[21, 2], [21, 4]] },
+    { customer: 'taylor', warehouse: 'NORTH', status: OrderStatus.SHIPPED, lines: [{ product: 'stand', quantity: 2 }], steps: [[21, 5], [21, 6], [22, 5], [23, 2]] },
+    { customer: 'northwind', warehouse: 'MAIN', status: OrderStatus.DRAFT, notes: 'Awaiting final quantities from the café.', lines: [{ product: 'pen', quantity: 5 }, { product: 'tape', quantity: 2 }], steps: [[22, 1]] },
+    { customer: 'northwind', warehouse: 'MAIN', status: OrderStatus.PROCESSING, lines: [{ product: 'keyboard', quantity: 3 }, { product: 'cable', quantity: 4 }], steps: [[22, 2], [22, 3], [23, 1]] },
+    { customer: 'taylor', warehouse: 'EAST', status: OrderStatus.CANCELLED, notes: 'Customer ordered by mistake.', lines: [{ product: 'box', quantity: 10 }], steps: [[23, 3], [23, 4], [24, 2]] },
+  ];
+  const fulfilled = (status: OrderStatus) =>
+    status === OrderStatus.PROCESSING ||
+    status === OrderStatus.SHIPPED ||
+    status === OrderStatus.COMPLETED;
+
+  // Guard: every stock record these sales touch must have enough units and no movement
+  // after the first seeded sale, or the appended SALE movements would break the chain.
+  const firstSale = at(21, 1);
+  const needed = new Map<string, number>();
+  for (const plan of plans.filter((p) => fulfilled(p.status))) {
+    for (const line of plan.lines) {
+      const key = `${warehouse(plan.warehouse)!.id}:${product(line.product)!.id}`;
+      needed.set(key, (needed.get(key) ?? 0) + line.quantity);
+    }
+  }
+  for (const [key, quantity] of needed) {
+    const [warehouseId, productId] = key.split(':') as [string, string];
+    const row = await tx.inventory.findUnique({
+      where: { warehouseId_productId: { warehouseId, productId } },
+      select: { quantity: true },
+    });
+    const later = await tx.stockMovement.count({
+      where: { warehouseId, productId, createdAt: { gte: firstSale } },
+    });
+    if (!row || row.quantity < quantity || later > 0) {
+      return ['skipped demo orders: the demo stock they would sell from was changed by hand'];
+    }
+  }
+
+  // prettier-ignore
+  const customerData = {
+    northwind: { name: 'Alex Morgan', companyName: 'Northwind Café', email: SALES_MARKER_EMAIL, phone: '+1 555 0103', address: '44 Placeholder Street, Springfield' },
+    harbor: { name: 'Priya Nair', companyName: 'Harbor Print Shop', email: 'hello@harbor-print.example', phone: '+1 555 0104', address: '9 Sample Wharf, Riverton' },
+    taylor: { name: 'Taylor Brooks', companyName: null, email: 'taylor.brooks@mail.example', phone: '+1 555 0105', address: null },
+    oldtown: { name: 'Chris Lee', companyName: 'Old Town Books (closed)', email: 'books@oldtown.example', phone: '+1 555 0106', address: null, notes: 'Store closed in September.' },
+  } as const;
+  const activity: Omit<Prisma.ActivityLogCreateManyInput, 'organizationId'>[] = [];
+  const customers: Record<string, string> = {};
+  for (const [key, data] of Object.entries(customerData)) {
+    const customer = await tx.customer.create({
+      data: { organizationId, ...data, createdAt: at(20, 1), isActive: key !== 'oldtown' },
+      select: { id: true, name: true },
+    });
+    customers[key] = customer.id;
+    activity.push({
+      action: 'CUSTOMER_CREATED',
+      entityType: 'Customer',
+      entityId: customer.id,
+      actorUserId: staff,
+      metadata: { name: customer.name },
+      createdAt: at(20, 1),
+    });
+    if (key === 'oldtown') {
+      activity.push({
+        action: 'CUSTOMER_ARCHIVED',
+        entityType: 'Customer',
+        entityId: customer.id,
+        actorUserId: admin,
+        metadata: { name: customer.name },
+        createdAt: at(22, 6),
+      });
+    }
+  }
+
+  const STEP_ACTIONS = ['ORDER_CREATED', 'ORDER_CONFIRMED'] as const;
+  const FINAL_ACTIONS: Record<OrderStatus, string[]> = {
+    DRAFT: [],
+    CONFIRMED: [],
+    PROCESSING: ['ORDER_PROCESSING'],
+    SHIPPED: ['ORDER_PROCESSING', 'ORDER_SHIPPED'],
+    COMPLETED: ['ORDER_PROCESSING', 'ORDER_SHIPPED', 'ORDER_COMPLETED'],
+    CANCELLED: ['ORDER_CANCELLED'],
+  };
+  const TO: Record<string, OrderStatus> = {
+    ORDER_CONFIRMED: OrderStatus.CONFIRMED,
+    ORDER_PROCESSING: OrderStatus.PROCESSING,
+    ORDER_SHIPPED: OrderStatus.SHIPPED,
+    ORDER_COMPLETED: OrderStatus.COMPLETED,
+    ORDER_CANCELLED: OrderStatus.CANCELLED,
+  };
+  let sales = 0;
+  for (const plan of plans) {
+    const orderNumber = await nextOrderNumber(tx, organizationId);
+    const lines = plan.lines.map(({ product: key, quantity }) => {
+      const item = product(key)!;
+      return { item, quantity, lineTotal: item.price.mul(quantity) };
+    });
+    const total = lines.reduce((sum, line) => sum.add(line.lineTotal), new Prisma.Decimal(0));
+    const [createdDay, createdHour] = plan.steps[0]!;
+    const lastStep = plan.steps.at(-1)!;
+    const order = await tx.order.create({
+      data: {
+        organizationId,
+        orderNumber,
+        customerId: customers[plan.customer]!,
+        warehouseId: warehouse(plan.warehouse)!.id,
+        status: plan.status,
+        notes: plan.notes ?? null,
+        subtotal: total,
+        total,
+        createdAt: at(createdDay, createdHour),
+        updatedAt: at(lastStep[0], lastStep[1]),
+        items: {
+          create: lines.map(({ item, quantity, lineTotal }) => ({
+            productId: item.id,
+            productNameSnapshot: item.name,
+            skuSnapshot: item.sku,
+            unitPrice: item.price,
+            quantity,
+            lineTotal,
+            createdAt: at(createdDay, createdHour),
+          })),
+        },
+      },
+      select: { id: true },
+    });
+
+    const actions = [
+      ...STEP_ACTIONS.slice(0, plan.status === OrderStatus.DRAFT ? 1 : 2),
+      ...FINAL_ACTIONS[plan.status],
+    ];
+    // A draft that gets cancelled was never confirmed; all seeded cancellations were confirmed first.
+    let from: OrderStatus = OrderStatus.DRAFT;
+    for (const [index, action] of actions.entries()) {
+      const [day, hour] = plan.steps[index]!;
+      const createdAt = at(day, hour);
+      const movementIds: string[] = [];
+      if (action === 'ORDER_PROCESSING') {
+        for (const { item, quantity } of lines) {
+          const whereKey = { warehouseId: warehouse(plan.warehouse)!.id, productId: item.id };
+          const row = await tx.inventory.findUniqueOrThrow({
+            where: { warehouseId_productId: whereKey },
+            select: { id: true, quantity: true },
+          });
+          const movement = await tx.stockMovement.create({
+            data: {
+              organizationId,
+              ...whereKey,
+              actorUserId: admin ?? undefined,
+              movementType: StockMovementType.SALE,
+              quantityDelta: -quantity,
+              quantityBefore: row.quantity,
+              quantityAfter: row.quantity - quantity,
+              reason: `Order ${orderNumber}`,
+              referenceType: 'ORDER',
+              referenceId: order.id,
+              createdAt,
+            },
+            select: { id: true },
+          });
+          await tx.inventory.update({
+            where: { id: row.id },
+            data: { quantity: row.quantity - quantity },
+          });
+          movementIds.push(movement.id);
+          sales += 1;
+        }
+      }
+      const to = TO[action];
+      activity.push({
+        action,
+        entityType: 'Order',
+        entityId: order.id,
+        actorUserId: action === 'ORDER_CREATED' || action === 'ORDER_CONFIRMED' ? staff : admin,
+        metadata:
+          action === 'ORDER_CREATED'
+            ? {
+                orderNumber,
+                customerId: customers[plan.customer]!,
+                warehouseId: warehouse(plan.warehouse)!.id,
+                itemCount: lines.length,
+                total: total.toFixed(2),
+              }
+            : {
+                orderNumber,
+                from,
+                to: to!,
+                ...(action === 'ORDER_PROCESSING'
+                  ? {
+                      orderId: order.id,
+                      warehouseId: warehouse(plan.warehouse)!.id,
+                      itemCount: lines.length,
+                      totalQuantity: lines.reduce((sum, line) => sum + line.quantity, 0),
+                      movementIds,
+                    }
+                  : {}),
+              },
+        createdAt,
+      });
+      if (to) from = to;
+    }
+  }
+
+  await tx.activityLog.createMany({
+    data: activity.map((entry) => ({ ...entry, organizationId })),
+  });
+  return [
+    `created 4 customers (1 archived) and ${plans.length} orders (one per status) with ${sales} SALE movements`,
+  ];
+}
+
+/**
+ * Order invariants for the demo organization: totals equal the sum of their
+ * lines, and exactly the fulfilled orders (PROCESSING, SHIPPED, COMPLETED)
+ * have one SALE movement per line referencing them.
+ */
+async function verifyOrders(prisma: PrismaClient): Promise<number> {
+  const orders = await prisma.order.findMany({
+    where: { organization: { slug: SEED_ORGANIZATION_SLUG } },
+    select: {
+      orderNumber: true,
+      id: true,
+      status: true,
+      subtotal: true,
+      total: true,
+      items: { select: { lineTotal: true, unitPrice: true, quantity: true } },
+    },
+  });
+  for (const order of orders) {
+    const sum = order.items.reduce((acc, item) => acc.add(item.lineTotal), new Prisma.Decimal(0));
+    const linesOk = order.items.every((item) =>
+      item.unitPrice.mul(item.quantity).equals(item.lineTotal),
+    );
+    const sales = await prisma.stockMovement.count({
+      where: { referenceType: 'ORDER', referenceId: order.id, movementType: 'SALE' },
+    });
+    const expectedSales = ['PROCESSING', 'SHIPPED', 'COMPLETED'].includes(order.status)
+      ? order.items.length
+      : 0;
+    if (
+      !linesOk ||
+      !sum.equals(order.subtotal) ||
+      !order.total.equals(order.subtotal) ||
+      sales !== expectedSales
+    ) {
+      throw new Error(
+        `Order ${order.orderNumber} is inconsistent with its lines or its SALE movements.`,
+      );
+    }
+  }
+  return orders.length;
+}
+
+/**
  * Checks the core inventory invariant for the demo organization: every stock
  * record equals the last `quantityAfter` and the sum of its movements.
  */
@@ -1088,8 +1431,19 @@ async function main(): Promise<void> {
         : 'Demo inventory is up to date.',
     );
 
+    const salesChanges = await prisma.$transaction((tx) => ensureSalesAdditions(tx), {
+      timeout: 60_000,
+    });
+    console.log(
+      salesChanges.length > 0
+        ? `Demo customers & orders updated: ${salesChanges.join('; ')}.`
+        : 'Demo customers & orders are up to date.',
+    );
+
     const verified = await verifyStockLedger(prisma);
     console.log(`Stock ledger verified: ${verified} stock records match their movement history.`);
+    const orders = await verifyOrders(prisma);
+    console.log(`Orders verified: ${orders} orders match their lines and SALE movements.`);
   } finally {
     await prisma.$disconnect();
   }
