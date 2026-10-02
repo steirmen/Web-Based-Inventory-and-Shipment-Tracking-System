@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react';
+import type { Category } from '@app/shared';
 import { describe, expect, it } from 'vitest';
 import { money } from '@/test/format';
 import {
@@ -11,6 +12,13 @@ import {
 } from '@/test/catalog-fixtures';
 import { apiError, json, pending } from '@/test/mock-api';
 
+const categorySearch = (categories: Category[]) => (_init: RequestInit | undefined, url: URL) => {
+  const term = (url.searchParams.get('search') ?? '').toLowerCase();
+  return Response.json({
+    categories: categories.filter((category) => category.name.toLowerCase().includes(term)),
+  });
+};
+const packaging = testCategory({ id: '0198c0de-0000-7000-8000-0000000000c3', name: 'Packaging' });
 const product = testProduct();
 const PRODUCT_API = `${ORG_API}/products/${product.id}`;
 const PRODUCT_APP = `${ORG_APP}/products/${product.id}`;
@@ -82,6 +90,58 @@ describe('New product page', () => {
       currency: 'EUR',
     });
     expect(screen.getByText(money('1234.50', 'EUR'))).toBeVisible();
+  });
+
+  it('picks the category with a searchable picker, creates one from it, and submits its id', async () => {
+    const gaming = testCategory({ id: '0198c0de-0000-7000-8000-0000000000c4', name: 'Gaming' });
+    const created = testProduct({ id: '0198c0de-0000-7000-8000-0000000000e3', category: gaming });
+    const { user, fetchMock } = await renderCatalog(
+      `${ORG_APP}/products/new`,
+      'STAFF',
+      {
+        [`GET ${ORG_API}/categories`]: categorySearch([testCategory(), packaging]),
+        [`POST ${ORG_API}/categories`]: json(201, { category: gaming }),
+        [`POST ${ORG_API}/products`]: json(201, { product: created }),
+        [`GET ${ORG_API}/products/${created.id}`]: json(200, { product: created }),
+      },
+      { waitForHeading: 'New product' },
+    );
+
+    // A picker, not a free-text field: it lists the workspace's categories when opened.
+    const picker = screen.getByRole('combobox', { name: 'Category' });
+    expect(picker).toHaveAccessibleDescription(
+      'Type to search. Choose “Create” to add a new category.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Show categories' }));
+    expect(await screen.findByRole('option', { name: 'Office' })).toBeVisible();
+    expect(screen.getByRole('option', { name: 'Packaging' })).toBeVisible();
+
+    // Search, then select an existing category, then clear it.
+    await user.type(picker, 'pack');
+    await waitFor(() => expect(screen.queryByRole('option', { name: 'Office' })).toBeNull());
+    await user.click(screen.getByRole('option', { name: 'Packaging' }));
+    expect(picker).toHaveValue('Packaging');
+    await user.click(screen.getByRole('button', { name: 'Clear category' }));
+    expect(picker).toHaveValue('');
+
+    // A new name: "no results", then create it right here; it becomes the selection.
+    await user.type(picker, 'Gaming');
+    expect(await screen.findByText('No categories match “Gaming”.')).toBeVisible();
+    await user.click(screen.getByRole('option', { name: 'Create “Gaming”' }));
+    await waitFor(() => expect(picker).toHaveValue('Gaming'));
+    expect(sentBodies(fetchMock, 'POST', `${ORG_API}/categories`)).toEqual([{ name: 'Gaming' }]);
+
+    await user.type(screen.getByLabelText('Name'), 'Controller');
+    await user.type(screen.getByLabelText('SKU'), 'GAME-1');
+    await user.type(screen.getByLabelText('Price'), '30');
+    await user.type(screen.getByLabelText('Cost'), '12');
+    await user.click(screen.getByRole('button', { name: 'Create product' }));
+
+    expect(await screen.findByText('Product created.')).toBeVisible();
+    // The category's id is submitted, never its visible name.
+    expect(sentBodies(fetchMock, 'POST', `${ORG_API}/products`)[0]).toMatchObject({
+      categoryId: gaming.id,
+    });
   });
 
   it('validates on the client before sending anything', async () => {
@@ -325,6 +385,53 @@ describe('Edit product page', () => {
     expect(sentBodies(fetchMock, 'PATCH', PRODUCT_API)).toEqual([{ price: '99.99' }]);
     // The detail page shows the saved product from the cache.
     expect(screen.getByText(money('99.99'))).toBeVisible();
+  });
+
+  it('shows the current category, and saves another one chosen with the picker', async () => {
+    const saved = { ...product, category: { id: packaging.id, name: 'Packaging' } };
+    const { user, fetchMock } = await renderCatalog(
+      `${PRODUCT_APP}/edit`,
+      'STAFF',
+      {
+        [`GET ${ORG_API}/categories`]: categorySearch([testCategory(), packaging]),
+        [`GET ${PRODUCT_API}`]: json(200, { product }),
+        [`PATCH ${PRODUCT_API}`]: json(200, { product: saved }),
+      },
+      { waitForHeading: 'Edit Ballpoint Pen' },
+    );
+
+    const picker = screen.getByRole('combobox', { name: 'Category' });
+    expect(picker).toHaveValue('Office');
+    await user.click(picker);
+    expect(await screen.findByRole('option', { name: 'Office' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await user.clear(picker);
+    await user.type(picker, 'Pack');
+    await user.click(await screen.findByRole('option', { name: 'Packaging' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByText('Changes saved.')).toBeVisible();
+    expect(sentBodies(fetchMock, 'PATCH', PRODUCT_API)).toEqual([{ categoryId: packaging.id }]);
+  });
+
+  it('removes the category when it is cleared', async () => {
+    const { user, fetchMock } = await renderCatalog(
+      `${PRODUCT_APP}/edit`,
+      'OWNER',
+      {
+        [`GET ${PRODUCT_API}`]: json(200, { product }),
+        [`PATCH ${PRODUCT_API}`]: json(200, { product: { ...product, category: null } }),
+      },
+      { waitForHeading: 'Edit Ballpoint Pen' },
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Clear category' }));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(await screen.findByText('Changes saved.')).toBeVisible();
+    expect(sentBodies(fetchMock, 'PATCH', PRODUCT_API)).toEqual([{ categoryId: null }]);
   });
 
   it('does not send a request when nothing changed', async () => {

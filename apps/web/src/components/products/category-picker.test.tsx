@@ -100,6 +100,33 @@ describe('CategoryPicker', () => {
     expect(chosen()).toHaveTextContent('Outdoor');
   });
 
+  it('opens and closes with the ▼ button, like a select', async () => {
+    mockApi({ [`GET ${CATEGORIES}`]: searchHandler([office, outdoor]) });
+    const { user, input } = renderPicker();
+
+    await user.click(screen.getByRole('button', { name: 'Show categories' }));
+    expect(input).toHaveFocus();
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('option', { name: 'Outdoor' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Hide categories' }));
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('Tab leaves the field, closes the list, and keeps the current choice', async () => {
+    mockApi({ [`GET ${CATEGORIES}`]: searchHandler([office, outdoor]) });
+    const { user, input } = renderPicker({ initial: { id: office.id, name: 'Office' } });
+
+    await user.click(input);
+    await screen.findByRole('option', { name: 'Outdoor' });
+    await user.clear(input);
+    await user.type(input, 'Out');
+    await user.tab();
+    expect(input).not.toHaveFocus();
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(input).toHaveValue('Office');
+    expect(chosen()).toHaveTextContent('Office');
+  });
+
   it('shows the current choice, and clears it', async () => {
     mockApi({ [`GET ${CATEGORIES}`]: searchHandler([office]) });
     const { user, input } = renderPicker({ initial: { id: office.id, name: 'Office' } });
@@ -124,6 +151,7 @@ describe('CategoryPicker', () => {
     const { user, input } = renderPicker();
 
     await user.type(input, '  Garden ');
+    expect(await screen.findByText('No categories match “Garden”.')).toBeVisible();
     await user.click(await screen.findByRole('option', { name: 'Create “Garden”' }));
 
     await waitFor(() => expect(chosen()).toHaveTextContent(`${created.id}:Garden`));

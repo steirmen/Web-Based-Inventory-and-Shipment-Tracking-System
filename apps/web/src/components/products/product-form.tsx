@@ -22,6 +22,7 @@ import {
   type ProductFormValues,
   validateProduct,
 } from '@/lib/product-form';
+import { useCurrentOrganization } from '@/lib/organization-context';
 import { CategoryPicker } from './category-picker';
 
 const L = CATALOG_LIMITS;
@@ -51,6 +52,7 @@ export function ProductForm({
   onSubmit: (values: ProductFormValues) => Promise<unknown>;
 }) {
   const m = useMessages(catalog);
+  const { can } = useCurrentOrganization();
   const c = useMessages(common);
   const f = useFormat();
   const errorMessage = useApiErrorMessage();
@@ -139,7 +141,11 @@ export function ProductForm({
               />
             )}
           </FormField>
-          <FormField label={m.form.category} error={errors.categoryId}>
+          <FormField
+            label={m.form.category}
+            error={errors.categoryId}
+            hint={can('CATEGORIES_CREATE') ? m.picker.hintCreate : m.picker.hintReadOnly}
+          >
             {(control) => (
               <CategoryPicker
                 control={control}

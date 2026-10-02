@@ -44,7 +44,7 @@ Request and response types live in `packages/shared/src/catalog.ts` (`Category`,
 
 `GET …/categories?search=` searches the organization's categories case-insensitively (`contains`, with `%`, `_`, and `` escaped), returns an exact (case-insensitive) match first and then names alphabetically, capped at `CATALOG_LIMITS.categorySearchMax` (20). Without `search` the full list is returned as before. The duplicate check on create/rename (`CATEGORY_NAME_TAKEN`) escapes the same characters, so `%` or `_` in a name never matches other names.
 
-The product form's **category combobox** (`components/products/category-picker.tsx`) uses it: type to search this workspace only, keyboard support, a selected state, clear, and a "Create “Name”" option only with `CATEGORIES_CREATE` (UX only; the API enforces the permission) that never duplicates an existing name in another letter case — if someone creates the same name meanwhile, the existing category is selected.
+The product form's **category combobox** (`components/products/category-picker.tsx`, on both Create and Edit) uses it: open it with ▼ or by focusing it to see the workspace's categories, type to search this workspace only, keyboard support, a selected state, clear, and a "Create “Name”" option only with `CATEGORIES_CREATE` (UX only; the API enforces the permission) that never duplicates an existing name in another letter case — if someone creates the same name meanwhile, the existing category is selected.
 
 ### Input normalization
 

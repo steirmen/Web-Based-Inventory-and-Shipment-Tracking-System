@@ -20,8 +20,11 @@ afterEach(async () => {
 const url = (organizationId: string, categoryId?: string) =>
   `/organizations/${organizationId}/categories${categoryId ? `/${categoryId}` : ''}`;
 
-const createCategory = (organizationId: string, actor: TeamMember, body: Record<string, unknown>) =>
-  api().post(url(organizationId)).set('Cookie', actor.cookie).send(body);
+const createCategory = (
+  organizationId: string,
+  actor: Pick<TeamMember, 'cookie'>,
+  body: Record<string, unknown>,
+) => api().post(url(organizationId)).set('Cookie', actor.cookie).send(body);
 
 describe('GET /organizations/:id/categories', () => {
   it('lists only this organization’s categories with product counts, newest first', async () => {
@@ -166,6 +169,18 @@ describe('POST /organizations/:id/categories', () => {
       });
     },
   );
+
+  it('refuses anonymous users and members of other workspaces, writing nothing', async () => {
+    const team = await createTeam();
+    const outsider = await createSignedInUser();
+
+    await api().post(url(team.organization.id)).send({ name: 'Gaming' }).expect(401);
+    const foreign = await createCategory(team.organization.id, outsider, { name: 'Gaming' }).expect(
+      404,
+    );
+    expect(foreign.body.code).toBe('ORGANIZATION_NOT_FOUND');
+    expect(await prisma.category.count({ where: { name: 'Gaming' } })).toBe(0);
+  });
 
   it('stores a blank description as null', async () => {
     const team = await createTeam();

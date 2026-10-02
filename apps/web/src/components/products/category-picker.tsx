@@ -4,7 +4,7 @@
 // "Create" option. The keyboard is handled on the input (aria-activedescendant), so the
 // options' click handlers are for pointers only.
 import type { Category } from '@app/shared';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, Plus, Search, X } from 'lucide-react';
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import type { FieldControlProps } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
@@ -146,6 +146,12 @@ export function CategoryPicker({
         setOpen(false);
         restore();
       }
+    } else if (event.key === 'Tab') {
+      // Leaving the field (also to its own clear button) closes the list; focus moves on.
+      if (open) {
+        setOpen(false);
+        restore();
+      }
     } else if (event.key === 'Home' && open) {
       event.preventDefault();
       setActive(0);
@@ -161,7 +167,7 @@ export function CategoryPicker({
       ? m.searching
       : results.isError
         ? m.loadError
-        : options.length === 0
+        : sorted.length === 0
           ? searching
             ? m.noMatches({ term })
             : m.empty
@@ -179,6 +185,10 @@ export function CategoryPicker({
       }}
     >
       <div className="relative">
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
+          aria-hidden="true"
+        />
         <Input
           {...control}
           ref={inputRef}
@@ -189,7 +199,7 @@ export function CategoryPicker({
           aria-activedescendant={open && options.length > 0 ? optionId(activeIndex) : undefined}
           autoComplete="off"
           placeholder={m.placeholder}
-          className={cn(value && 'pr-9')}
+          className={cn('pl-9', value ? 'pr-16' : 'pr-9')}
           value={input}
           onChange={(event) => {
             setInput(event.target.value);
@@ -206,7 +216,7 @@ export function CategoryPicker({
             type="button"
             aria-label={m.clear}
             title={m.clear}
-            className="absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-control text-subtle-foreground focus-ring hover:text-foreground"
+            className="absolute top-1/2 right-8 flex size-6 -translate-y-1/2 items-center justify-center rounded-control text-subtle-foreground focus-ring hover:text-foreground"
             onClick={() => {
               choose(null, m.noCategory);
               inputRef.current?.focus();
@@ -215,6 +225,30 @@ export function CategoryPicker({
             <X className="size-4" aria-hidden="true" />
           </button>
         )}
+        {/* The ▼ affordance: pointer users open the list here; the keyboard uses ↓ on the input. */}
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={open ? m.hideList : m.showList}
+          title={open ? m.hideList : m.showList}
+          className="absolute top-1/2 right-1.5 flex size-6 -translate-y-1/2 items-center justify-center rounded-control text-subtle-foreground hover:text-foreground"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            if (open) {
+              setOpen(false);
+              restore();
+            } else {
+              inputRef.current?.focus();
+              setOpen(true);
+              setActive(0);
+            }
+          }}
+        >
+          <ChevronDown
+            className={cn('size-4 transition-transform', open && 'rotate-180')}
+            aria-hidden="true"
+          />
+        </button>
       </div>
 
       <div
@@ -223,6 +257,22 @@ export function CategoryPicker({
           !open && 'hidden',
         )}
       >
+        {status && (
+          <p className="flex items-center gap-2 px-2.5 py-2 text-sm text-muted-foreground">
+            {results.isPending && <Spinner size="sm" label={null} />}
+            {status}
+            {results.isError && (
+              <button
+                type="button"
+                className="ml-auto rounded-sm font-medium text-primary focus-ring hover:underline"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => void results.refetch()}
+              >
+                {m.retry}
+              </button>
+            )}
+          </p>
+        )}
         <ul id={listId} role="listbox" aria-label={m.suggestions}>
           {options.map((option, index) => {
             const isActive = index === activeIndex;
@@ -273,22 +323,6 @@ export function CategoryPicker({
             );
           })}
         </ul>
-        {status && (
-          <p className="flex items-center gap-2 px-2.5 py-2 text-sm text-muted-foreground">
-            {results.isPending && <Spinner size="sm" label={null} />}
-            {status}
-            {results.isError && (
-              <button
-                type="button"
-                className="ml-auto rounded-sm font-medium text-primary focus-ring hover:underline"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => void results.refetch()}
-              >
-                {m.retry}
-              </button>
-            )}
-          </p>
-        )}
       </div>
 
       {createError && (

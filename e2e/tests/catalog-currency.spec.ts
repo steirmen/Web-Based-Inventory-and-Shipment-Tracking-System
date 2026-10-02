@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { sql } from '../support/db.js';
-import { expect, orgPath, test } from '../support/fixtures.js';
+import { expect, horizontalOverflow, orgPath, test } from '../support/fixtures.js';
 
 /*
  * Phase 10.1 in the Beta workspace (the STAFF member "other"), so Acme's counts
@@ -50,11 +50,8 @@ test.describe('category combobox', () => {
     await expect(categoryField(page)).toHaveValue('Office');
     await expect(page.getByRole('heading', { level: 1, name: 'New product' })).toBeVisible();
     await categoryField(page).fill('Zzz');
-    await expect(
-      page
-        .getByText('No categories match “Zzz”.')
-        .or(page.getByRole('option', { name: 'Create “Zzz”' })),
-    ).toBeVisible();
+    await expect(page.getByText('No categories match “Zzz”.')).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Create “Zzz”' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(categoryField(page)).toHaveValue('Office');
 
@@ -63,6 +60,90 @@ test.describe('category combobox', () => {
     );
     expect(rows.filter((row) => row.organization_id === data.beta)).toHaveLength(1);
     expect(rows.filter((row) => row.organization_id === data.acme)).toHaveLength(1);
+  });
+});
+
+test.describe('category picker in the product forms', () => {
+  test('create a product with a category created from the picker, then change it on edit', async ({
+    pageAs,
+    apiAs,
+    data,
+  }) => {
+    // This test's own existing category (Beta), so it relies on no other test.
+    const api = await apiAs('other');
+    const tools = (await (
+      await api.post(`/organizations/${data.beta}/categories`, { data: { name: 'E2E Tools' } })
+    ).json()) as { category: { id: string } };
+
+    const page = await pageAs('other');
+    await page.goto(orgPath(data.beta, '/products'));
+    await page.getByRole('link', { name: 'Add product' }).first().click();
+    await expect(page.getByRole('heading', { level: 1, name: 'New product' })).toBeVisible();
+
+    // Open the picker with its ▼ button: this workspace's categories, never Acme's.
+    const picker = categoryField(page);
+    await expect(picker).toHaveAttribute('placeholder', 'Search or select a category…');
+    await page.getByRole('button', { name: 'Show categories' }).click();
+    await expect(page.getByRole('option', { name: 'E2E Tools' })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Packaging' })).toHaveCount(0);
+
+    // Search, select, clear.
+    await picker.fill('tool');
+    await page.getByRole('option', { name: 'E2E Tools' }).click();
+    await expect(picker).toHaveValue('E2E Tools');
+    await page.getByRole('button', { name: 'Clear category' }).click();
+    await expect(picker).toHaveValue('');
+
+    // A brand-new name: create it from the picker; it is selected at once.
+    await picker.fill('E2E Gaming');
+    await expect(page.getByText('No categories match “E2E Gaming”.')).toBeVisible();
+    await page.getByRole('option', { name: 'Create “E2E Gaming”' }).click();
+    await expect(picker).toHaveValue('E2E Gaming');
+
+    await page.getByLabel('Name').fill('E2E Controller');
+    await page.getByLabel('SKU').fill('E2E-CTRL');
+    await page.getByLabel('Price').fill('30.00');
+    await page.getByLabel('Cost').fill('12.00');
+    await page.getByLabel('Minimum stock').fill('0');
+    await page.getByRole('button', { name: 'Create product' }).click();
+    await expect(page.getByText('Product created.')).toBeVisible();
+    await expect(page.getByText('E2E Gaming')).toBeVisible();
+
+    const [created] = await sql<{ id: string; category: string }>(
+      `SELECT p.id::text, c.name AS category FROM products p
+       JOIN categories c ON c.organization_id = p.organization_id AND c.id = p.category_id
+       WHERE p.organization_id = $1::uuid AND p.sku = 'E2E-CTRL'`,
+      [data.beta],
+    );
+    expect(created!.category).toBe('E2E Gaming');
+
+    // Edit: the category is shown selected; change it and save.
+    await page.getByRole('link', { name: 'Edit', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Edit E2E Controller' }),
+    ).toBeVisible();
+    await expect(picker).toHaveValue('E2E Gaming');
+    await picker.fill('E2E To');
+    await page.getByRole('option', { name: 'E2E Tools' }).click();
+    await page.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByText('Changes saved.')).toBeVisible();
+    await expect(page.getByText('E2E Tools')).toBeVisible();
+    const [edited] = await sql<{ category_id: string }>(
+      'SELECT category_id::text FROM products WHERE id = $1::uuid',
+      [created!.id],
+    );
+    expect(edited!.category_id).toBe(tools.category.id);
+
+    // 375 px: the picker and its suggestions stay inside the screen.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.getByRole('link', { name: 'Edit', exact: true }).click();
+    await page.getByRole('button', { name: 'Show categories' }).click();
+    const list = page.getByRole('listbox', { name: 'Categories' });
+    await expect(list.getByRole('option', { name: 'E2E Gaming' })).toBeVisible();
+    const box = (await list.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
+    expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
   });
 });
 
