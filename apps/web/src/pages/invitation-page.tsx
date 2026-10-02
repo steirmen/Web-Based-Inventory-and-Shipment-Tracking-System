@@ -1,4 +1,4 @@
-import type { MemberRole } from '@app/shared';
+import type { ApiErrorCode, MemberRole } from '@app/shared';
 import { CircleX, MailOpen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
@@ -11,17 +11,20 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader } from '@/components/ui/card';
 import { useAuth, useLogout } from '@/hooks/use-auth';
 import { useAcceptInvitation, useInvitation } from '@/hooks/use-invitation';
-import { apiErrorMessage, hasErrorCode } from '@/lib/api-errors';
+import type { Translation } from '@/i18n/define';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { workspace } from '@/i18n/messages/workspace';
+import { hasErrorCode, useApiErrorMessage } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
-import { formatDateTime } from '@/lib/format';
 import { paths } from '@/routes/paths';
 
-const INVALID_TITLES: Record<string, string> = {
-  INVITATION_EXPIRED: 'This invitation has expired',
-  INVITATION_REVOKED: 'This invitation is no longer valid',
-  INVITATION_ALREADY_ACCEPTED: 'This invitation has already been used',
-  INVITATION_NOT_FOUND: 'Invitation not found',
-};
+type InvalidCode = keyof Translation<(typeof workspace)['en']>['invitation']['invalid'];
+
+const isInvalidCode = (
+  code: ApiErrorCode | '',
+  titles: Record<InvalidCode, string>,
+): code is InvalidCode => code in titles;
 
 /**
  * /invite/:token — public. Shows the invitation, then lets the signed-in user
@@ -36,12 +39,14 @@ export function InvitationPage() {
   const logout = useLogout();
   const navigate = useNavigate();
   const invitePath = paths.invitation(token);
+  const m = useMessages(workspace).invitation;
+  const errorMessage = useApiErrorMessage();
 
   if (invitation.isPending) {
     return (
       <Card className="shadow-raised">
-        <title>{pageTitle('Invitation')}</title>
-        <LoadingState label="Loading invitation" />
+        <title>{pageTitle(m.pageTitle)}</title>
+        <LoadingState label={m.loading} />
       </Card>
     );
   }
@@ -51,11 +56,11 @@ export function InvitationPage() {
     return (
       <InvitationCard
         icon={<CircleX className="size-5" aria-hidden="true" />}
-        title={INVALID_TITLES[code] ?? "We couldn't load this invitation"}
-        description={apiErrorMessage(invitation.error)}
+        title={isInvalidCode(code, m.invalid) ? m.invalid[code] : m.loadError}
+        description={errorMessage(invitation.error)}
         footer={
           <Link to={paths.home} className={buttonVariants({ variant: 'secondary' })}>
-            Go to the app
+            {m.goToApp}
           </Link>
         }
       />
@@ -74,31 +79,31 @@ export function InvitationPage() {
       onSuccess: ({ organization }) =>
         void navigate(paths.organization(organization.id), {
           replace: true,
-          state: { notice: `Invitation accepted. Welcome to ${organization.name}!` },
+          state: { notice: m.accepted({ name: organization.name }) },
         }),
     });
 
   let action: ReactNode;
   if (auth.status === 'loading') {
-    action = <LoadingState label="Checking your session" className="min-h-0 py-2" />;
+    action = <LoadingState label={m.checkingSession} className="min-h-0 py-2" />;
   } else if (auth.status !== 'authenticated') {
     action = (
       <div className="flex flex-col gap-3">
-        <Alert tone="info">Please sign in with the invited email to accept.</Alert>
+        <Alert tone="info">{m.signInFirst}</Alert>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Link
             to={paths.login}
             state={redirectState}
             className={buttonVariants({ className: 'flex-1' })}
           >
-            Sign in
+            {m.signIn}
           </Link>
           <Link
             to={paths.register}
             state={redirectState}
             className={buttonVariants({ variant: 'secondary', className: 'flex-1' })}
           >
-            Create account
+            {m.createAccount}
           </Link>
         </div>
       </div>
@@ -106,36 +111,36 @@ export function InvitationPage() {
   } else if (!emailMatches || serverMismatch) {
     action = (
       <div className="flex flex-col gap-3">
-        <Alert tone="warning" title="This invitation was sent to another email address.">
-          Sign out, then sign in with the invited email address to accept it.
+        <Alert tone="warning" title={m.otherEmailTitle}>
+          {m.otherEmailText}
         </Alert>
         <Button
           variant="secondary"
           onClick={() => logout.mutate({ returnTo: invitePath, email: details.email })}
           isLoading={logout.isPending}
         >
-          Sign out and switch account
+          {m.switchAccount}
         </Button>
       </div>
     );
   } else if (alreadyMember) {
     action = (
       <div className="flex flex-col gap-3">
-        <Alert tone="info">You&apos;re already a member of this workspace.</Alert>
+        <Alert tone="info">{m.alreadyMember}</Alert>
         <Link
           to={paths.organization(details.organization.id)}
           className={buttonVariants({ variant: 'secondary' })}
         >
-          Open workspace
+          {m.openWorkspace}
         </Link>
       </div>
     );
   } else {
     action = (
       <div className="flex flex-col gap-3">
-        {accept.isError && <Alert tone="danger">{apiErrorMessage(accept.error)}</Alert>}
+        {accept.isError && <Alert tone="danger">{errorMessage(accept.error)}</Alert>}
         <Button size="lg" className="w-full" onClick={onAccept} isLoading={accept.isPending}>
-          {accept.isPending ? 'Accepting…' : 'Accept invitation'}
+          {accept.isPending ? m.accepting : m.accept}
         </Button>
       </div>
     );
@@ -144,8 +149,8 @@ export function InvitationPage() {
   return (
     <InvitationCard
       icon={<MailOpen className="size-5" aria-hidden="true" />}
-      title={`Join ${details.organization.name}`}
-      description="You've been invited to a workspace."
+      title={m.title({ name: details.organization.name })}
+      description={m.description}
       body={
         <InvitationDetails
           email={details.email}
@@ -167,21 +172,23 @@ function InvitationDetails({
   role: MemberRole;
   expiresAt: string;
 }) {
+  const m = useMessages(workspace).invitation;
+  const f = useFormat();
   return (
     <dl className="divide-y divide-border rounded-control border border-border text-sm">
       <div className="flex items-center justify-between gap-4 px-4 py-2.5">
-        <dt className="text-muted-foreground">Invited email</dt>
+        <dt className="text-muted-foreground">{m.invitedEmail}</dt>
         <dd className="min-w-0 truncate font-medium">{email}</dd>
       </div>
       <div className="flex items-center justify-between gap-4 px-4 py-2.5">
-        <dt className="text-muted-foreground">Role</dt>
+        <dt className="text-muted-foreground">{m.role}</dt>
         <dd>
           <RoleBadge role={role} />
         </dd>
       </div>
       <div className="flex items-center justify-between gap-4 px-4 py-2.5">
-        <dt className="text-muted-foreground">Expires</dt>
-        <dd>{formatDateTime(expiresAt)}</dd>
+        <dt className="text-muted-foreground">{m.expires}</dt>
+        <dd>{f.dateTime(expiresAt)}</dd>
       </div>
     </dl>
   );
@@ -200,9 +207,10 @@ function InvitationCard({
   body?: ReactNode;
   footer: ReactNode;
 }) {
+  const m = useMessages(workspace).invitation;
   return (
     <Card className="shadow-raised">
-      <title>{pageTitle('Invitation')}</title>
+      <title>{pageTitle(m.pageTitle)}</title>
       <CardHeader className="gap-1 pb-5">
         <div className="mb-3 flex size-10 items-center justify-center rounded-control bg-primary-soft text-primary-soft-foreground">
           {icon}

@@ -3,13 +3,11 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AppException } from '../common/errors/app-exception.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
+import { AUTH_USER_SELECT, toAuthUser } from './auth-user.js';
 import type { LoginDto, RegisterDto } from './dto/auth.dto.js';
 import { normalizeEmail } from './email.js';
 import { PasswordService } from './password/password.service.js';
 import { type IssuedSession, SessionsService } from './sessions/sessions.service.js';
-
-/** The user columns that may leave the API. */
-const AUTH_USER_SELECT = { id: true, name: true, email: true } as const;
 
 export interface AuthResult {
   user: AuthUser;
@@ -56,10 +54,12 @@ export class AuthService {
 
     let user: AuthUser;
     try {
-      user = await this.prisma.user.create({
-        data: { name: input.name.trim(), email, passwordHash },
-        select: AUTH_USER_SELECT,
-      });
+      user = toAuthUser(
+        await this.prisma.user.create({
+          data: { name: input.name.trim(), email, passwordHash },
+          select: AUTH_USER_SELECT,
+        }),
+      );
     } catch (error) {
       // Lost a race with a concurrent registration for the same email.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -89,7 +89,7 @@ export class AuthService {
       throw invalidCredentials();
     }
 
-    const { passwordHash: _omitted, ...user } = record;
+    const user = toAuthUser(record);
     const session = await this.sessions.create(user.id);
     this.logger.log(`User signed in: ${user.id}`);
     return { user, session };

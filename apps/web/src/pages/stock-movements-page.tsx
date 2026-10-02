@@ -22,13 +22,14 @@ import {
 } from '@/components/ui/table';
 import { useProducts } from '@/hooks/use-catalog';
 import { useStockMovements, useWarehouses } from '@/hooks/use-inventory';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { stock } from '@/i18n/messages/stock';
 import { pageTitle } from '@/lib/app-config';
 import { cn } from '@/lib/cn';
-import { formatDateTime } from '@/lib/format';
 import {
-  formatDelta,
   hasMovementFilters,
-  MOVEMENT_TYPE_LABELS,
   type MovementParams,
   movementsPath,
   readMovementParams,
@@ -46,6 +47,8 @@ const PRODUCT_OPTIONS_LIMIT = 100;
  */
 export function StockMovementsPage() {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(stock).movements;
+  const c = useMessages(common);
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readMovementParams(searchParams);
   const invalidRange = Boolean(params.from && params.to && params.from > params.to);
@@ -80,40 +83,37 @@ export function StockMovementsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Stock movements · ${organization.name}`)}</title>
-      <PageHeader
-        title="Stock movements"
-        description="A permanent record of every stock change. Entries can't be edited or deleted; mistakes are corrected with a new movement."
-      />
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
+      <PageHeader title={m.title} description={m.description} />
 
       <search className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 xl:items-end">
-        <FormField label="Warehouse">
+        <FormField label={m.warehouse}>
           {(control) => (
             <Select
               {...control}
               value={params.warehouseId}
               onChange={(event) => setParams({ warehouseId: event.target.value })}
             >
-              <option value="">All warehouses</option>
+              <option value="">{m.allWarehouses}</option>
               {warehouses.data?.warehouses.map((warehouse) => (
                 <option key={warehouse.id} value={warehouse.id}>
                   {warehouse.name}
-                  {warehouse.isActive ? '' : ' (archived)'}
+                  {warehouse.isActive ? '' : m.archivedSuffix}
                 </option>
               ))}
             </Select>
           )}
         </FormField>
-        <FormField label="Product">
+        <FormField label={m.product}>
           {(control) => (
             <Select
               {...control}
               value={params.productId}
               onChange={(event) => setParams({ productId: event.target.value })}
             >
-              <option value="">All products</option>
+              <option value="">{m.allProducts}</option>
               {params.productId && !productOptions.some((p) => p.id === params.productId) && (
-                <option value={params.productId}>Selected product</option>
+                <option value={params.productId}>{m.selectedProduct}</option>
               )}
               {productOptions.map((product) => (
                 <option key={product.id} value={product.id}>
@@ -123,7 +123,7 @@ export function StockMovementsPage() {
             </Select>
           )}
         </FormField>
-        <FormField label="Type">
+        <FormField label={m.type}>
           {(control) => (
             <Select
               {...control}
@@ -132,16 +132,16 @@ export function StockMovementsPage() {
                 setParams({ movementType: event.target.value as MovementParams['movementType'] })
               }
             >
-              <option value="">All types</option>
+              <option value="">{m.allTypes}</option>
               {STOCK_MOVEMENT_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {MOVEMENT_TYPE_LABELS[type]}
+                  {c.movementType[type]}
                 </option>
               ))}
             </Select>
           )}
         </FormField>
-        <FormField label="From">
+        <FormField label={m.from}>
           {(control) => (
             <Input
               {...control}
@@ -152,7 +152,7 @@ export function StockMovementsPage() {
             />
           )}
         </FormField>
-        <FormField label="To" error={invalidRange ? 'Must not be before “From”.' : undefined}>
+        <FormField label={m.to} error={invalidRange ? m.invalidRange : undefined}>
           {(control) => (
             <Input
               {...control}
@@ -163,7 +163,7 @@ export function StockMovementsPage() {
             />
           )}
         </FormField>
-        <FormField label="Order">
+        <FormField label={m.order}>
           {(control) => (
             <Select
               {...control}
@@ -172,8 +172,8 @@ export function StockMovementsPage() {
                 setParams({ sortOrder: event.target.value === 'asc' ? 'asc' : 'desc' })
               }
             >
-              <option value="desc">Newest first</option>
-              <option value="asc">Oldest first</option>
+              <option value="desc">{m.newest}</option>
+              <option value="asc">{m.oldest}</option>
             </Select>
           )}
         </FormField>
@@ -181,27 +181,26 @@ export function StockMovementsPage() {
 
       <div className="-mt-3 flex min-h-8 items-center justify-end gap-2">
         {movements.isFetching && !movements.isPending && (
-          <Spinner size="sm" label="Updating results" className="text-muted-foreground" />
+          <Spinner size="sm" label={m.updating} className="text-muted-foreground" />
         )}
         {filtered && (
           <Button variant="ghost" size="sm" onClick={clearFilters}>
             <X aria-hidden="true" />
-            Clear filters
+            {c.actions.clearFilters}
           </Button>
         )}
       </div>
 
       {params.transferGroupId && (
         <Alert tone="info">
-          Showing the two movements of transfer {transferLabel(params.transferGroupId)}: stock
-          leaving the source warehouse and arriving in the destination.
+          {m.transferInfo({ label: transferLabel(params.transferGroupId) })}
         </Alert>
       )}
 
-      {movements.isPending && <ListSkeleton label="Loading stock movements" />}
+      {movements.isPending && <ListSkeleton label={m.loading} />}
       {movements.isError && (
         <ErrorState
-          title="We couldn't load stock movements"
+          title={m.loadError}
           error={movements.error}
           onRetry={() => void movements.refetch()}
         />
@@ -210,14 +209,12 @@ export function StockMovementsPage() {
       {data && data.pagination.totalItems === 0 && (
         <EmptyState
           icon={<History className="size-5" aria-hidden="true" />}
-          title={filtered ? 'No movements match your filters.' : 'No stock movements yet'}
-          description={
-            filtered ? undefined : 'Receiving, issuing, or moving stock records a movement here.'
-          }
+          title={filtered ? m.noMatches : m.emptyTitle}
+          description={filtered ? undefined : m.emptyText}
           action={
             filtered ? (
               <Button variant="secondary" onClick={clearFilters}>
-                Clear filters
+                {c.actions.clearFilters}
               </Button>
             ) : undefined
           }
@@ -243,10 +240,10 @@ export function StockMovementsPage() {
 
       {data && data.items.length === 0 && data.pagination.totalItems > 0 && (
         <EmptyState
-          title="This page is empty."
+          title={m.pageEmpty}
           action={
             <Button variant="secondary" onClick={() => setParams({ page: 1 })}>
-              Go to the first page
+              {m.firstPage}
             </Button>
           }
         />
@@ -256,6 +253,7 @@ export function StockMovementsPage() {
 }
 
 function Change({ delta }: { delta: number }) {
+  const f = useFormat();
   return (
     <span
       className={cn(
@@ -264,7 +262,7 @@ function Change({ delta }: { delta: number }) {
         delta > 0 ? 'text-success-soft-foreground' : 'text-danger',
       )}
     >
-      {formatDelta(delta)}
+      {f.signed(delta)}
     </span>
   );
 }
@@ -275,52 +273,55 @@ function Change({ delta }: { delta: number }) {
  */
 function TransferLink({ movement }: { movement: StockMovement }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(stock).movements;
   const [searchParams] = useSearchParams();
   const groupId = movement.transferGroupId;
   if (!groupId) return null;
   const label = transferLabel(groupId);
   if (searchParams.get('transferGroupId') === groupId) {
-    return <span className="font-mono text-xs text-muted-foreground">Transfer {label}</span>;
+    return <span className="font-mono text-xs text-muted-foreground">{m.transfer({ label })}</span>;
   }
   return (
     <Link
       to={movementsPath(organization.id, { transferGroupId: groupId })}
       className="inline-flex items-center gap-1 rounded-sm font-mono text-xs text-primary focus-ring hover:underline"
-      aria-label={`Show both movements of transfer ${label}`}
+      aria-label={m.showTransfer({ label })}
     >
       <ArrowLeftRight className="size-3" aria-hidden="true" />
-      Transfer {label}
+      {m.transfer({ label })}
     </Link>
   );
 }
 
 function MovementTable({ items }: { items: StockMovement[] }) {
+  const m = useMessages(stock).movements;
+  const f = useFormat();
   return (
     <Table className="hidden @5xl:table">
       <TableHeader>
         <tr>
-          <TableHead className="px-3 @5xl:px-3">Date</TableHead>
-          <TableHead className="px-3 @5xl:px-3">Product</TableHead>
-          <TableHead className="px-3 @5xl:px-3">Warehouse</TableHead>
-          <TableHead className="px-3 @5xl:px-3">Type</TableHead>
+          <TableHead className="px-3 @5xl:px-3">{m.date}</TableHead>
+          <TableHead className="px-3 @5xl:px-3">{m.product}</TableHead>
+          <TableHead className="px-3 @5xl:px-3">{m.warehouse}</TableHead>
+          <TableHead className="px-3 @5xl:px-3">{m.type}</TableHead>
           <TableHead align="right" className="px-3 @5xl:px-3">
-            Change
+            {m.change}
           </TableHead>
           <TableHead align="right" className="px-3 @5xl:px-3">
-            Before
+            {m.before}
           </TableHead>
           <TableHead align="right" className="px-3 @5xl:px-3">
-            After
+            {m.after}
           </TableHead>
-          <TableHead className="px-3 @5xl:px-3">By</TableHead>
-          <TableHead className="px-3 @5xl:px-3">Reason</TableHead>
+          <TableHead className="px-3 @5xl:px-3">{m.by}</TableHead>
+          <TableHead className="px-3 @5xl:px-3">{m.reason}</TableHead>
         </tr>
       </TableHeader>
       <TableBody>
         {items.map((movement) => (
           <TableRow key={movement.id}>
             <TableCell className="px-3 whitespace-nowrap text-muted-foreground @5xl:px-3">
-              {formatDateTime(movement.createdAt)}
+              {f.dateTime(movement.createdAt)}
             </TableCell>
             <TableCell className="max-w-44 px-3">
               <span className="block truncate font-medium">{movement.product.name}</span>
@@ -341,13 +342,13 @@ function MovementTable({ items }: { items: StockMovement[] }) {
               <Change delta={movement.quantityDelta} />
             </TableCell>
             <TableCell align="right" className="px-3 text-muted-foreground @5xl:px-3">
-              {movement.quantityBefore.toLocaleString()}
+              {f.number(movement.quantityBefore)}
             </TableCell>
             <TableCell align="right" className="px-3 @5xl:px-3">
-              {movement.quantityAfter.toLocaleString()}
+              {f.number(movement.quantityAfter)}
             </TableCell>
             <TableCell className="max-w-28 truncate px-3">
-              {movement.actor?.name ?? <span className="text-subtle-foreground">System</span>}
+              {movement.actor?.name ?? <span className="text-subtle-foreground">{m.system}</span>}
             </TableCell>
             <TableCell
               className="max-w-40 truncate px-3 text-muted-foreground"
@@ -363,8 +364,10 @@ function MovementTable({ items }: { items: StockMovement[] }) {
 }
 
 function MovementCards({ items }: { items: StockMovement[] }) {
+  const m = useMessages(stock).movements;
+  const f = useFormat();
   return (
-    <ul className="divide-y divide-border @5xl:hidden" aria-label="Stock movements">
+    <ul className="divide-y divide-border @5xl:hidden" aria-label={m.list}>
       {items.map((movement) => (
         <li key={movement.id} className="flex flex-col gap-2 p-4">
           <div className="flex items-start justify-between gap-3">
@@ -378,18 +381,18 @@ function MovementCards({ items }: { items: StockMovement[] }) {
           </div>
           <dl className="grid grid-cols-3 gap-3 text-sm">
             <div>
-              <dt className="text-xs text-muted-foreground">Change</dt>
+              <dt className="text-xs text-muted-foreground">{m.change}</dt>
               <dd>
                 <Change delta={movement.quantityDelta} />
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Before</dt>
-              <dd className="tabular-nums">{movement.quantityBefore.toLocaleString()}</dd>
+              <dt className="text-xs text-muted-foreground">{m.before}</dt>
+              <dd className="tabular-nums">{f.number(movement.quantityBefore)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">After</dt>
-              <dd className="tabular-nums">{movement.quantityAfter.toLocaleString()}</dd>
+              <dt className="text-xs text-muted-foreground">{m.after}</dt>
+              <dd className="tabular-nums">{f.number(movement.quantityAfter)}</dd>
             </div>
           </dl>
           {movement.reason && (
@@ -397,7 +400,7 @@ function MovementCards({ items }: { items: StockMovement[] }) {
           )}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-subtle-foreground">
-              {formatDateTime(movement.createdAt)} · {movement.actor?.name ?? 'System'}
+              {f.dateTime(movement.createdAt)} · {movement.actor?.name ?? m.system}
             </p>
             <TransferLink movement={movement} />
           </div>

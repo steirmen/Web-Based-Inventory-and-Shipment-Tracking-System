@@ -18,7 +18,8 @@ test.describe('products', () => {
     // Server-side validation: the SKU is taken in this workspace.
     await page.getByLabel('Name').fill('E2E Stapler');
     await page.getByLabel('SKU').fill('PEN-1');
-    await page.getByLabel('Category').selectOption({ label: 'Office' });
+    await page.getByRole('combobox', { name: 'Category' }).fill('Off');
+    await page.getByRole('option', { name: 'Office', exact: true }).click();
     await page.getByLabel('Price').fill('12.40');
     await page.getByLabel('Cost').fill('5.10');
     await page.getByLabel('Minimum stock').fill('3');

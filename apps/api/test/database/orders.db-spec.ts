@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { OrderStatus } from '../../src/generated/prisma/client.js';
 import { prisma } from './support/database.js';
-import { expectCheckViolation, expectUniqueViolation } from './support/db-errors.js';
+import {
+  expectCheckViolation,
+  expectInvalidEnumValue,
+  expectUniqueViolation,
+} from './support/db-errors.js';
 import { createCustomer, createOrder, createStockFixture } from './support/factories.js';
 
 describe('Customer', () => {
@@ -72,12 +76,14 @@ describe('OrderItem', () => {
         orderNumber: 'SO-2001',
         subtotal: '30.00',
         total: '30.00',
+        currency: 'TRY',
         items: {
           create: {
             productId: product.id,
             productNameSnapshot: product.name,
             skuSnapshot: product.sku,
             unitPrice: '10.00',
+            currency: 'TRY',
             quantity: 3,
             lineTotal: '30.00',
           },
@@ -103,6 +109,7 @@ describe('OrderItem', () => {
         productNameSnapshot: 'Original Name',
         skuSnapshot: 'ORIG-SKU',
         unitPrice: '12.50',
+        currency: 'TRY',
         quantity: 2,
         lineTotal: '25.00',
       },
@@ -143,12 +150,92 @@ describe('OrderItem', () => {
           productNameSnapshot: product.name,
           skuSnapshot: product.sku,
           unitPrice: '1.00',
+          currency: 'TRY',
           quantity: 1,
           lineTotal: '1.00',
           ...data,
         },
       }),
       constraint,
+    );
+  });
+});
+
+describe('one currency per order (database triggers)', () => {
+  /** The raw PostgreSQL error of a rejected write (Prisma 7 driver adapter). */
+  const rejection = (message: RegExp) => ({
+    meta: {
+      driverAdapterError: {
+        cause: expect.objectContaining({
+          originalCode: '23514',
+          originalMessage: expect.stringMatching(message),
+        }),
+      },
+    },
+  });
+
+  it('refuses a line whose currency differs from its order', async () => {
+    const { organization, warehouse, product } = await createStockFixture();
+    const order = await createOrder(organization.id, warehouse.id, { currency: 'EUR' });
+    const line = (currency: 'TRY' | 'EUR') =>
+      prisma.orderItem.create({
+        data: {
+          organizationId: organization.id,
+          orderId: order.id,
+          productId: product.id,
+          productNameSnapshot: product.name,
+          skuSnapshot: product.sku,
+          unitPrice: '1.00',
+          currency,
+          quantity: 1,
+          lineTotal: '1.00',
+        },
+      });
+
+    await expect(line('TRY')).rejects.toMatchObject(rejection(/currency of its order/));
+    const accepted = await line('EUR');
+    await expect(
+      prisma.orderItem.update({ where: { id: accepted.id }, data: { currency: 'USD' } }),
+    ).rejects.toMatchObject(rejection(/currency of its order/));
+  });
+
+  it('refuses an order currency change while lines in another currency exist', async () => {
+    const { organization, warehouse, product } = await createStockFixture();
+    const order = await createOrder(organization.id, warehouse.id, {
+      currency: 'TRY',
+      items: {
+        create: {
+          productId: product.id,
+          productNameSnapshot: product.name,
+          skuSnapshot: product.sku,
+          unitPrice: '1.00',
+          currency: 'TRY',
+          quantity: 1,
+          lineTotal: '1.00',
+        },
+      },
+    });
+
+    await expect(
+      prisma.order.update({ where: { id: order.id }, data: { currency: 'EUR' } }),
+    ).rejects.toMatchObject(rejection(/currency of its lines/));
+    await expect(
+      prisma.order.update({ where: { id: order.id }, data: { currency: null } }),
+    ).rejects.toMatchObject(rejection(/currency of its lines/));
+
+    // Without lines, the currency may change (the application then adds lines in it).
+    await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
+    const emptied = await prisma.order.update({
+      where: { id: order.id },
+      data: { currency: null },
+    });
+    expect(emptied.currency).toBeNull();
+  });
+
+  it('stores currencies as ISO codes of the currency enum only', async () => {
+    const { organization } = await createStockFixture();
+    await expectInvalidEnumValue(
+      prisma.$executeRaw`UPDATE products SET currency = 'BTC' WHERE organization_id = ${organization.id}::uuid`,
     );
   });
 });

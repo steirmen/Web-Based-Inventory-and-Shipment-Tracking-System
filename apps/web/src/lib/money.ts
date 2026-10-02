@@ -1,14 +1,27 @@
-const moneyFormatter = new Intl.NumberFormat(undefined, {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+import type { Currency } from '@app/shared';
 
 /**
- * Formats an API decimal string ("1234.5" → "1,234.50" in en-US) for display.
- * The string is passed to Intl directly (exact decimal formatting), never
- * parsed into a binary floating-point number.
+ * Money display helpers. Amounts are formatted only by `useFormat().money`
+ * (i18n/format.ts: locale + currency via Intl, exact decimal strings); this
+ * file has what the formatter does not cover.
  */
-export function formatMoney(value: string | null): string {
-  if (value === null) return '—';
-  return moneyFormatter.format(value as Intl.StringNumericLiteral);
+
+const symbols = new Map<string, string>();
+
+/** The currency's narrow symbol in a locale: TRY → "₺", EUR → "€", USD → "$". */
+export function currencySymbol(currency: Currency, locale: string): string {
+  const key = `${locale}:${currency}`;
+  let symbol = symbols.get(key);
+  if (!symbol) {
+    symbol =
+      new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency,
+        currencyDisplay: 'narrowSymbol',
+      })
+        .formatToParts(0)
+        .find((part) => part.type === 'currency')?.value ?? currency;
+    symbols.set(key, symbol);
+  }
+  return symbol;
 }

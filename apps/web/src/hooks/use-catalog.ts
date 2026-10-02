@@ -21,6 +21,7 @@ import {
   deleteCategory,
   getProduct,
   listCategories,
+  searchCategories,
   listProducts,
   restoreProduct,
   updateCategory,
@@ -56,6 +57,26 @@ export function useCategories(organizationId: string) {
   return useQuery({
     queryKey: catalogKeys.categories(organizationId),
     queryFn: ({ signal }) => listCategories(organizationId, { signal }),
+  });
+}
+
+/**
+ * Server-side category search for the product form's picker. An empty term
+ * lists every category (the plain list); results stay visible while the next
+ * search loads.
+ */
+export function useCategorySearch(organizationId: string, search: string, enabled = true) {
+  const term = search.trim();
+  return useQuery({
+    queryKey: term
+      ? catalogKeys.categorySearch(organizationId, term)
+      : catalogKeys.categories(organizationId),
+    queryFn: ({ signal }) =>
+      term
+        ? searchCategories(organizationId, term, { signal })
+        : listCategories(organizationId, { signal }),
+    placeholderData: keepPreviousData,
+    enabled,
   });
 }
 

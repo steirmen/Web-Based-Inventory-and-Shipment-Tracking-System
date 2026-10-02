@@ -68,7 +68,12 @@ async function openTeam(viewerRole: MemberRole, extra: Parameters<typeof mockApi
     role: viewerRole,
   };
   const fetchMock = mockApi({
-    'GET /auth/me': signedIn({ id: viewer.userId, name: viewer.name, email: viewer.email }),
+    'GET /auth/me': signedIn({
+      id: viewer.userId,
+      name: viewer.name,
+      email: viewer.email,
+      language: null,
+    }),
     'GET /organizations': organizationList([organizationSummary({ role: viewerRole })]),
     [`GET ${ORG}`]: () => organizationDetail(state.role)(),
     [`GET ${ORG}/members`]: () => Response.json({ members: state.members }),

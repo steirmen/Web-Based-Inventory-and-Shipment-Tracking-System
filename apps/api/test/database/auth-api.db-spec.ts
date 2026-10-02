@@ -53,7 +53,12 @@ describe('POST /auth/register', () => {
     }).expect(201);
 
     expect(response.body).toEqual({
-      user: { id: expect.any(String), name: 'Ada Example', email: 'ada.example@test.example' },
+      user: {
+        id: expect.any(String),
+        name: 'Ada Example',
+        email: 'ada.example@test.example',
+        language: null,
+      },
     });
     expect(response.headers['cache-control']).toBe('no-store');
 
@@ -152,7 +157,12 @@ describe('POST /auth/login', () => {
       .expect(200);
 
     expect(response.body).toEqual({
-      user: { id: expect.any(String), name: 'Ada Example', email: 'login@test.example' },
+      user: {
+        id: expect.any(String),
+        name: 'Ada Example',
+        email: 'login@test.example',
+        language: null,
+      },
     });
     const token = getSetCookie(response, COOKIE)?.value;
     expect(token).toBeDefined();
@@ -215,7 +225,12 @@ describe('GET /auth/me', () => {
     const response = await api().get('/auth/me').set('Cookie', withSession(token)).expect(200);
 
     expect(response.body).toEqual({
-      user: { id: expect.any(String), name: 'Ada Example', email: 'ada@test.example' },
+      user: {
+        id: expect.any(String),
+        name: 'Ada Example',
+        email: 'ada@test.example',
+        language: null,
+      },
     });
     const session = await prisma.session.findFirstOrThrow();
     expect(Date.now() - session.lastSeenAt.getTime()).toBeLessThan(60_000);

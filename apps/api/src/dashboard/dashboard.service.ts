@@ -1,4 +1,5 @@
 import {
+  type Currency,
   DASHBOARD_LIMITS,
   type DashboardCountMetric,
   type DashboardMoneyMetric,
@@ -14,6 +15,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { STOCK_STATUS_SQL } from '../inventory/inventory-mappers.js';
+import { availableCurrencies, chooseCurrency } from './currency-choice.js';
 import { REALIZED_ORDER_SQL } from './sales-semantics.js';
 import {
   BUCKET_UNIT,
@@ -42,6 +44,7 @@ interface RecentOrderRow {
   orderNumber: string;
   status: OrderStatus;
   total: string;
+  currency: Currency | null;
   createdAt: Date;
   customerId: string | null;
   customerName: string | null;
@@ -50,17 +53,20 @@ interface RecentOrderRow {
 
 interface StatusRow {
   status: OrderStatus;
+  currency: Currency | null;
   isCurrent: boolean;
   orders: number;
   revenue: string;
 }
 interface BucketRow {
   bucket: string;
+  currency: Currency | null;
   orders: number;
   realizedOrders: number;
   revenue: string;
 }
 interface TopProductRow {
+  currency: Currency;
   productId: string;
   name: string;
   sku: string;
@@ -119,7 +125,9 @@ function moneyMetric(current: Decimal, previous: Decimal): DashboardMoneyMetric 
  * joins tenant tables on (organization_id, id). Six queries (five grouped,
  * one LIMIT 5) answer the whole summary — none per KPI, status, product, or warehouse — and run
  * in one REPEATABLE READ transaction so all numbers come from one snapshot.
- * Money is summed by PostgreSQL (numeric) and handled as Decimal strings.
+ * Money is summed by PostgreSQL (numeric) and handled as Decimal strings,
+ * grouped by currency: the money figures are those of ONE currency
+ * (`chooseCurrency`), never a sum across currencies.
  */
 @Injectable()
 export class DashboardService {
@@ -127,7 +135,7 @@ export class DashboardService {
 
   async summary(
     organizationId: string,
-    query: DashboardPeriodInput,
+    query: DashboardPeriodInput & { currency?: Currency },
     now: Date = new Date(),
   ): Promise<DashboardSummaryResponse> {
     const { current, previous, bucket } = resolveDashboardPeriods(query, now);
@@ -140,9 +148,10 @@ export class DashboardService {
     const [statusRows, bucketRows, topRows, countRows, warehouseRows, recentRows] =
       await this.prisma.$transaction(
         [
-          // 1. Orders and realized revenue per status, for the period and the comparison period.
+          // 1. Orders and realized revenue per status and currency, for the period and the
+          //    comparison period.
           this.prisma.$queryRaw<StatusRow[]>`
-            SELECT o.status::text AS status,
+            SELECT o.status::text AS status, o.currency::text AS currency,
                    (o.created_at >= ${start}::timestamptz) AS "isCurrent",
                    COUNT(*)::int AS orders,
                    COALESCE(SUM(line.revenue), 0)::text AS revenue
@@ -151,32 +160,44 @@ export class DashboardService {
             WHERE o.organization_id = ${org}
               AND o.created_at >= ${previousStart}::timestamptz
               AND o.created_at < ${end}::timestamptz
-            GROUP BY o.status, "isCurrent"`,
+            GROUP BY o.status, o.currency, "isCurrent"`,
           // 2. Time series: buckets of local days in the requested time zone.
           this.prisma.$queryRaw<BucketRow[]>`
             SELECT to_char(
                      date_trunc(${BUCKET_UNIT[bucket]}, o.created_at AT TIME ZONE ${current.timeZone}),
                      'YYYY-MM-DD'
                    ) AS bucket,
+                   o.currency::text AS currency,
                    COUNT(*)::int AS orders,
                    COUNT(*) FILTER (WHERE ${REALIZED_ORDER_SQL})::int AS "realizedOrders",
                    COALESCE(SUM(line.revenue), 0)::text AS revenue
             FROM orders o
             ${REALIZED_REVENUE_JOIN}
             WHERE o.organization_id = ${org} AND ${inPeriod}
-            GROUP BY bucket`,
-          // 3. Top products by units sold in realized orders (amounts from line snapshots).
+            GROUP BY bucket, o.currency`,
+          // 3. Top products by units sold in realized orders, per currency (amounts from line
+          //    snapshots): the first DASHBOARD_LIMITS.topProducts of each currency.
           this.prisma.$queryRaw<TopProductRow[]>`
-            SELECT oi.product_id AS "productId", p.name, p.sku, p.status::text AS status,
-                   SUM(oi.quantity)::bigint AS "unitsSold",
-                   SUM(oi.quantity * oi.unit_price)::text AS revenue
-            FROM order_items oi
-            JOIN orders o ON o.organization_id = oi.organization_id AND o.id = oi.order_id
-            JOIN products p ON p.organization_id = oi.organization_id AND p.id = oi.product_id
-            WHERE oi.organization_id = ${org} AND ${inPeriod} AND ${REALIZED_ORDER_SQL}
-            GROUP BY oi.product_id, p.name, p.sku, p.status
-            ORDER BY "unitsSold" DESC, SUM(oi.quantity * oi.unit_price) DESC, p.name ASC, oi.product_id ASC
-            LIMIT ${DASHBOARD_LIMITS.topProducts}`,
+            SELECT ranked.currency, ranked."productId", ranked.name, ranked.sku, ranked.status,
+                   ranked."unitsSold", ranked.revenue
+            FROM (
+              SELECT oi.currency::text AS currency, oi.product_id AS "productId", p.name, p.sku,
+                     p.status::text AS status,
+                     SUM(oi.quantity)::bigint AS "unitsSold",
+                     SUM(oi.quantity * oi.unit_price)::text AS revenue,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY oi.currency
+                       ORDER BY SUM(oi.quantity) DESC, SUM(oi.quantity * oi.unit_price) DESC,
+                                p.name ASC, oi.product_id ASC
+                     ) AS rank
+              FROM order_items oi
+              JOIN orders o ON o.organization_id = oi.organization_id AND o.id = oi.order_id
+              JOIN products p ON p.organization_id = oi.organization_id AND p.id = oi.product_id
+              WHERE oi.organization_id = ${org} AND ${inPeriod} AND ${REALIZED_ORDER_SQL}
+              GROUP BY oi.currency, oi.product_id, p.name, p.sku, p.status
+            ) ranked
+            WHERE ranked.rank <= ${DASHBOARD_LIMITS.topProducts}
+            ORDER BY ranked.currency, ranked.rank`,
           // 4. Customer and product counts (current state + new customers per period).
           this.prisma.$queryRaw<CountsRow[]>`
             SELECT c."activeCustomers", c."archivedCustomers", c."newCustomers",
@@ -217,7 +238,8 @@ export class DashboardService {
           // 6. The newest orders of the same period (any status), for the Recent orders box.
           this.prisma.$queryRaw<RecentOrderRow[]>`
             SELECT o.id, o.order_number AS "orderNumber", o.status::text AS status,
-                   o.total::text AS total, o.created_at AS "createdAt",
+                   o.total::text AS total, o.currency::text AS currency,
+                   o.created_at AS "createdAt",
                    c.id AS "customerId", c.name AS "customerName", c.company_name AS "customerCompany"
             FROM orders o
             LEFT JOIN customers c ON c.organization_id = o.organization_id AND c.id = o.customer_id
@@ -228,7 +250,21 @@ export class DashboardService {
         { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
       );
 
-    // Orders and revenue per period.
+    // Realized orders per currency, to choose the currency of the money figures.
+    const realizedByCurrency = { current: new Map<Currency, number>(), previous: new Map() };
+    for (const row of statusRows) {
+      if (!row.currency) continue;
+      if (!(REALIZED_ORDER_STATUSES as readonly OrderStatus[]).includes(row.status)) continue;
+      const counts = realizedByCurrency[row.isCurrent ? 'current' : 'previous'];
+      counts.set(row.currency, (counts.get(row.currency) ?? 0) + row.orders);
+    }
+    const currency = chooseCurrency(
+      query.currency,
+      realizedByCurrency.current,
+      realizedByCurrency.previous,
+    );
+
+    // Orders (every currency) and revenue (the chosen currency) per period.
     const orders = { current: 0, previous: 0 };
     const realizedOrders = { current: 0, previous: 0 };
     const revenue = { current: new Decimal(0), previous: new Decimal(0) };
@@ -239,11 +275,23 @@ export class DashboardService {
       if ((REALIZED_ORDER_STATUSES as readonly OrderStatus[]).includes(row.status)) {
         realizedOrders[key] += row.orders;
       }
-      revenue[key] = revenue[key].plus(row.revenue);
-      if (row.isCurrent) byStatus.set(row.status, row.orders);
+      if (row.currency === currency) revenue[key] = revenue[key].plus(row.revenue);
+      if (row.isCurrent) byStatus.set(row.status, (byStatus.get(row.status) ?? 0) + row.orders);
     }
 
-    const buckets = new Map(bucketRows.map((row) => [row.bucket, row]));
+    // Per bucket: orders of every currency, revenue of the chosen one.
+    const buckets = new Map<string, { orders: number; realizedOrders: number; revenue: Decimal }>();
+    for (const row of bucketRows) {
+      const slot = buckets.get(row.bucket) ?? {
+        orders: 0,
+        realizedOrders: 0,
+        revenue: new Decimal(0),
+      };
+      slot.orders += row.orders;
+      slot.realizedOrders += row.realizedOrders;
+      if (row.currency === currency) slot.revenue = slot.revenue.plus(row.revenue);
+      buckets.set(row.bucket, slot);
+    }
     const counts = countRows[0]!;
     const warehouses: DashboardWarehouseSummary[] = warehouseRows.map((row) => ({
       id: row.id,
@@ -264,6 +312,12 @@ export class DashboardService {
       period: current,
       comparisonPeriod: previous,
       generatedAt: now.toISOString(),
+      currency,
+      currencies: availableCurrencies(
+        currency,
+        realizedByCurrency.current,
+        realizedByCurrency.previous,
+      ),
       kpis: {
         sales: moneyMetric(revenue.current, revenue.previous),
         orders: countMetric(orders.current, orders.previous),
@@ -290,18 +344,20 @@ export class DashboardService {
             periodEnd: slot.periodEnd,
             orders: row?.orders ?? 0,
             realizedOrders: row?.realizedOrders ?? 0,
-            revenue: money(new Decimal(row?.revenue ?? 0)),
+            revenue: money(row?.revenue ?? new Decimal(0)),
           };
         }),
       },
-      topProducts: topRows.map((row): DashboardTopProduct => ({
-        productId: row.productId,
-        name: row.name,
-        sku: row.sku,
-        status: row.status,
-        unitsSold: Number(row.unitsSold),
-        revenue: money(new Decimal(row.revenue)),
-      })),
+      topProducts: topRows
+        .filter((row) => row.currency === currency)
+        .map((row): DashboardTopProduct => ({
+          productId: row.productId,
+          name: row.name,
+          sku: row.sku,
+          status: row.status,
+          unitsSold: Number(row.unitsSold),
+          revenue: money(new Decimal(row.revenue)),
+        })),
       warehouses,
       recentOrders: recentRows.map((row) => ({
         id: row.id,
@@ -311,6 +367,7 @@ export class DashboardService {
           ? { id: row.customerId, name: row.customerName!, companyName: row.customerCompany }
           : null,
         total: money(new Decimal(row.total)),
+        currency: row.currency,
         createdAt: row.createdAt.toISOString(),
       })),
     };

@@ -22,6 +22,9 @@ export const catalogKeys = {
     [...catalogKeys.products(organizationId), 'item', productId] as const,
   categories: (organizationId: string) =>
     [...organizationKeys.detail(organizationId), 'categories'] as const,
+  /** Under `categories`, so creating or renaming a category refreshes searches too. */
+  categorySearch: (organizationId: string, search: string) =>
+    [...catalogKeys.categories(organizationId), 'search', search] as const,
 };
 
 const base = (organizationId: string) => `/organizations/${encodeURIComponent(organizationId)}`;
@@ -92,6 +95,21 @@ export function listCategories(organizationId: string, options?: { signal?: Abor
   return apiRequest<CategoryListResponse>(`${base(organizationId)}/categories`, {
     signal: options?.signal,
   });
+}
+
+/**
+ * `GET …/categories?search=`: a case-insensitive name search in this
+ * workspace (exact match first, at most CATALOG_LIMITS.categorySearchMax).
+ */
+export function searchCategories(
+  organizationId: string,
+  search: string,
+  options?: { signal?: AbortSignal },
+) {
+  return apiRequest<CategoryListResponse>(
+    `${base(organizationId)}/categories?${new URLSearchParams({ search }).toString()}`,
+    { signal: options?.signal },
+  );
 }
 
 export function createCategory(organizationId: string, body: CreateCategoryRequest) {

@@ -8,7 +8,9 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
 import { useOrderAction } from '@/hooks/use-sales';
-import { apiErrorMessage } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { sales } from '@/i18n/messages/sales';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { ApiError } from '@/api/http-client';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import { ORDER_ACTION_INFO, ORDER_ACTIONS_BY_STATUS } from '@/lib/sales-params';
@@ -21,14 +23,6 @@ const ICONS = {
   complete: CheckCircle2,
   cancel: XCircle,
 } as const satisfies Record<OrderAction, unknown>;
-
-const DONE: Record<OrderAction, string> = {
-  confirm: 'Order confirmed.',
-  process: 'Order processed: stock was deducted.',
-  ship: 'Order marked as shipped.',
-  complete: 'Order completed.',
-  cancel: 'Order cancelled.',
-};
 
 /**
  * The lifecycle actions this order's status allows, filtered by the viewer's
@@ -43,6 +37,7 @@ export function OrderActions({
   onDone: (message: string) => void;
 }) {
   const { organization, can } = useCurrentOrganization();
+  const m = useMessages(sales).actions;
   const mutation = useOrderAction(organization.id);
   const [pendingAction, setPendingAction] = useState<OrderAction | null>(null);
   const actions = ORDER_ACTIONS_BY_STATUS[order.status].filter((action) =>
@@ -65,7 +60,7 @@ export function OrderActions({
       {
         onSuccess: () => {
           setPendingAction(null);
-          onDone(DONE[action]);
+          onDone(m.done[action]);
         },
       },
     );
@@ -85,7 +80,7 @@ export function OrderActions({
             className={buttonVariants({ variant: 'secondary' })}
           >
             <Pencil aria-hidden="true" />
-            Edit
+            {m.edit}
           </Link>
         )}
         {actions.map((action) => {
@@ -97,7 +92,7 @@ export function OrderActions({
               onClick={() => open(action)}
             >
               <Icon aria-hidden="true" />
-              {ORDER_ACTION_INFO[action].label}
+              {m.labels[action]}
             </Button>
           );
         })}
@@ -106,14 +101,14 @@ export function OrderActions({
       {info && pendingAction !== 'process' && (
         <ConfirmDialog
           open
-          title={info.title}
+          title={m.titles[info.action]}
           description={
             <>
               <span className="font-medium text-foreground">{order.orderNumber}</span>:{' '}
-              {info.description}
+              {m.descriptions[info.action]}
             </>
           }
-          confirmLabel={info.label}
+          confirmLabel={m.labels[info.action]}
           tone={info.tone}
           pending={mutation.isPending}
           error={mutation.error}
@@ -148,37 +143,45 @@ function ProcessDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const info = ORDER_ACTION_INFO.process;
+  const m = useMessages(sales).actions;
+  const errorMessage = useApiErrorMessage();
   const short = order.items.filter(
     (item) => item.availableQuantity !== null && item.quantity > item.availableQuantity,
   );
   // INVENTORY_INSUFFICIENT_STOCK lists every short line (field items.<orderItemId>).
   const shortages =
-    error instanceof ApiError ? error.details.flatMap((detail) => detail.messages) : [];
+    error instanceof ApiError
+      ? error.details.flatMap((detail) => {
+          const item = order.items.find((line) => `items.${line.id}` === detail.field);
+          return detail.messages.map((message) =>
+            m.shortLine({ product: item?.productName ?? '', message }),
+          );
+        })
+      : [];
 
   return (
     <Dialog
       open
       onClose={onCancel}
-      title={info.title}
-      description={info.description}
+      title={m.titles.process}
+      description={m.descriptions.process}
       dismissible={!pending}
       size="md"
       footer={
         <>
           <Button variant="secondary" onClick={onCancel} disabled={pending} data-autofocus>
-            Cancel
+            {m.cancel}
           </Button>
           <Button onClick={onConfirm} isLoading={pending}>
-            Process order
+            {m.processOrder}
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-3">
         {error ? (
-          <Alert tone="danger" title="The order was not processed">
-            <p>{apiErrorMessage(error)}</p>
+          <Alert tone="danger" title={m.notProcessed}>
+            <p>{errorMessage(error)}</p>
             {shortages.length > 1 && (
               <ul className="mt-1 list-disc pl-5">
                 {shortages.map((message) => (
@@ -189,7 +192,7 @@ function ProcessDialog({
           </Alert>
         ) : null}
         <p className="text-sm">
-          From{' '}
+          {m.from}{' '}
           <span className="font-medium">
             {order.warehouse.name} ({order.warehouse.code})
           </span>
@@ -198,13 +201,13 @@ function ProcessDialog({
           <thead className="text-left text-xs text-muted-foreground">
             <tr>
               <th scope="col" className="py-1 font-medium">
-                Product
+                {m.product}
               </th>
               <th scope="col" className="py-1 text-right font-medium">
-                Needed
+                {m.needed}
               </th>
               <th scope="col" className="py-1 text-right font-medium">
-                In stock
+                {m.inStock}
               </th>
             </tr>
           </thead>
@@ -221,7 +224,7 @@ function ProcessDialog({
                   <td className="py-1.5 text-right tabular-nums">{item.quantity}</td>
                   <td className="py-1.5 text-right tabular-nums">
                     {item.availableQuantity ?? '—'}
-                    {isShort && <span className="block text-xs text-danger">Not enough</span>}
+                    {isShort && <span className="block text-xs text-danger">{m.notEnough}</span>}
                   </td>
                 </tr>
               );
@@ -229,15 +232,9 @@ function ProcessDialog({
           </tbody>
         </table>
         {short.length > 0 && !error && (
-          <Alert tone="warning">
-            {short.length === 1 ? 'One line has' : `${short.length} lines have`} less stock than
-            needed right now. Processing will fail unless stock arrives first; nothing is deducted
-            partially.
-          </Alert>
+          <Alert tone="warning">{m.shortWarning({ count: short.length })}</Alert>
         )}
-        <p className="text-xs text-subtle-foreground">
-          Stock shown as of when this page loaded. The final check happens when you process.
-        </p>
+        <p className="text-xs text-subtle-foreground">{m.stockAsOf}</p>
       </div>
     </Dialog>
   );

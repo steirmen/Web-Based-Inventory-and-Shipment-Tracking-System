@@ -37,12 +37,15 @@ export async function dashboardFixture(app: INestApplication, slug?: string) {
         orderNumber: `SO-${++orderSequence}`,
         status,
         createdAt: new Date(createdAt),
+        // The currency of the first line's product (an order never mixes currencies).
+        currency: lines[0]?.[0].currency ?? null,
         items: {
           create: lines.map(([item, quantity, unitPrice]) => ({
             productId: item.id,
             productNameSnapshot: item.name,
             skuSnapshot: item.sku,
             unitPrice,
+            currency: item.currency,
             quantity,
             lineTotal: new Prisma.Decimal(unitPrice).mul(quantity).toFixed(2),
           })),

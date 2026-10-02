@@ -7,7 +7,10 @@ import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateCustomer, useUpdateCustomer } from '@/hooks/use-sales';
-import { apiErrorMessage } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { sales } from '@/i18n/messages/sales';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { type FieldErrors, hasErrors, serverFieldErrors } from '@/lib/auth-form';
 import {
   CUSTOMER_FIELDS,
@@ -34,12 +37,13 @@ export function CustomerFormDialog({
   onClose: () => void;
   onSaved: (message: string, customer: Customer) => void;
 }) {
+  const m = useMessages(sales).customerForm;
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title={customer ? 'Edit customer' : 'New customer'}
-      description={customer ? undefined : 'Someone you sell to: a person or a business contact.'}
+      title={customer ? m.editTitle : m.newTitle}
+      description={customer ? undefined : m.newDescription}
       size="md"
     >
       {open && (
@@ -64,6 +68,9 @@ function CustomerForm({
   onSaved: (message: string, customer: Customer) => void;
 }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(sales).customerForm;
+  const c = useMessages(common);
+  const errorMessage = useApiErrorMessage();
   const create = useCreateCustomer(organization.id);
   const update = useUpdateCustomer(organization.id);
   const pending = create.isPending || update.isPending;
@@ -77,7 +84,7 @@ function CustomerForm({
   };
 
   const onError = (error: unknown) => {
-    const fields = serverFieldErrors(error, CUSTOMER_FIELDS);
+    const fields = serverFieldErrors(error, CUSTOMER_FIELDS, c.errors);
     setErrors(fields);
     setFormError(hasErrors(fields) ? null : error);
   };
@@ -85,7 +92,7 @@ function CustomerForm({
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending) return;
-    const validation = validateCustomer(values);
+    const validation = validateCustomer(values, m, c.authValidation);
     setErrors(validation);
     setFormError(null);
     if (hasErrors(validation)) return;
@@ -93,27 +100,23 @@ function CustomerForm({
     if (customer) {
       const body = toUpdateCustomerRequest(customer, values);
       if (Object.keys(body).length === 0) {
-        onSaved('No changes to save.', customer);
+        onSaved(m.noChanges, customer);
         return;
       }
       update.mutate(
         { customerId: customer.id, body },
-        { onSuccess: (data) => onSaved('Customer saved.', data.customer), onError },
+        { onSuccess: (data) => onSaved(m.saved, data.customer), onError },
       );
     } else {
       create.mutate(toCustomerRequest(values), {
-        onSuccess: (data) => onSaved(`${data.customer.name} added.`, data.customer),
+        onSuccess: (data) => onSaved(m.added({ name: data.customer.name }), data.customer),
         onError,
       });
     }
   };
 
   const text = (field: CustomerField, label: string, max: number, extra: object = {}) => (
-    <FormField
-      label={label}
-      error={errors[field]}
-      hint={field === 'name' ? undefined : 'Optional.'}
-    >
+    <FormField label={label} error={errors[field]} hint={field === 'name' ? undefined : m.optional}>
       {(control) => (
         <Input
           {...control}
@@ -129,14 +132,14 @@ function CustomerForm({
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-4">
-      {formError !== null && <Alert tone="danger">{apiErrorMessage(formError)}</Alert>}
-      {text('name', 'Name', L.nameMaxLength, { autoComplete: 'off', 'data-autofocus': true })}
-      {text('companyName', 'Company', L.companyNameMaxLength, { autoComplete: 'off' })}
+      {formError !== null && <Alert tone="danger">{errorMessage(formError)}</Alert>}
+      {text('name', m.name, L.nameMaxLength, { autoComplete: 'off', 'data-autofocus': true })}
+      {text('companyName', m.company, L.companyNameMaxLength, { autoComplete: 'off' })}
       <div className="grid gap-4 sm:grid-cols-2">
-        {text('email', 'Email', L.emailMaxLength, { type: 'email', autoComplete: 'off' })}
-        {text('phone', 'Phone', L.phoneMaxLength, { type: 'tel', autoComplete: 'off' })}
+        {text('email', m.email, L.emailMaxLength, { type: 'email', autoComplete: 'off' })}
+        {text('phone', m.phone, L.phoneMaxLength, { type: 'tel', autoComplete: 'off' })}
       </div>
-      <FormField label="Address" error={errors.address} hint="Optional.">
+      <FormField label={m.address} error={errors.address} hint={m.optional}>
         {(control) => (
           <Textarea
             {...control}
@@ -148,7 +151,7 @@ function CustomerForm({
           />
         )}
       </FormField>
-      <FormField label="Notes" error={errors.notes} hint="Optional, e.g. delivery preferences.">
+      <FormField label={m.notes} error={errors.notes} hint={m.notesHint}>
         {(control) => (
           <Textarea
             {...control}
@@ -162,10 +165,10 @@ function CustomerForm({
       </FormField>
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button variant="secondary" onClick={onCancel} disabled={pending}>
-          Cancel
+          {m.cancel}
         </Button>
         <Button type="submit" isLoading={pending}>
-          {customer ? 'Save changes' : 'Add customer'}
+          {customer ? m.save : m.add}
         </Button>
       </div>
     </form>

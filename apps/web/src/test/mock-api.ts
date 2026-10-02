@@ -26,6 +26,10 @@ type Handler = (init: RequestInit | undefined, url: URL) => Response | Promise<R
 function defaultHandler(key: string): Handler | undefined {
   // Every signed-in page loads the user's appearance; default to "never saved".
   if (key === 'GET /me/appearance') return defaultAppearance;
+  // Saving the interface language: echo the choice back.
+  if (key === 'PATCH /me/preferences') {
+    return (init) => Response.json(JSON.parse(String(init?.body ?? '{}')));
+  }
   // The workspace overview (dashboard) of any organization: an empty workspace.
   if (/^GET \/organizations\/[^/]+\/dashboard\/summary$/.test(key)) {
     return () => Response.json(emptyDashboardSummary());
@@ -74,6 +78,7 @@ export const testUser: AuthUser = {
   id: '0198c0de-0000-7000-8000-000000000001',
   name: 'Ada Example',
   email: 'ada@test.example',
+  language: null,
 };
 
 export const signedIn = (user: AuthUser = testUser) => json(200, { user });

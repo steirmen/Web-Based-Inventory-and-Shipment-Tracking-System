@@ -3,11 +3,10 @@ import { type FormEvent, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import {
-  customRangeError,
-  DASHBOARD_RANGE_LABELS,
-  type DashboardParams,
-} from '@/lib/dashboard-params';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { insights } from '@/i18n/messages/insights';
+import { customRangeError, type DashboardParams } from '@/lib/dashboard-params';
 
 /**
  * Date range of the dashboard: a preset, or a custom first/last day applied
@@ -24,6 +23,8 @@ export function RangePicker({
   onChange: (next: DashboardParams) => void;
 }) {
   const id = useId();
+  const m = useMessages(insights).rangePicker;
+  const c = useMessages(common);
   const [selected, setSelected] = useState<DashboardRange>(value.range);
   const [from, setFrom] = useState(value.from || period?.from || '');
   const [to, setTo] = useState(value.to || period?.to || '');
@@ -39,20 +40,20 @@ export function RangePicker({
       if (!to && period) setTo(period.to);
       return;
     }
-    onChange({ range, from: '', to: '' });
+    onChange({ range, from: '', to: '', currency: value.currency });
   };
 
   const apply = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const problem = customRangeError(from, to);
-    setError(problem);
-    if (!problem) onChange({ range: 'CUSTOM', from, to });
+    setError(problem ? m[problem] : undefined);
+    if (!problem) onChange({ range: 'CUSTOM', from, to, currency: value.currency });
   };
 
   return (
     <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
       <label htmlFor={`${id}-range`} className="sr-only">
-        Date range
+        {m.label}
       </label>
       <Select
         id={`${id}-range`}
@@ -62,7 +63,7 @@ export function RangePicker({
       >
         {DASHBOARD_RANGES.map((range) => (
           <option key={range} value={range}>
-            {DASHBOARD_RANGE_LABELS[range]}
+            {c.ranges[range]}
           </option>
         ))}
       </Select>
@@ -70,13 +71,13 @@ export function RangePicker({
         <form
           noValidate
           onSubmit={apply}
-          aria-label="Custom date range"
+          aria-label={m.custom}
           className="flex w-full flex-col gap-2 sm:w-auto"
         >
           <div className="flex flex-wrap items-end gap-2">
             <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
               <label htmlFor={`${id}-from`} className="text-xs font-medium text-muted-foreground">
-                From
+                {m.from}
               </label>
               <Input
                 id={`${id}-from`}
@@ -91,7 +92,7 @@ export function RangePicker({
             </div>
             <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-none">
               <label htmlFor={`${id}-to`} className="text-xs font-medium text-muted-foreground">
-                To
+                {m.to}
               </label>
               <Input
                 id={`${id}-to`}
@@ -105,7 +106,7 @@ export function RangePicker({
               />
             </div>
             <Button type="submit" variant="secondary" className="w-full sm:w-auto">
-              Apply
+              {m.apply}
             </Button>
           </div>
           {error && (

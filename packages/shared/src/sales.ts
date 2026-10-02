@@ -3,13 +3,16 @@
  *
  * Money is a decimal STRING with two fraction digits ("125.50"), as in the
  * catalog. Order lines keep a snapshot of the product's name, SKU, and price,
- * so historical orders never change when the product does.
+ * so historical orders never change when the product does — including the
+ * currency. An order has ONE currency: the currency of its first line; lines
+ * in another currency are refused (422 ORDER_CURRENCY_MISMATCH).
  *
  * Stock is not affected by DRAFT or CONFIRMED orders. It is deducted (one SALE
  * movement per line) only when an order moves from CONFIRMED to PROCESSING.
  */
 
 import type { Pagination, ProductStatus, SortOrder } from './catalog.js';
+import type { Currency } from './currency.js';
 
 // --- Customers ---------------------------------------------------------------------
 
@@ -160,6 +163,8 @@ export interface OrderItem {
   sku: string;
   /** Snapshot of the product price when the line was added (decimal string). */
   unitPrice: string;
+  /** Snapshot of the product currency when the line was added (= the order's currency). */
+  currency: Currency;
   quantity: number;
   /** quantity × unitPrice (decimal string). */
   lineTotal: string;
@@ -186,8 +191,10 @@ export interface OrderListItem {
   customer: OrderCustomerRef | null;
   warehouse: OrderWarehouseRef;
   itemCount: number;
-  /** Decimal string. */
+  /** Decimal string, in `currency`. */
   total: string;
+  /** The currency of every line; null while the order has no lines. */
+  currency: Currency | null;
   createdAt: string;
   updatedAt: string;
 }

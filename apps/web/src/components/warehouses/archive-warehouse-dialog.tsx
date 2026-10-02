@@ -1,4 +1,6 @@
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useMessages } from '@/i18n/i18n-context';
+import { stock } from '@/i18n/messages/stock';
 
 /** Confirmation before archiving a warehouse. Restoring needs no confirmation. */
 export function ArchiveWarehouseDialog({
@@ -15,18 +17,18 @@ export function ArchiveWarehouseDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const m = useMessages(stock).archiveWarehouse;
   return (
     <ConfirmDialog
       open={warehouse !== null}
-      title="Archive warehouse?"
+      title={m.title}
       description={
         <>
-          <span className="font-medium text-foreground">{warehouse?.name}</span> keeps its stock and
-          history, but no stock can be received, issued, adjusted, or transferred there until
-          it&apos;s restored.
+          <span className="font-medium text-foreground">{warehouse?.name}</span>
+          {m.text}
         </>
       }
-      confirmLabel="Archive"
+      confirmLabel={m.confirm}
       tone="danger"
       pending={pending}
       error={error}

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { AppearanceProvider } from '@/app/appearance-provider';
+import { I18nProvider } from '@/app/i18n-provider';
 import { createQueryClient } from '@/app/query-client';
 import { routes } from '@/routes/router';
 
@@ -20,9 +21,11 @@ export function renderApp(path: string) {
 
   render(
     <QueryClientProvider client={queryClient}>
-      <AppearanceProvider>
-        <RouterProvider router={router} />
-      </AppearanceProvider>
+      <I18nProvider>
+        <AppearanceProvider>
+          <RouterProvider router={router} />
+        </AppearanceProvider>
+      </I18nProvider>
     </QueryClientProvider>,
   );
 

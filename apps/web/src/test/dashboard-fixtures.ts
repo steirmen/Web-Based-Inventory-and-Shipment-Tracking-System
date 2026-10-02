@@ -56,6 +56,8 @@ export function dashboardSummary(
       days: 7,
     },
     generatedAt: '2025-09-07T12:00:00.000Z',
+    currency: 'TRY',
+    currencies: ['TRY'],
     kpis: {
       sales: {
         current: '200.50',
@@ -148,6 +150,7 @@ export function dashboardSummary(
           companyName: 'Acme, Inc.',
         },
         total: '79.98',
+        currency: 'TRY',
         createdAt: '2025-09-06T10:00:00.000Z',
       },
     ],

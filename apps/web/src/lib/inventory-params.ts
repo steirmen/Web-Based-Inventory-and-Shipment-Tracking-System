@@ -34,18 +34,19 @@ function oneOf<T extends string>(values: readonly T[], value: string | null): T 
 
 // --- Inventory ---------------------------------------------------------------------
 
-type InventorySort = `${InventorySortField}:${SortOrder}`;
+export type InventorySort = `${InventorySortField}:${SortOrder}`;
 
 export const DEFAULT_INVENTORY_SORT: InventorySort = 'productName:asc';
 
-export const INVENTORY_SORT_OPTIONS: { value: InventorySort; label: string }[] = [
-  { value: 'productName:asc', label: 'Product (A–Z)' },
-  { value: 'productName:desc', label: 'Product (Z–A)' },
-  { value: 'sku:asc', label: 'SKU (A–Z)' },
-  { value: 'quantity:asc', label: 'Quantity (low to high)' },
-  { value: 'quantity:desc', label: 'Quantity (high to low)' },
-  { value: 'updatedAt:desc', label: 'Recently changed' },
-];
+/** Sort options in menu order (labels: `stock.inventory.sortOptions`). */
+export const INVENTORY_SORT_OPTIONS = [
+  'productName:asc',
+  'productName:desc',
+  'sku:asc',
+  'quantity:asc',
+  'quantity:desc',
+  'updatedAt:desc',
+] as const satisfies readonly InventorySort[];
 
 export interface InventoryParams {
   search: string;
@@ -202,22 +203,7 @@ export function warehouseInventoryPath(organizationId: string, warehouseId: stri
   return `${paths.inventory(organizationId)}?${query.toString()}`;
 }
 
-// --- Labels --------------------------------------------------------------------------
-
-export const MOVEMENT_TYPE_LABELS: Record<StockMovementType, string> = {
-  PURCHASE: 'Purchase',
-  SALE: 'Sale',
-  DAMAGE: 'Damage',
-  ADJUSTMENT: 'Adjustment',
-  TRANSFER_OUT: 'Transfer out',
-  TRANSFER_IN: 'Transfer in',
-};
-
-export const STOCK_STATUS_LABELS: Record<StockStatus, string> = {
-  IN_STOCK: 'In stock',
-  LOW_STOCK: 'Low stock',
-  OUT_OF_STOCK: 'Out of stock',
-};
+// --- Labels (status and type names: `common.stockStatus`, `common.movementType`) ---------
 
 /**
  * A short, human-comparable label for a transfer group: both legs of a
@@ -225,9 +211,4 @@ export const STOCK_STATUS_LABELS: Record<StockStatus, string> = {
  */
 export function transferLabel(transferGroupId: string): string {
   return `#${transferGroupId.replaceAll('-', '').slice(-6).toUpperCase()}`;
-}
-
-/** "+50", "-10" (with a real minus sign for readability). */
-export function formatDelta(delta: number): string {
-  return delta > 0 ? `+${delta.toLocaleString()}` : `−${Math.abs(delta).toLocaleString()}`;
 }

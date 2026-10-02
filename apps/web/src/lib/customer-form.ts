@@ -5,6 +5,9 @@ import {
   PHONE_PATTERN,
   type UpdateCustomerRequest,
 } from '@app/shared';
+import type { Translation } from '@/i18n/define';
+import type { common } from '@/i18n/messages/common';
+import type { sales } from '@/i18n/messages/sales';
 import { type FieldErrors, validateEmail } from './auth-form';
 
 /** Client-side checks for the customer form; the API remains authoritative. */
@@ -32,8 +35,6 @@ export const CUSTOMER_FIELDS: readonly CustomerField[] = [
 ];
 
 const collapse = (value: string) => value.trim().replace(/\s+/g, ' ');
-const tooLong = (value: string, max: number) =>
-  value.trim().length > max ? `Use at most ${max} characters.` : undefined;
 
 export function customerFormValues(customer: Customer | null): CustomerFormValues {
   return {
@@ -46,18 +47,24 @@ export function customerFormValues(customer: Customer | null): CustomerFormValue
   };
 }
 
-export function validateCustomer(values: CustomerFormValues): FieldErrors<CustomerField> {
+export function validateCustomer(
+  values: CustomerFormValues,
+  m: Translation<typeof sales.en>['customerForm'],
+  auth: Translation<typeof common.en>['authValidation'],
+): FieldErrors<CustomerField> {
+  const tooLong = (value: string, max: number) =>
+    value.trim().length > max ? m.tooLong({ max }) : undefined;
   const name = collapse(values.name);
   const email = values.email.trim();
   const phone = values.phone.trim();
   return {
-    name: !name ? 'Enter the customer’s name.' : tooLong(name, L.nameMaxLength),
+    name: !name ? m.nameRequired : tooLong(name, L.nameMaxLength),
     companyName: tooLong(values.companyName, L.companyNameMaxLength),
-    email: !email ? undefined : (tooLong(email, L.emailMaxLength) ?? validateEmail(email)),
+    email: !email ? undefined : (tooLong(email, L.emailMaxLength) ?? validateEmail(email, auth)),
     phone: !phone
       ? undefined
       : (tooLong(phone, L.phoneMaxLength) ??
-        (PHONE_PATTERN.test(phone) ? undefined : 'Use digits, spaces, and + - ( ) . / only.')),
+        (PHONE_PATTERN.test(phone) ? undefined : m.phonePattern)),
     address: tooLong(values.address, L.addressMaxLength),
     notes: tooLong(values.notes, L.notesMaxLength),
   };

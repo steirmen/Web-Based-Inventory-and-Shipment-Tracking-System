@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
-import { apiErrorMessage, hasErrorCode } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { catalog } from '@/i18n/messages/catalog';
+import { hasErrorCode, useApiErrorMessage } from '@/lib/api-errors';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import { categoryProductsPath } from '@/lib/product-list-params';
 
@@ -29,6 +31,8 @@ export function DeleteCategoryDialog({
   onCancel: () => void;
 }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(catalog).deleteCategory;
+  const errorMessage = useApiErrorMessage();
   // The count may be stale; a CATEGORY_IN_USE answer from the API switches to the explanation too.
   const inUse =
     category !== null && (category.productCount > 0 || hasErrorCode(error, 'CATEGORY_IN_USE'));
@@ -39,29 +43,29 @@ export function DeleteCategoryDialog({
       <Dialog
         open
         onClose={onCancel}
-        title="This category can't be deleted"
+        title={m.blockedTitle}
         description={
           count === 1
-            ? `${category.name} is used by 1 product. Move that product to another category first.`
+            ? m.usedByOne({ name: category.name })
             : count > 1
-              ? `${category.name} is used by ${count} products. Move them to another category first.`
-              : apiErrorMessage(error)
+              ? m.usedByMany({ name: category.name, count })
+              : errorMessage(error)
         }
         footer={
           <>
             <Button variant="secondary" onClick={onCancel} data-autofocus>
-              Close
+              {m.close}
             </Button>
             <Link
               to={categoryProductsPath(organization.id, category.id)}
               className={buttonVariants()}
             >
-              View products
+              {m.viewProducts}
             </Link>
           </>
         }
       >
-        <Alert tone="info">Archived products count too, because they still reference it.</Alert>
+        <Alert tone="info">{m.archivedCount}</Alert>
       </Dialog>
     );
   }
@@ -69,14 +73,14 @@ export function DeleteCategoryDialog({
   return (
     <ConfirmDialog
       open={category !== null}
-      title="Delete category?"
+      title={m.title}
       description={
         <>
-          <span className="font-medium text-foreground">{category?.name}</span> will be deleted
-          permanently. This can&apos;t be undone.
+          <span className="font-medium text-foreground">{category?.name}</span>
+          {m.text}
         </>
       }
-      confirmLabel="Delete"
+      confirmLabel={m.confirm}
       tone="danger"
       pending={pending}
       error={error}

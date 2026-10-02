@@ -1,4 +1,6 @@
 import type { ComponentProps } from 'react';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { cn } from '@/lib/cn';
 
 const sizes = {
@@ -14,7 +16,9 @@ export interface SpinnerProps extends Omit<ComponentProps<'span'>, 'children'> {
 }
 
 /** Indeterminate loading indicator. Inherits the current text color. */
-export function Spinner({ size = 'md', label = 'Loading', className, ...props }: SpinnerProps) {
+export function Spinner({ size = 'md', label, className, ...props }: SpinnerProps) {
+  const fallback = useMessages(common).actions.loading;
+  if (label === undefined) label = fallback;
   return (
     <span
       role={label ? 'status' : undefined}

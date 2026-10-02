@@ -7,6 +7,8 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent } from '@/components/ui/card';
 import { useOrganization } from '@/hooks/use-organizations';
 import { hasErrorCode } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { pageTitle } from '@/lib/app-config';
 import { rememberLastOrganizationId } from '@/lib/last-organization';
 import { createOrganizationContext, OrganizationContext } from '@/lib/organization-context';
@@ -20,6 +22,7 @@ import { paths } from '@/routes/paths';
 export function OrganizationLayout() {
   const { organizationId = '' } = useParams();
   const query = useOrganization(organizationId);
+  const m = useMessages(common).shell;
 
   // Only ever render the organization the URL names: data for any other id is ignored.
   const context = useMemo(
@@ -44,7 +47,7 @@ export function OrganizationLayout() {
     }
     return (
       <ErrorState
-        title="We couldn't load this workspace"
+        title={m.workspaceLoadError}
         error={query.error}
         onRetry={() => void query.refetch()}
         className="mx-auto max-w-lg py-12"
@@ -67,21 +70,20 @@ export function OrganizationLayout() {
 }
 
 function WorkspaceNotFound() {
+  const m = useMessages(common).shell;
   return (
     <Card className="mx-auto max-w-lg">
-      <title>{pageTitle('Workspace not found')}</title>
+      <title>{pageTitle(m.workspaceNotFound)}</title>
       <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
         <div className="flex size-12 items-center justify-center rounded-full bg-surface-muted text-muted-foreground">
           <SearchX className="size-5" aria-hidden="true" />
         </div>
         <div className="flex flex-col gap-1.5">
           <h1 className="text-lg font-semibold">Workspace not found</h1>
-          <p className="text-sm text-muted-foreground">
-            Workspace not found or you don&apos;t have access to it.
-          </p>
+          <p className="text-sm text-muted-foreground">{m.workspaceNotFoundText}</p>
         </div>
         <Link to={paths.organizations} className={buttonVariants({ variant: 'secondary' })}>
-          View your workspaces
+          {m.viewYourWorkspaces}
         </Link>
       </CardContent>
     </Card>

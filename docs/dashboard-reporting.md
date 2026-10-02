@@ -1,6 +1,6 @@
 # Dashboard & reporting
 
-The dashboard is the **workspace overview** (`/org/:organizationId`): a read-only, organization-scoped endpoint (Phase 8A) aggregates the organization's real data (orders, sales, customers, products, inventory, warehouses), and the overview page (Phase 8B) presents it. Phase 8C adds [reports](#reports) (sales, orders, inventory) with CSV export, built on the same definitions. The typed contract is in `@app/shared` (`packages/shared/src/dashboard.ts`); the page is described under [Dashboard UI](#dashboard-ui).
+The dashboard is the **workspace overview** (`/org/:organizationId`): a read-only, organization-scoped endpoint (Phase 8A) aggregates the organization's real data (orders, sales, customers, products, inventory, warehouses), and the overview page (Phase 8B) presents it. Phase 8C adds [reports](#reports) (sales, orders, inventory) with CSV export, built on the same definitions; Phase 10.1 adds Excel (.xlsx) export, translated export labels ([export.md](export.md)), and one-currency-at-a-time money figures ([currency.md](currency.md#api-rules)). The typed contract is in `@app/shared` (`packages/shared/src/dashboard.ts`); the page is described under [Dashboard UI](#dashboard-ui).
 
 Nothing is cached, precomputed, or invented: every number is read from the database on request.
 
@@ -213,14 +213,14 @@ Database tests assert the consistency: for the same period and time zone, the Sa
 
 All require a session, membership (404 `ORGANIZATION_NOT_FOUND` otherwise), and a permission; the organization comes only from the route.
 
-| Method & path                                     | Permission       | Returns                                                                                                   |
-| ------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------- |
-| `GET /organizations/:id/reports/sales`            | `REPORTS_READ`   | `SalesReportResponse`: `period`, `items`, `pagination`, `totals { orders, units, revenue }`               |
-| `GET /organizations/:id/reports/sales/export`     | `REPORTS_EXPORT` | `text/csv`                                                                                                |
-| `GET /organizations/:id/reports/orders`           | `REPORTS_READ`   | `OrdersReportResponse`: `period`, `items`, `pagination`, `totals { orders, value }`                       |
-| `GET /organizations/:id/reports/orders/export`    | `REPORTS_EXPORT` | `text/csv`                                                                                                |
-| `GET /organizations/:id/reports/inventory`        | `REPORTS_READ`   | `InventoryReportResponse`: `items`, `pagination`, `totals { rows, units, inStock, lowStock, outOfStock }` |
-| `GET /organizations/:id/reports/inventory/export` | `REPORTS_EXPORT` | `text/csv`                                                                                                |
+| Method & path                                     | Permission       | Returns                                                                                                               |
+| ------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `GET /organizations/:id/reports/sales`            | `REPORTS_READ`   | `SalesReportResponse`: `period`, `currency`, `currencies`, `items`, `pagination`, `totals { orders, units, revenue }` |
+| `GET /organizations/:id/reports/sales/export`     | `REPORTS_EXPORT` | `text/csv` or `.xlsx` (`format`, `lang`; [export.md](export.md))                                                      |
+| `GET /organizations/:id/reports/orders`           | `REPORTS_READ`   | `OrdersReportResponse`: `period`, `items`, `pagination`, `totals { orders, values: { currency, amount }[] }`          |
+| `GET /organizations/:id/reports/orders/export`    | `REPORTS_EXPORT` | `text/csv` or `.xlsx`                                                                                                 |
+| `GET /organizations/:id/reports/inventory`        | `REPORTS_READ`   | `InventoryReportResponse`: `items`, `pagination`, `totals { rows, units, inStock, lowStock, outOfStock }`             |
+| `GET /organizations/:id/reports/inventory/export` | `REPORTS_EXPORT` | `text/csv` or `.xlsx`                                                                                                 |
 
 Types: `packages/shared/src/reports.ts`. JSON responses are `Cache-Control: no-store`. Nothing is written (no activity log entry).
 
@@ -233,7 +233,8 @@ Types: `packages/shared/src/reports.ts`. JSON responses are `Cache-Control: no-s
 | Inventory | One per inventory row (product × warehouse), **current** state | product, SKU, category, warehouse, quantity, minimum stock, status          | `warehouseId`, `productId`, `categoryId`, `status` (IN_STOCK/LOW_STOCK/OUT_OF_STOCK), `search` (product name/SKU), `includeArchived` (default false: sellable stock only)                               | `productName` (asc), `sku`, `category`, `warehouse`, `quantity`, `minimumStock` |
 
 - With a **product or category** filter, the Sales report lists the orders containing such lines and counts **only those lines** in units and revenue (the UI says so).
-- The Sales report never lists DRAFT, CONFIRMED, or CANCELLED orders; the Orders report is where every status is inspected. The Orders report's `value` is the sum of the listed orders' totals (all listed statuses), not revenue.
+- The Sales report never lists DRAFT, CONFIRMED, or CANCELLED orders; the Orders report is where every status is inspected. The Orders report's `values` are the sums of the listed orders' totals per currency (all listed statuses), not revenue.
+- **Currency (Phase 10.1):** the Sales report shows one currency (`currency`, chosen like the dashboard's when omitted) and returns `currencies`; the Orders report has an optional `currency` filter and a row currency. Amounts in different currencies are never summed ([currency.md](currency.md)).
 - The Inventory report is the current state; the stock movement history stays on Stock movements and is not replaced. Reports never change stock.
 - Sorting: only whitelisted fields (`IsIn` on the DTO), mapped to SQL expressions in the service, ties broken by date/name and id. An unknown field is `400 VALIDATION_ERROR`.
 - Pagination: `page` (≥ 1), `pageSize` (default 25, max 100); `pagination` has `page`, `pageSize`, `totalItems`, `totalPages`.
@@ -241,6 +242,8 @@ Types: `packages/shared/src/reports.ts`. JSON responses are `Cache-Control: no-s
 - Search escapes `%`, `_`, and `\` (literal matching), case-insensitive.
 
 ### CSV export
+
+Phase 10.1: every export is also available as an Excel workbook (`format=xlsx`) with the same rows, and `lang=en|tr` translates the generated labels. The Turkish-locale Excel root cause and the writers are documented in [export.md](export.md); the CSV rules below are unchanged.
 
 - Same query string as the report (filters, date range, time zone, sort), without paging; the web app sends exactly the active report state.
 - **Limit:** at most **10,000 rows** (`REPORT_LIMITS.exportMaxRows`). The API fetches one row more than the limit; if the export would be larger it answers `422 REPORT_EXPORT_TOO_LARGE` ("… would contain N rows; the maximum is 10,000. Narrow the filters …"). No background jobs.
@@ -269,8 +272,8 @@ Enforced by the API per handler (`@RequirePermissions`, pinned by `reports.contr
 
 ### Report tests
 
-- API unit: `csv.spec.ts` (escaping, formula neutralization, round-trip), `reports.controller.spec.ts` (permissions).
-- Database (`reports-api.db-spec.ts`): roles × read/export, 401/404, read-only, validation (unsupported sort, statuses, paging, ranges, `includeArchived`, an `organizationId` parameter), unknown filter ids, Sales (realized only, snapshots, totals, dashboard consistency in two time zones, every filter, product/category line semantics, search incl. wildcards, every sort, pagination, empty), Orders (statuses, filters, sort), Inventory (Phase 6 status, sellable scope, `includeArchived`, filters, sorts, dashboard consistency, empty), CSV (filtered content, headers, time zone, hostile values, 10,001-row limit), tenant isolation (B's ids in A's reports and exports → 422; B's routes → 404).
+- API unit: `csv.spec.ts` (escaping, formula neutralization, round-trip), `export/export.spec.ts` (XLSX/CSV writers, typed cells, hostile text), `reports.controller.spec.ts` (permissions).
+- Database (`reports-api.db-spec.ts`): roles × read/export, 401/404, read-only, validation (unsupported sort, statuses, paging, ranges, `includeArchived`, an `organizationId` parameter), unknown filter ids, Sales (realized only, snapshots, totals, dashboard consistency in two time zones, every filter, product/category line semantics, search incl. wildcards, every sort, pagination, empty), Orders (statuses, filters, sort), Inventory (Phase 6 status, sellable scope, `includeArchived`, filters, sorts, dashboard consistency, empty), CSV (filtered content, headers, time zone, hostile values, 10,001-row limit), XLSX read back in both languages, currencies in reports, tenant isolation (B's ids in A's reports and exports → 422; B's routes → 404).
 - Web: `pages/reports/reports-pages.test.tsx` (navigation, rows/totals, default query, filters → URL + request, sort headers + `aria-sort`, pagination, empty vs no matches, loading, error/retry, product chip, export with the active filters, too-large message, disabled export, workspace switch, dashboard link), `lib/report-params.test.ts`.
 
 ## Performance and bundle size

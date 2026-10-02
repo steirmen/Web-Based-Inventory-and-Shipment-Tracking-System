@@ -13,6 +13,7 @@ import { ROOT_ENV_FILE, validateEnv } from './config/env.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { OrganizationsModule } from './organizations/organizations.module.js';
+import { PreferencesModule } from './preferences/preferences.module.js';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { OrganizationsModule } from './organizations/organizations.module.js';
     DatabaseModule,
     AuthModule,
     AppearanceModule,
+    PreferencesModule,
     OrganizationsModule,
     CatalogModule,
     InventoryModule,

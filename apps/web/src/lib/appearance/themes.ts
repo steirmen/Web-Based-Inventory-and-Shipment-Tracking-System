@@ -35,27 +35,6 @@ interface ThemeSpec {
   warmSurface?: boolean;
 }
 
-export interface ThemeInfo {
-  id: ThemeId;
-  name: string;
-  description: string;
-}
-
-/** Display names (never persisted — the ids are). */
-export const THEMES: readonly ThemeInfo[] = [
-  { id: 'default', name: 'Default', description: 'The classic Nexora indigo.' },
-  { id: 'ocean', name: 'Ocean', description: 'Calm blues and cool grays.' },
-  { id: 'forest', name: 'Forest', description: 'Deep greens, grounded neutrals.' },
-  { id: 'sunset', name: 'Sunset', description: 'Warm orange accents.' },
-  { id: 'graphite', name: 'Graphite', description: 'Monochrome and focused.' },
-  { id: 'plum', name: 'Plum', description: 'Rich purple-magenta.' },
-  { id: 'paper', name: 'Paper', description: 'Soft cream, ink-like accents.' },
-  { id: 'mint', name: 'Mint', description: 'Fresh teal greens.' },
-  { id: 'lavender', name: 'Lavender', description: 'Gentle violet tones.' },
-  { id: 'rose', name: 'Rose', description: 'Warm pinks and reds.' },
-  { id: 'custom', name: 'Custom', description: 'Your accent color and tone.' },
-];
-
 const PRESETS: Record<Exclude<ThemeId, 'custom'>, ThemeSpec> = {
   default: {
     neutral: { hue: 257, chroma: 0.009 },

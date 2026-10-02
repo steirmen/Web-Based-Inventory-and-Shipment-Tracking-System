@@ -19,6 +19,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useCategories, useDeleteCategory } from '@/hooks/use-catalog';
+import { useMessages } from '@/i18n/i18n-context';
+import { catalog } from '@/i18n/messages/catalog';
 import { pageTitle } from '@/lib/app-config';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import { categoryProductsPath } from '@/lib/product-list-params';
@@ -28,6 +30,7 @@ type Editing = { mode: 'create' } | { mode: 'edit'; categoryId: string } | null;
 /** Categories of the current organization with create, edit, and delete by permission. */
 export function CategoriesPage() {
   const { organization, can } = useCurrentOrganization();
+  const m = useMessages(catalog).categories;
   const categories = useCategories(organization.id);
   const remove = useDeleteCategory(organization.id);
   const [editing, setEditing] = useState<Editing>(null);
@@ -60,7 +63,7 @@ export function CategoriesPage() {
     remove.mutate(deleting.id, {
       onSuccess: () => {
         setDeletingId(null);
-        setNotice(`${name} deleted.`);
+        setNotice(m.deleted({ name }));
       },
     });
   };
@@ -69,19 +72,15 @@ export function CategoriesPage() {
     <Can permission="CATEGORIES_CREATE">
       <Button onClick={startCreate}>
         <Plus aria-hidden="true" />
-        Add category
+        {m.add}
       </Button>
     </Can>
   );
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Categories · ${organization.name}`)}</title>
-      <PageHeader
-        title="Categories"
-        description="Group products to find and filter them faster."
-        actions={addButton}
-      />
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
+      <PageHeader title={m.title} description={m.description} actions={addButton} />
 
       {notice && (
         <Alert tone="success" onDismiss={() => setNotice(null)}>
@@ -89,11 +88,11 @@ export function CategoriesPage() {
         </Alert>
       )}
 
-      {categories.isPending && <ListSkeleton label="Loading categories" />}
+      {categories.isPending && <ListSkeleton label={m.loading} />}
 
       {categories.isError && (
         <ErrorState
-          title="We couldn't load categories"
+          title={m.loadError}
           error={categories.error}
           onRetry={() => void categories.refetch()}
         />
@@ -102,8 +101,8 @@ export function CategoriesPage() {
       {categories.isSuccess && list.length === 0 && (
         <EmptyState
           icon={<FolderTree className="size-5" aria-hidden="true" />}
-          title="No categories yet"
-          description="Create a category to organize your products."
+          title={m.emptyTitle}
+          description={m.emptyText}
           action={addButton}
         />
       )}
@@ -113,12 +112,12 @@ export function CategoriesPage() {
           <Table className="hidden @2xl:table">
             <TableHeader>
               <tr>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead align="right">Products</TableHead>
+                <TableHead>{m.name}</TableHead>
+                <TableHead>{m.descriptionColumn}</TableHead>
+                <TableHead align="right">{m.products}</TableHead>
                 {showActions && (
                   <TableHead>
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{m.actions}</span>
                   </TableHead>
                 )}
               </tr>
@@ -149,7 +148,7 @@ export function CategoriesPage() {
             </TableBody>
           </Table>
 
-          <ul className="divide-y divide-border @2xl:hidden" aria-label="Categories">
+          <ul className="divide-y divide-border @2xl:hidden" aria-label={m.list}>
             {list.map((category) => (
               <li key={category.id} className="flex flex-col gap-2 p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -196,7 +195,8 @@ export function CategoriesPage() {
 /** "3 products", linking to the product list filtered by this category. */
 function ProductCountLink({ category }: { category: Category }) {
   const { organization } = useCurrentOrganization();
-  const label = `${category.productCount} ${category.productCount === 1 ? 'product' : 'products'}`;
+  const m = useMessages(catalog).categories;
+  const label = m.productCount({ count: category.productCount });
   if (category.productCount === 0) {
     return <span className="text-muted-foreground">{label}</span>;
   }
@@ -204,7 +204,7 @@ function ProductCountLink({ category }: { category: Category }) {
     <Link
       to={categoryProductsPath(organization.id, category.id)}
       className="rounded-sm font-medium text-primary focus-ring hover:underline"
-      aria-label={`${label} in ${category.name}`}
+      aria-label={m.productCountIn({ label, name: category.name })}
     >
       {label}
     </Link>
@@ -220,6 +220,7 @@ function CategoryActions({
   onEdit: (category: Category) => void;
   onDelete: (category: Category) => void;
 }) {
+  const m = useMessages(catalog).categories;
   return (
     <div className="flex flex-wrap items-center gap-1 @2xl:flex-nowrap @2xl:justify-end">
       <Can permission="CATEGORIES_UPDATE">
@@ -227,10 +228,10 @@ function CategoryActions({
           variant="ghost"
           size="sm"
           onClick={() => onEdit(category)}
-          aria-label={`Edit ${category.name}`}
+          aria-label={m.editNamed({ name: category.name })}
         >
           <Pencil aria-hidden="true" />
-          Edit
+          {m.edit}
         </Button>
       </Can>
       <Can permission="CATEGORIES_DELETE">
@@ -238,10 +239,10 @@ function CategoryActions({
           variant="ghost"
           size="sm"
           onClick={() => onDelete(category)}
-          aria-label={`Delete ${category.name}`}
+          aria-label={m.deleteNamed({ name: category.name })}
         >
           <Trash2 aria-hidden="true" />
-          Delete
+          {m.delete}
         </Button>
       </Can>
     </div>

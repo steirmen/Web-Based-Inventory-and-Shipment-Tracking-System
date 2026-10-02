@@ -1,5 +1,6 @@
 import { ChevronDown, LayoutGrid, LogOut, Palette } from 'lucide-react';
 import { Link, Outlet, ScrollRestoration } from 'react-router';
+import { LanguageSwitch } from '@/components/i18n/language-switch';
 import { BrandMark } from '@/components/layout/brand-mark';
 import { Container } from '@/components/layout/container';
 import { RouteProgress } from '@/components/layout/route-loading';
@@ -8,18 +9,23 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { Menu, menuItemClass, MenuSeparator } from '@/components/ui/menu';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth, useLogout } from '@/hooks/use-auth';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { appConfig } from '@/lib/app-config';
+import { cn } from '@/lib/cn';
 import { initials } from '@/lib/initials';
 import { paths } from '@/routes/paths';
 
 /**
- * Top-level page frame: header (brand, workspace switcher, user menu), main
- * content area, footer. Pages render inside <Outlet /> and inherit the page
+ * Top-level page frame: header (brand, workspace switcher; on the right
+ * Appearance, the TR | EN language switch, and the user menu), main content
+ * area, footer. Pages render inside <Outlet /> and inherit the page
  * width and vertical rhythm; workspace pages add the workspace navigation
  * (OrganizationLayout).
  */
 export function AppShell() {
   const auth = useAuth();
+  const m = useMessages(common);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -31,7 +37,7 @@ export function AppShell() {
         href="#main-content"
         className="sr-only rounded-control bg-surface px-3 py-2 font-medium shadow-raised focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50"
       >
-        Skip to content
+        {m.shell.skipToContent}
       </a>
 
       <header className="sticky top-0 z-40 border-b border-border bg-surface/85 backdrop-blur-sm">
@@ -56,7 +62,22 @@ export function AppShell() {
             )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            {auth.status === 'authenticated' && (
+              <Link
+                to={paths.appearance}
+                aria-label={m.shell.appearance}
+                title={m.shell.appearance}
+                className={cn(
+                  buttonVariants({ variant: 'ghost', size: 'sm' }),
+                  'h-9 px-2.5 max-sm:hidden',
+                )}
+              >
+                <Palette aria-hidden="true" />
+                <span className="hidden xl:inline">{m.shell.appearance}</span>
+              </Link>
+            )}
+            <LanguageSwitch />
             {auth.status === 'authenticated' && (
               <UserMenu name={auth.user.name} email={auth.user.email} />
             )}
@@ -65,7 +86,7 @@ export function AppShell() {
                 to={paths.login}
                 className={buttonVariants({ variant: 'secondary', size: 'sm' })}
               >
-                Sign in
+                {m.shell.signIn}
               </Link>
             )}
           </div>
@@ -85,7 +106,7 @@ export function AppShell() {
             to={paths.healthCheck}
             className="rounded-sm focus-ring hover:text-foreground hover:underline"
           >
-            System status
+            {m.shell.systemStatus}
           </Link>
         </Container>
       </footer>
@@ -96,15 +117,16 @@ export function AppShell() {
 /** Signed-in user: personal settings (appearance), workspaces, and sign-out. */
 function UserMenu({ name, email }: { name: string; email: string }) {
   const logout = useLogout();
+  const m = useMessages(common).shell;
 
   return (
     <Menu
-      label="Account"
+      label={m.account}
       align="end"
       trigger={(props) => (
         <button
           {...props}
-          aria-label={`Account: ${name}`}
+          aria-label={m.accountOf({ name })}
           className="flex items-center gap-2 rounded-full py-1 pr-1 pl-1 text-sm font-medium text-foreground focus-ring transition-colors duration-150 hover:bg-surface-muted aria-expanded:bg-surface-muted lg:rounded-control lg:pr-2"
         >
           <span
@@ -130,11 +152,11 @@ function UserMenu({ name, email }: { name: string; email: string }) {
           <MenuSeparator />
           <Link role="menuitem" to={paths.appearance} onClick={close} className={menuItemClass}>
             <Palette className="text-subtle-foreground" aria-hidden="true" />
-            Appearance
+            {m.appearance}
           </Link>
           <Link role="menuitem" to={paths.organizations} onClick={close} className={menuItemClass}>
             <LayoutGrid className="text-subtle-foreground" aria-hidden="true" />
-            Your workspaces
+            {m.yourWorkspaces}
           </Link>
           <MenuSeparator />
           <button
@@ -149,7 +171,7 @@ function UserMenu({ name, email }: { name: string; email: string }) {
             ) : (
               <LogOut className="text-subtle-foreground" aria-hidden="true" />
             )}
-            Sign out
+            {m.signOut}
           </button>
         </>
       )}

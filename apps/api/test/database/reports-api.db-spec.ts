@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { dashboardFixture } from './support/dashboard.js';
 import { prisma } from './support/database.js';
 import { createCategory, createWarehouse } from './support/factories.js';
+import { parseCsv } from '../support/parse-csv.js';
+import { readXlsx, xlsxValues } from '../support/read-xlsx.js';
 import { createHttpApp } from './support/http-app.js';
 import { createSignedInUser, NON_EXISTENT_ID, type SignedInUser } from './support/organizations.js';
 
@@ -54,37 +56,23 @@ async function reportsFixture(slug?: string) {
         res.on('data', (chunk: string) => (text += chunk));
         res.on('end', () => done(null, text));
       });
-  return { ...f, report, read, exportCsv };
-}
-
-/** CSV text → rows of cells (RFC 4180), without the BOM. */
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = '';
-  let quoted = false;
-  const body = text.replace(/^﻿/, '');
-  for (let index = 0; index < body.length; index += 1) {
-    const char = body[index]!;
-    if (quoted) {
-      if (char === '"' && body[index + 1] === '"') {
-        cell += '"';
-        index += 1;
-      } else if (char === '"') quoted = false;
-      else cell += char;
-    } else if (char === '"') quoted = true;
-    else if (char === ',') {
-      row.push(cell);
-      cell = '';
-    } else if (char === '\r' && body[index + 1] === '\n') {
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = '';
-      index += 1;
-    } else cell += char;
-  }
-  return rows;
+  /** The export as an Excel workbook (`format=xlsx`), read back cell by cell. */
+  const exportXlsx = async (
+    type: Report,
+    query: Record<string, string> = {},
+    who: SignedInUser = f.team.owner,
+  ) => {
+    const response = await get(`${type}/export`, { ...query, format: 'xlsx' }, who)
+      .buffer(true)
+      .parse((res, done) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer) => chunks.push(chunk));
+        res.on('end', () => done(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    return { response, workbook: readXlsx(response.body as Buffer) };
+  };
+  return { ...f, report, read, exportCsv, exportXlsx };
 }
 
 /** A team with two warehouses, a category, customers, and orders in every status in September 2025. */
@@ -133,8 +121,16 @@ describe('report access', () => {
         const csv = await f.exportCsv(type, {}, f.team[who]).expect(200);
         expect(csv.headers['content-type']).toBe('text/csv; charset=utf-8');
         expect(csv.headers['content-disposition']).toMatch(
-          new RegExp(`^attachment; filename="${type}-report_[\\d_-]+\\.csv"$`),
+          new RegExp(`^attachment; filename="${type}-report_[\\d_-]+(_TRY)?\\.csv"$`),
         );
+        const { response, workbook } = await f.exportXlsx(type, {}, f.team[who]);
+        expect(response.headers['content-type']).toBe(
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        );
+        expect(response.headers['content-disposition']).toMatch(
+          new RegExp(`^attachment; filename="${type}-report_[\\d_-]+(_TRY)?\\.xlsx"$`),
+        );
+        expect(workbook.rows).toHaveLength(1);
       }
     },
   );
@@ -254,8 +250,11 @@ describe('sales report', () => {
       warehouse: { id: f.main.id, name: 'Main', code: 'MAIN', isActive: true },
       units: 11,
       revenue: '55.00',
+      currency: 'TRY',
     });
     expect(body.totals).toEqual({ orders: 3, units: 17, revenue: '139.98' });
+    expect(body.currency).toBe('TRY');
+    expect(body.currencies).toEqual(['TRY']);
     expect(body.pagination).toEqual({ page: 1, pageSize: 25, totalItems: 3, totalPages: 1 });
     expect(body.period).toMatchObject({ from: '2025-09-01', to: '2025-09-30' });
   });
@@ -399,6 +398,7 @@ describe('orders report', () => {
       warehouse: { id: f.main.id, name: 'Main', code: 'MAIN', isActive: true },
       itemCount: 2,
       total: '0.00',
+      currency: 'TRY',
       createdAt: '2025-09-03T10:00:00.000Z',
     });
     expect(body.totals.orders).toBe(6);
@@ -516,6 +516,94 @@ describe('inventory report', () => {
   });
 });
 
+describe('currencies in reports', () => {
+  /** September data in TRY (salesData) plus one completed EUR order. */
+  async function mixedCurrencies() {
+    const f = await salesData();
+    const chair = await f.product({
+      name: 'Chair',
+      sku: 'CHAIR',
+      currency: 'EUR',
+      price: '249.00',
+    });
+    const euro = await f.order('COMPLETED', '2025-09-15T10:00:00Z', [[chair, 2, '249.00']], {
+      customerId: f.bolt.id,
+    });
+    return { ...f, chair, euro };
+  }
+
+  it('sales: one currency at a time (default: most orders), never added across currencies', async () => {
+    const f = await mixedCurrencies();
+
+    const byDefault = await f.read<SalesReportResponse>('sales', SEPTEMBER);
+    const euro = await f.read<SalesReportResponse>('sales', { ...SEPTEMBER, currency: 'EUR' });
+
+    expect(byDefault.currency).toBe('TRY');
+    expect(byDefault.currencies).toEqual(['TRY', 'EUR']);
+    expect(byDefault.totals).toEqual({ orders: 3, units: 17, revenue: '139.98' });
+    expect(byDefault.items.every((row) => row.currency === 'TRY')).toBe(true);
+    expect(euro.items.map((row) => [row.orderNumber, row.revenue, row.currency])).toEqual([
+      [f.euro.orderNumber, '498.00', 'EUR'],
+    ]);
+    expect(euro.totals).toEqual({ orders: 1, units: 2, revenue: '498.00' });
+
+    // The dashboard picks the same currency and agrees with the report in each currency.
+    for (const currency of ['TRY', 'EUR'] as const) {
+      const report = await f.read<SalesReportResponse>('sales', { ...SEPTEMBER, currency });
+      const dashboard = (await f.summary({ ...SEPTEMBER, currency }).expect(200))
+        .body as DashboardSummaryResponse;
+      expect(dashboard.currency).toBe(currency);
+      expect(dashboard.currencies).toEqual(['TRY', 'EUR']);
+      expect(report.totals.revenue).toBe(dashboard.kpis.sales.current);
+    }
+    const dashboard = (await f.summary(SEPTEMBER).expect(200)).body as DashboardSummaryResponse;
+    expect(dashboard.currency).toBe('TRY');
+    // Orders count every currency; revenue only the chosen one.
+    expect(dashboard.kpis.realizedOrders.current).toBe(4);
+    expect(dashboard.kpis.sales.current).toBe('139.98');
+    expect(dashboard.topProducts.map((product) => product.name)).not.toContain('Chair');
+  });
+
+  it('orders: a currency per row and totals per currency', async () => {
+    const f = await mixedCurrencies();
+
+    const all = await f.read<OrdersReportResponse>('orders', SEPTEMBER);
+    const euro = await f.read<OrdersReportResponse>('orders', { ...SEPTEMBER, currency: 'EUR' });
+
+    expect(all.totals.orders).toBe(7);
+    expect(all.totals.values.map((value) => value.currency)).toEqual(['TRY', 'EUR']);
+    expect(all.totals.values[1]).toEqual({ currency: 'EUR', amount: '0.00' });
+    expect(all.items.find((row) => row.orderId === f.euro.id)?.currency).toBe('EUR');
+    expect(euro.items.map((row) => row.orderId)).toEqual([f.euro.id]);
+  });
+
+  it('exports the chosen currency only, with the currency in every row', async () => {
+    const f = await mixedCurrencies();
+
+    const csv = parseCsv(
+      (await f.exportCsv('sales', { ...SEPTEMBER, currency: 'EUR' }).expect(200)).body as string,
+    );
+    const { workbook, response } = await f.exportXlsx('sales', { ...SEPTEMBER, currency: 'EUR' });
+
+    expect(csv.slice(1).map((row) => [row[1], row[8], row[9]])).toEqual([
+      [f.euro.orderNumber, '498.00', 'EUR'],
+    ]);
+    expect(response.headers['content-disposition']).toMatch(/_EUR\.xlsx"$/);
+    expect(workbook.rows[1]![8]).toEqual({
+      value: '498.00',
+      type: 'number',
+      format: '"€"#,##0.00',
+    });
+  });
+
+  it('rejects an unknown currency', async () => {
+    const f = await reportsFixture();
+    const response = await f.report('sales', { currency: 'BTC' }).expect(400);
+    expect(response.body).toMatchObject({ code: 'VALIDATION_ERROR' });
+    await f.summary({ currency: '<script>' }).expect(400);
+  });
+});
+
 describe('CSV export', () => {
   it('exports exactly the filtered report, with readable headers and exact decimals', async () => {
     const f = await salesData();
@@ -525,7 +613,7 @@ describe('CSV export', () => {
       .expect(200);
 
     expect(response.headers['content-disposition']).toBe(
-      'attachment; filename="sales-report_2025-09-01_2025-09-30.csv"',
+      'attachment; filename="sales-report_2025-09-01_2025-09-30_TRY.csv"',
     );
     const text = response.body as string;
     expect(text.startsWith('﻿')).toBe(true);
@@ -541,6 +629,7 @@ describe('CSV export', () => {
         'Warehouse',
         'Units',
         'Revenue',
+        'Currency',
       ],
       [
         '2025-09-20 13:00',
@@ -552,6 +641,7 @@ describe('CSV export', () => {
         'Main',
         '4',
         '5.00',
+        'TRY',
       ],
       [
         '2025-09-03 13:00',
@@ -563,6 +653,7 @@ describe('CSV export', () => {
         'Main',
         '11',
         '55.00',
+        'TRY',
       ],
     ]);
   });
@@ -588,10 +679,11 @@ describe('CSV export', () => {
       'Warehouse',
       'Items',
       'Total',
+      'Currency',
       'Created (UTC)',
     ]);
     expect(orders.slice(1).map((row) => row[1])).toEqual(['Draft']);
-    expect(orders[1]![8]).toBe('2025-09-05 10:00');
+    expect(orders[1]![9]).toBe('2025-09-05 10:00');
     expect(stock).toEqual([
       [
         'Product',
@@ -642,7 +734,123 @@ describe('CSV export', () => {
       'Comma, Inc.',
       'Line\nBreak',
     ]);
-    expect(rows.every((row) => row.length === 9)).toBe(true);
+    expect(rows.every((row) => row.length === 10)).toBe(true);
+  });
+
+  it('exports the same rows, filters, and order as an Excel workbook with typed cells', async () => {
+    const f = await salesData();
+    const query = { ...SEPTEMBER, warehouseId: f.main.id, timeZone: 'Europe/Istanbul' };
+
+    const csv = parseCsv((await f.exportCsv('sales', query).expect(200)).body as string);
+    const { response, workbook } = await f.exportXlsx('sales', query);
+
+    expect(response.headers['content-disposition']).toBe(
+      'attachment; filename="sales-report_2025-09-01_2025-09-30_TRY.xlsx"',
+    );
+    expect(workbook.sheetName).toBe('Sales');
+    expect(workbook.frozenRows).toBe(1);
+    const values = xlsxValues(workbook);
+    // Same header, same rows in the same order; every row exactly as wide as the header.
+    expect(values[0]).toEqual(csv[0]);
+    expect(values.map((row) => row[1])).toEqual(csv.map((row) => row[1]));
+    expect(values.every((row) => row.length === csv[0]!.length)).toBe(true);
+    const completed = workbook.rows[2]!;
+    expect(completed[7]).toMatchObject({ value: '11', type: 'number' });
+    expect(completed[8]).toEqual({ value: '55.00', type: 'number', format: '"₺"#,##0.00' });
+    expect(completed[9]?.value).toBe('TRY');
+    expect(completed[0]).toMatchObject({ type: 'number', format: 'yyyy\\-mm\\-dd\\ hh:mm' });
+  });
+
+  it('translates only the generated labels: headers, statuses, and sheet names in Turkish', async () => {
+    const f = await salesData();
+    await f.stock(f.east.id, f.lamp.id, 9);
+    await prisma.customer.update({
+      where: { id: f.acme.id },
+      data: { name: 'Çağrı Öztürk', companyName: "Şişli Kırtasiye, O'Neil" },
+    });
+
+    const sales = parseCsv(
+      (await f.exportCsv('sales', { ...SEPTEMBER, lang: 'tr', customerId: f.acme.id }).expect(200))
+        .body as string,
+    );
+    const english = parseCsv(
+      (await f.exportCsv('sales', { ...SEPTEMBER, customerId: f.acme.id }).expect(200))
+        .body as string,
+    );
+    const orders = await f.exportXlsx('orders', { ...SEPTEMBER, lang: 'tr', status: 'CANCELLED' });
+    const stock = await f.exportXlsx('inventory', { lang: 'tr', warehouseId: f.east.id });
+
+    expect(sales).toEqual([
+      [
+        'Tarih (UTC)',
+        'Sipariş No',
+        'Durum',
+        'Müşteri',
+        'Firma',
+        'Depo kodu',
+        'Depo',
+        'Adet',
+        'Ciro',
+        'Para birimi',
+      ],
+      [
+        '2025-09-03 10:00',
+        f.completed.orderNumber,
+        'Tamamlandı',
+        'Çağrı Öztürk',
+        "Şişli Kırtasiye, O'Neil",
+        'MAIN',
+        'Main',
+        '11',
+        '55.00',
+        'TRY',
+      ],
+    ]);
+    // Same data rows in both languages; only labels differ.
+    expect(english[1]!.filter((_, index) => index !== 2)).toEqual(
+      sales[1]!.filter((_, index) => index !== 2),
+    );
+    expect(english[1]![2]).toBe('Completed');
+    expect(orders.workbook.sheetName).toBe('Siparişler');
+    expect(orders.response.headers['content-disposition']).toMatch(/filename="siparis-raporu_/);
+    expect(xlsxValues(orders.workbook)[0]).toEqual([
+      'Sipariş No',
+      'Durum',
+      'Müşteri',
+      'Firma',
+      'Depo kodu',
+      'Depo',
+      'Kalem',
+      'Toplam',
+      'Para birimi',
+      'Oluşturulma (UTC)',
+    ]);
+    expect(xlsxValues(orders.workbook)[1]![1]).toBe('İptal edildi');
+    expect(stock.workbook.sheetName).toBe('Envanter');
+    expect(xlsxValues(stock.workbook)[1]).toEqual([
+      'Desk Lamp',
+      'LAMP-1',
+      '',
+      'EAST',
+      'East',
+      '9',
+      '0',
+      'Stokta',
+      'Aktif',
+      'Aktif',
+    ]);
+  });
+
+  it('rejects an unknown format or language', async () => {
+    const f = await reportsFixture();
+    const bad = await f.exportCsv('sales', { format: 'pdf', lang: 'de' }).expect(400);
+    expect(JSON.parse(bad.body as string)).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: expect.arrayContaining([
+        expect.objectContaining({ field: 'format' }),
+        expect.objectContaining({ field: 'lang' }),
+      ]),
+    });
   });
 
   it('refuses exports above the limit and asks for narrower filters', async () => {

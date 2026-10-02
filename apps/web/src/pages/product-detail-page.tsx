@@ -11,10 +11,12 @@ import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useProduct, useProductStatusChange } from '@/hooks/use-catalog';
-import { apiErrorMessage, hasErrorCode } from '@/lib/api-errors';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { catalog } from '@/i18n/messages/catalog';
+import { common } from '@/i18n/messages/common';
+import { hasErrorCode, useApiErrorMessage } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
-import { formatDateTime } from '@/lib/format';
-import { formatMoney } from '@/lib/money';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import { paths } from '@/routes/paths';
 
@@ -36,6 +38,10 @@ export function ProductDetailPage() {
   const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [notice, setNotice] = useState(() => readNotice(location.state));
   const navigate = useNavigate();
+  const m = useMessages(catalog);
+  const c = useMessages(common);
+  const f = useFormat();
+  const errorMessage = useApiErrorMessage();
 
   // Show the flash message once: drop it from history so a reload doesn't repeat it.
   useEffect(() => {
@@ -45,7 +51,7 @@ export function ProductDetailPage() {
   }, [location.state, location.pathname, navigate]);
 
   if (product.isPending) {
-    return <DetailSkeleton label="Loading product" />;
+    return <DetailSkeleton label={m.pages.loading} />;
   }
 
   if (product.isError) {
@@ -54,7 +60,7 @@ export function ProductDetailPage() {
       <div className="flex flex-col gap-6">
         <BackToProducts />
         <ErrorState
-          title="We couldn't load this product"
+          title={m.pages.loadError}
           error={product.error}
           onRetry={() => void product.refetch()}
         />
@@ -72,7 +78,7 @@ export function ProductDetailPage() {
       {
         onSuccess: () => {
           setConfirmingArchive(false);
-          setNotice(action === 'archive' ? 'Product archived.' : 'Product restored.');
+          setNotice(action === 'archive' ? m.detail.archivedNotice : m.detail.restoredNotice);
         },
       },
     );
@@ -83,7 +89,7 @@ export function ProductDetailPage() {
       <title>{pageTitle(`${current.name} · ${organization.name}`)}</title>
       <BackToProducts />
       <PageHeader
-        eyebrow="Product"
+        eyebrow={m.detail.eyebrow}
         title={<span className="break-words">{current.name}</span>}
         description={
           <span className="flex flex-wrap items-center gap-2">
@@ -99,7 +105,7 @@ export function ProductDetailPage() {
                 className={buttonVariants({ variant: 'secondary' })}
               >
                 <Pencil aria-hidden="true" />
-                Edit
+                {m.actions.edit}
               </Link>
             )}
             {can('PRODUCTS_ARCHIVE') &&
@@ -110,7 +116,7 @@ export function ProductDetailPage() {
                   onClick={() => changeStatus('restore')}
                 >
                   {!statusChange.isPending && <ArchiveRestore aria-hidden="true" />}
-                  Restore
+                  {m.actions.restore}
                 </Button>
               ) : (
                 <Button
@@ -121,7 +127,7 @@ export function ProductDetailPage() {
                   }}
                 >
                   <Archive aria-hidden="true" />
-                  Archive
+                  {m.actions.archive}
                 </Button>
               ))}
           </>
@@ -134,32 +140,34 @@ export function ProductDetailPage() {
         </Alert>
       )}
       {statusChange.isError && !confirmingArchive && (
-        <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
+        <Alert tone="danger">{errorMessage(statusChange.error)}</Alert>
       )}
       {archived && (
-        <Alert tone="warning" title="This product is archived">
-          {can('PRODUCTS_ARCHIVE')
-            ? 'Restore it to make changes.'
-            : 'An owner or admin can restore it.'}
+        <Alert tone="warning" title={m.detail.archivedTitle}>
+          {can('PRODUCTS_ARCHIVE') ? m.detail.canRestore : m.detail.askToRestore}
         </Alert>
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Details</CardTitle>
+            <CardTitle>{m.detail.details}</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-5 text-sm sm:grid-cols-2">
-              <Field label="Category">
-                {current.category?.name ?? <span className="text-subtle-foreground">None</span>}
+              <Field label={m.detail.category}>
+                {current.category?.name ?? (
+                  <span className="text-subtle-foreground">{m.detail.none}</span>
+                )}
               </Field>
-              <Field label="Status">{archived ? 'Archived' : 'Active'}</Field>
-              <Field label="Description" className="sm:col-span-2">
+              <Field label={m.detail.status}>
+                {archived ? c.status.archived : c.status.active}
+              </Field>
+              <Field label={m.detail.description} className="sm:col-span-2">
                 {current.description ? (
                   <span className="whitespace-pre-line">{current.description}</span>
                 ) : (
-                  <span className="text-subtle-foreground">No description</span>
+                  <span className="text-subtle-foreground">{m.detail.noDescription}</span>
                 )}
               </Field>
             </dl>
@@ -168,18 +176,21 @@ export function ProductDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Pricing</CardTitle>
+            <CardTitle>{m.detail.pricing}</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-2 gap-5 text-sm lg:grid-cols-1">
-              <Field label="Price">
-                <span className="tabular-nums">{formatMoney(current.price)}</span>
+              <Field label={m.detail.price}>
+                <span className="tabular-nums">{f.money(current.price, current.currency)}</span>
               </Field>
-              <Field label="Cost">
-                <span className="tabular-nums">{formatMoney(current.cost)}</span>
+              <Field label={m.detail.cost}>
+                <span className="tabular-nums">{f.money(current.cost, current.currency)}</span>
               </Field>
-              <Field label="Minimum stock">
-                <span className="tabular-nums">{current.minimumStock}</span>
+              <Field label={m.detail.currency}>
+                {current.currency} · {c.currency[current.currency]}
+              </Field>
+              <Field label={m.detail.minimumStock}>
+                <span className="tabular-nums">{f.number(current.minimumStock)}</span>
               </Field>
             </dl>
           </CardContent>
@@ -188,17 +199,14 @@ export function ProductDetailPage() {
 
       <dl className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:gap-6">
         <div className="flex gap-1">
-          <dt>Created</dt>
-          <dd>{formatDateTime(current.createdAt)}</dd>
+          <dt>{m.detail.created}</dt>
+          <dd>{f.dateTime(current.createdAt)}</dd>
         </div>
         <div className="flex gap-1">
-          <dt>Last updated</dt>
-          <dd>{formatDateTime(current.updatedAt)}</dd>
+          <dt>{m.detail.updated}</dt>
+          <dd>{f.dateTime(current.updatedAt)}</dd>
         </div>
       </dl>
-      <p className="text-xs text-subtle-foreground">
-        Inventory tracking will be available in a future module.
-      </p>
 
       <ArchiveProductDialog
         product={confirmingArchive ? current : null}

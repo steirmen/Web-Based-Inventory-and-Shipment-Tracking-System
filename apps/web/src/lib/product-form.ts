@@ -2,19 +2,26 @@ import {
   CATALOG_LIMITS,
   type CreateCategoryRequest,
   type CreateProductRequest,
+  type Currency,
+  DEFAULT_CURRENCY,
   MONEY_PATTERN,
   type Product,
   SKU_PATTERN,
   type UpdateCategoryRequest,
   type UpdateProductRequest,
 } from '@app/shared';
+import type { Translation } from '@/i18n/define';
+import type { catalog } from '@/i18n/messages/catalog';
 import type { FieldErrors } from './auth-form';
+
+type Validation = Translation<typeof catalog.en>['validation'];
 
 /**
  * Client-side validation and request building for the product and category
  * forms. It catches obvious mistakes early; the API remains the authority.
  * Money stays a string from the input to the request body — it is never
- * parsed into a floating-point number.
+ * parsed into a floating-point number. Price and cost share the product's
+ * one currency. Messages come from the current language.
  */
 
 const L = CATALOG_LIMITS;
@@ -25,12 +32,15 @@ export interface ProductFormValues {
   sku: string;
   description: string;
   categoryId: string;
+  /** The selected category's name, for display only (never sent). */
+  categoryName: string;
   price: string;
   cost: string;
+  currency: Currency;
   minimumStock: string;
 }
 
-export type ProductField = keyof ProductFormValues;
+export type ProductField = Exclude<keyof ProductFormValues, 'categoryName'>;
 
 export const PRODUCT_FIELDS: readonly ProductField[] = [
   'name',
@@ -39,6 +49,7 @@ export const PRODUCT_FIELDS: readonly ProductField[] = [
   'categoryId',
   'price',
   'cost',
+  'currency',
   'minimumStock',
 ];
 
@@ -47,8 +58,10 @@ export const EMPTY_PRODUCT_FORM: ProductFormValues = {
   sku: '',
   description: '',
   categoryId: '',
+  categoryName: '',
   price: '',
   cost: '',
+  currency: DEFAULT_CURRENCY,
   minimumStock: '0',
 };
 
@@ -58,20 +71,23 @@ export function productToFormValues(product: Product): ProductFormValues {
     sku: product.sku,
     description: product.description ?? '',
     categoryId: product.category?.id ?? '',
+    categoryName: product.category?.name ?? '',
     price: product.price,
     cost: product.cost ?? '',
+    currency: product.currency,
     minimumStock: String(product.minimumStock),
   };
 }
 
 const collapse = (value: string) => value.trim().replace(/\s+/g, ' ');
 
-function validateMoney(value: string, label: string): string | undefined {
+function validateMoney(
+  value: string,
+  messages: { required: string; invalid: string },
+): string | undefined {
   const amount = value.trim();
-  if (!amount) return `Enter a ${label.toLowerCase()}.`;
-  if (!MONEY_PATTERN.test(amount)) {
-    return `${label} must be a non-negative amount with up to 2 decimals (e.g. 19.99).`;
-  }
+  if (!amount) return messages.required;
+  if (!MONEY_PATTERN.test(amount)) return messages.invalid;
   return undefined;
 }
 
@@ -81,38 +97,38 @@ function validateMoney(value: string, label: string): string | undefined {
  */
 export function validateProduct(
   values: ProductFormValues,
-  options: { costOptional?: boolean } = {},
+  m: Validation,
+  options: { costOptional?: boolean; formatNumber?: (value: number) => string } = {},
 ): FieldErrors<ProductField> {
+  const formatNumber = options.formatNumber ?? ((value: number) => value.toLocaleString('en-US'));
   const name = collapse(values.name);
   const sku = values.sku.trim();
   const minimumStock = values.minimumStock.trim();
 
   return {
-    name: !name
-      ? 'Enter a product name.'
-      : name.length > L.productNameMaxLength
-        ? `Use at most ${L.productNameMaxLength} characters.`
-        : undefined,
+    name: !name ? m.nameRequired : name.length > L.productNameMaxLength ? m.nameTooLong : undefined,
     sku: !sku
-      ? 'Enter a SKU.'
+      ? m.skuRequired
       : sku.length > L.skuMaxLength
-        ? `Use at most ${L.skuMaxLength} characters.`
+        ? m.skuTooLong
         : !SKU_PATTERN.test(sku)
-          ? 'Use letters, numbers, and . _ - / (starting with a letter or number).'
+          ? m.skuPattern
           : undefined,
     description:
       values.description.trim().length > L.productDescriptionMaxLength
-        ? `Use at most ${L.productDescriptionMaxLength} characters.`
+        ? m.descriptionTooLong
         : undefined,
-    price: validateMoney(values.price, 'Price'),
+    price: validateMoney(values.price, { required: m.priceRequired, invalid: m.priceInvalid }),
     cost:
-      options.costOptional && !values.cost.trim() ? undefined : validateMoney(values.cost, 'Cost'),
+      options.costOptional && !values.cost.trim()
+        ? undefined
+        : validateMoney(values.cost, { required: m.costRequired, invalid: m.costInvalid }),
     minimumStock: !minimumStock
-      ? 'Enter a minimum stock level (0 for none).'
+      ? m.minimumStockRequired
       : !/^\d+$/.test(minimumStock)
-        ? 'Minimum stock must be a whole number of 0 or more.'
+        ? m.minimumStockInvalid
         : Number(minimumStock) > L.minimumStockMax
-          ? `Minimum stock must be at most ${L.minimumStockMax.toLocaleString()}.`
+          ? m.minimumStockTooLarge({ max: formatNumber(L.minimumStockMax) })
           : undefined,
   };
 }
@@ -125,6 +141,7 @@ export function toCreateProductRequest(values: ProductFormValues): CreateProduct
     categoryId: values.categoryId || null,
     price: values.price.trim(),
     cost: values.cost.trim(),
+    currency: values.currency,
     minimumStock: Number(values.minimumStock.trim()),
   };
 }
@@ -144,6 +161,7 @@ export function toUpdateProductRequest(
   if (next.price !== before.price) changes.price = next.price;
   // A legacy product without a cost keeps it unset while the field stays blank.
   if (next.cost !== before.cost && next.cost !== '') changes.cost = next.cost;
+  if (next.currency !== before.currency) changes.currency = next.currency;
   if (next.minimumStock !== before.minimumStock) changes.minimumStock = next.minimumStock;
   return changes;
 }
@@ -159,20 +177,26 @@ export type CategoryField = keyof CategoryFormValues;
 
 export const CATEGORY_FIELDS: readonly CategoryField[] = ['name', 'description'];
 
-export function validateCategory(values: CategoryFormValues): FieldErrors<CategoryField> {
+export function validateCategory(
+  values: CategoryFormValues,
+  m: Validation,
+): FieldErrors<CategoryField> {
   const name = collapse(values.name);
   return {
     name: !name
-      ? 'Enter a category name.'
+      ? m.categoryNameRequired
       : name.length > L.categoryNameMaxLength
-        ? `Use at most ${L.categoryNameMaxLength} characters.`
+        ? m.categoryNameTooLong
         : undefined,
     description:
       values.description.trim().length > L.categoryDescriptionMaxLength
-        ? `Use at most ${L.categoryDescriptionMaxLength} characters.`
+        ? m.categoryDescriptionTooLong
         : undefined,
   };
 }
+
+/** A category name as the API stores it (trimmed, inner spaces collapsed). */
+export const normalizeCategoryName = collapse;
 
 export function toCategoryRequest(
   values: CategoryFormValues,

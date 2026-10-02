@@ -1,4 +1,5 @@
 import type { ProductStatus } from './catalog.js';
+import type { Currency } from './currency.js';
 import type { OrderStatus } from './sales.js';
 
 /**
@@ -62,6 +63,12 @@ export interface DashboardSummaryQuery {
   to?: string;
   /** IANA time zone the days are counted in (e.g. `Europe/Istanbul`). Default `UTC`. */
   timeZone?: string;
+  /**
+   * Currency of the money figures (sales KPI, revenue series, top products).
+   * Default: the currency with the most realized orders in the period (see
+   * `DashboardSummaryResponse.currency`). Amounts in other currencies are never added in.
+   */
+  currency?: Currency;
 }
 
 /** A resolved period: local days `from`…`to` (inclusive) = instants [`start`, `end`). */
@@ -103,7 +110,10 @@ export interface DashboardMoneyMetric {
 }
 
 export interface DashboardKpis {
-  /** Realized revenue: Σ quantity × unit price of the lines of realized orders created in the period. */
+  /**
+   * Realized revenue in the response `currency`: Σ quantity × unit price of the
+   * lines of realized orders in that currency created in the period.
+   */
   sales: DashboardMoneyMetric;
   /** Orders created in the period, every status. */
   orders: DashboardCountMetric;
@@ -141,7 +151,7 @@ export interface DashboardTimeSeriesPoint {
   orders: number;
   /** Realized orders created in the bucket. */
   realizedOrders: number;
-  /** Realized revenue (decimal string). */
+  /** Realized revenue in the response `currency` (decimal string). */
   revenue: string;
 }
 
@@ -158,7 +168,7 @@ export interface DashboardTopProduct {
   sku: string;
   status: ProductStatus;
   unitsSold: number;
-  /** Decimal string. */
+  /** Decimal string, in the response `currency`. */
   revenue: string;
 }
 
@@ -180,8 +190,10 @@ export interface DashboardRecentOrder {
   orderNumber: string;
   status: OrderStatus;
   customer: { id: string; name: string; companyName: string | null } | null;
-  /** Decimal string. */
+  /** Decimal string, in `currency`. */
   total: string;
+  /** null for an order without lines. */
+  currency: Currency | null;
   createdAt: string;
 }
 
@@ -191,11 +203,19 @@ export interface DashboardSummaryResponse {
   comparisonPeriod: DashboardPeriod;
   /** When the numbers were read (ISO 8601). */
   generatedAt: string;
+  /**
+   * The currency of every money figure (`kpis.sales`, the revenue series, top
+   * products): the requested one, else the currency with the most realized
+   * orders in the period (then the comparison period), else DEFAULT_CURRENCY.
+   */
+  currency: Currency;
+  /** Currencies with realized sales in the period or the comparison period (always includes `currency`). */
+  currencies: Currency[];
   kpis: DashboardKpis;
   /** Orders created in the period per status; always all six statuses, in lifecycle order. */
   orderStatus: DashboardOrderStatusCount[];
   timeSeries: DashboardTimeSeries;
-  /** Up to 5 products by units sold in realized orders of the period. */
+  /** Up to 5 products by units sold in realized orders of the period in `currency`. */
   topProducts: DashboardTopProduct[];
   /** Every warehouse (active first, then by code) with its current stock summary. */
   warehouses: DashboardWarehouseSummary[];

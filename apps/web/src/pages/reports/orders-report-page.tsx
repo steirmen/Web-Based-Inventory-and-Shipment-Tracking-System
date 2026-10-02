@@ -1,4 +1,9 @@
-import { ORDER_STATUSES, type OrdersReportRow, type OrdersReportSortField } from '@app/shared';
+import {
+  CURRENCIES,
+  ORDER_STATUSES,
+  type OrdersReportRow,
+  type OrdersReportSortField,
+} from '@app/shared';
 import { useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { RangePicker } from '@/components/dashboard/range-picker';
@@ -19,15 +24,12 @@ import { FormField } from '@/components/ui/form-field';
 import { Select } from '@/components/ui/select';
 import { useWarehouses } from '@/hooks/use-inventory';
 import { useOrdersReport, useReportExport } from '@/hooks/use-reports';
+import { useFormat } from '@/i18n/format';
+import { useLanguage, useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { insights } from '@/i18n/messages/insights';
 import { pageTitle } from '@/lib/app-config';
-import {
-  browserTimeZone,
-  formatCount,
-  formatDayRange,
-  writeDashboardParams,
-} from '@/lib/dashboard-params';
-import { formatDateTime } from '@/lib/format';
-import { formatMoney } from '@/lib/money';
+import { browserTimeZone, formatDayRange, writeDashboardParams } from '@/lib/dashboard-params';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import {
   hasOrdersReportFilters,
@@ -37,7 +39,6 @@ import {
   toOrdersReportQuery,
   writeOrdersReportParams,
 } from '@/lib/report-params';
-import { ORDER_STATUS_LABELS } from '@/lib/sales-params';
 import { paths } from '@/routes/paths';
 
 /** Orders of every status created in the period, filtered, sorted, and exported on the server. */
@@ -51,6 +52,11 @@ export function OrdersReportPage() {
   const exporter = useReportExport(organization.id, 'orders');
   const warehouses = useWarehouses(organization.id);
   const data = report.data;
+  const r = useMessages(insights);
+  const m = r.ordersReport;
+  const c = useMessages(common);
+  const f = useFormat();
+  const language = useLanguage().language;
 
   const setParams = (changes: Partial<OrdersReportParams>) => {
     exporter.reset();
@@ -70,7 +76,7 @@ export function OrdersReportPage() {
   const columns: ReportColumn<OrdersReportRow, OrdersReportSortField>[] = [
     {
       key: 'order',
-      header: 'Order',
+      header: m.order,
       sort: 'orderNumber',
       cell: (row) => (
         <Link
@@ -83,7 +89,7 @@ export function OrdersReportPage() {
     },
     {
       key: 'customer',
-      header: 'Customer',
+      header: m.customer,
       sort: 'customer',
       className: 'max-w-56',
       cell: (row) =>
@@ -97,42 +103,42 @@ export function OrdersReportPage() {
             )}
           </span>
         ) : (
-          <span className="text-muted-foreground">No customer</span>
+          <span className="text-muted-foreground">{r.reports.noCustomer}</span>
         ),
     },
     {
       key: 'warehouse',
-      header: 'Warehouse',
+      header: m.warehouse,
       cell: (row) => <span className="font-mono text-xs">{row.warehouse.code}</span>,
     },
     {
       key: 'status',
-      header: 'Status',
+      header: m.status,
       sort: 'status',
       cell: (row) => <OrderStatusBadge status={row.status} />,
     },
     {
       key: 'items',
-      header: 'Lines',
+      header: m.lines,
       align: 'right',
-      cell: (row) => formatCount(row.itemCount),
+      cell: (row) => f.number(row.itemCount),
     },
     {
       key: 'total',
-      header: 'Total',
+      header: m.total,
       sort: 'total',
       defaultOrder: 'desc',
       align: 'right',
-      className: 'font-medium',
-      cell: (row) => formatMoney(row.total),
+      className: 'font-medium whitespace-nowrap',
+      cell: (row) => f.money(row.total, row.currency),
     },
     {
       key: 'created',
-      header: 'Created',
+      header: m.created,
       sort: 'createdAt',
       defaultOrder: 'desc',
       className: 'whitespace-nowrap text-muted-foreground',
-      cell: (row) => formatDateTime(row.createdAt),
+      cell: (row) => f.dateTime(row.createdAt),
     },
   ];
 
@@ -140,14 +146,14 @@ export function OrdersReportPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Orders report · ${organization.name}`)}</title>
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
       <PageHeader
-        eyebrow="Reports"
-        title="Orders report"
-        description="Every order created in the period, whatever its status."
+        eyebrow={r.reports.eyebrow}
+        title={m.title}
+        description={m.description}
         actions={
           <ExportButton
-            onExport={() => exporter.mutate(query)}
+            onExport={(format) => exporter.mutate({ query, format, lang: language })}
             pending={exporter.isPending}
             error={exporter.error}
             disabled={!data || data.pagination.totalItems === 0}
@@ -159,12 +165,12 @@ export function OrdersReportPage() {
         periodSearch={writeDashboardParams(params.period).toString()}
       />
 
-      <search className="flex flex-col gap-3" aria-label="Orders report filters">
+      <search className="flex flex-col gap-3" aria-label={m.filters}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <p className="text-sm text-muted-foreground">
             {data
-              ? `${formatDayRange(data.period.from, data.period.to)} (${data.period.timeZone})`
-              : 'Date range'}
+              ? `${formatDayRange(data.period.from, data.period.to, f.locale)} (${data.period.timeZone})`
+              : r.reports.dateRange}
           </p>
           <RangePicker
             key={writeDashboardParams(params.period).toString()}
@@ -173,13 +179,13 @@ export function OrdersReportPage() {
             onChange={(period) => setParams({ period })}
           />
         </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
           <ReportSearch
             value={params.search}
-            placeholder="Order or customer…"
+            placeholder={m.searchPlaceholder}
             onSearch={onSearch}
           />
-          <FormField label="Status">
+          <FormField label={r.reports.status}>
             {(control) => (
               <Select
                 {...control}
@@ -188,33 +194,33 @@ export function OrdersReportPage() {
                   setParams({ status: event.target.value as OrdersReportParams['status'] })
                 }
               >
-                <option value="">All statuses</option>
+                <option value="">{m.allStatuses}</option>
                 {ORDER_STATUSES.map((status) => (
                   <option key={status} value={status}>
-                    {ORDER_STATUS_LABELS[status]}
+                    {c.orderStatus[status]}
                   </option>
                 ))}
               </Select>
             )}
           </FormField>
-          <FormField label="Warehouse">
+          <FormField label={r.reports.warehouse}>
             {(control) => (
               <Select
                 {...control}
                 value={params.warehouseId}
                 onChange={(event) => setParams({ warehouseId: event.target.value })}
               >
-                <option value="">All warehouses</option>
+                <option value="">{r.reports.allWarehouses}</option>
                 {warehouses.data?.warehouses.map((warehouse) => (
                   <option key={warehouse.id} value={warehouse.id}>
                     {warehouse.name}
-                    {warehouse.isActive ? '' : ' (archived)'}
+                    {warehouse.isActive ? '' : r.reports.archivedSuffix}
                   </option>
                 ))}
               </Select>
             )}
           </FormField>
-          <FormField label="Customer">
+          <FormField label={r.reports.customer}>
             {(control) => (
               <ReportCustomerFilter
                 control={control}
@@ -223,13 +229,39 @@ export function OrdersReportPage() {
               />
             )}
           </FormField>
+          <FormField label={r.reports.currency}>
+            {(control) => (
+              <Select
+                {...control}
+                value={params.period.currency}
+                onChange={(event) =>
+                  setParams({
+                    period: {
+                      ...params.period,
+                      currency: event.target.value as OrdersReportParams['period']['currency'],
+                    },
+                  })
+                }
+              >
+                <option value="">{r.reports.allCurrencies}</option>
+                {CURRENCIES.map((currency) => (
+                  <option key={currency} value={currency}>
+                    {currency} · {c.currency[currency]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </FormField>
         </div>
         <div className="flex min-h-8 flex-wrap items-center justify-between gap-2">
           {data && data.pagination.totalItems > 0 ? (
             <ReportSummary
               items={[
-                { label: 'Orders', value: formatCount(data.totals.orders) },
-                { label: 'Order value', value: formatMoney(data.totals.value) },
+                { label: m.orders, value: f.number(data.totals.orders) },
+                ...data.totals.values.map((value) => ({
+                  label: `${m.orderValue} (${value.currency})`,
+                  value: f.money(value.amount, value.currency),
+                })),
               ]}
             />
           ) : (
@@ -240,12 +272,12 @@ export function OrdersReportPage() {
       </search>
 
       <ReportResults
-        label="orders report"
+        label={m.noun}
         query={report}
         totalItems={data?.pagination.totalItems}
         filtered={filtered}
-        emptyTitle="No orders in this period."
-        emptyDescription="Try a longer date range."
+        emptyTitle={m.empty}
+        emptyDescription={m.emptyText}
         onClearFilters={clearFilters}
         page={data?.pagination.page ?? 1}
         pageSize={data?.pagination.pageSize ?? 25}
@@ -254,7 +286,7 @@ export function OrdersReportPage() {
       >
         {data && (
           <ReportTable
-            caption="Orders"
+            caption={m.caption}
             columns={columns}
             rows={data.items}
             rowKey={(row) => row.orderId}

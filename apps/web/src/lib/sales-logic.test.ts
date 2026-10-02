@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { common } from '@/i18n/messages/common';
+import { sales } from '@/i18n/messages/sales';
 import { testOrder, testOrderItem } from '@/test/sales-fixtures';
+import { describeApiError } from './api-errors';
 import { toCustomerRequest, validateCustomer } from './customer-form';
 import {
   mapOrderError,
@@ -39,29 +42,34 @@ describe('order form', () => {
 
   it('requires a customer and warehouse and valid quantities, and previews the subtotal', () => {
     const state = orderFormState(null);
-    const errors = validateOrderForm({
-      ...state,
-      lines: [
-        {
-          productId: 'a',
-          name: 'A',
-          sku: 'A',
-          unitPrice: '0.10',
-          quantity: '3',
-          saved: false,
-          archived: false,
-        },
-        {
-          productId: 'b',
-          name: 'B',
-          sku: 'B',
-          unitPrice: '1.00',
-          quantity: '0',
-          saved: false,
-          archived: false,
-        },
-      ],
-    });
+    const errors = validateOrderForm(
+      {
+        ...state,
+        lines: [
+          {
+            productId: 'a',
+            name: 'A',
+            sku: 'A',
+            unitPrice: '0.10',
+            quantity: '3',
+            currency: 'TRY',
+            saved: false,
+            archived: false,
+          },
+          {
+            productId: 'b',
+            name: 'B',
+            sku: 'B',
+            unitPrice: '1.00',
+            quantity: '0',
+            currency: 'TRY',
+            saved: false,
+            archived: false,
+          },
+        ],
+      },
+      sales.en.builder,
+    );
     expect(errors.fields).toMatchObject({
       customerId: 'Choose a customer.',
       warehouseId: 'Choose a warehouse.',
@@ -75,6 +83,7 @@ describe('order form', () => {
           sku: 'A',
           unitPrice: '0.10',
           quantity: '3',
+          currency: 'TRY',
           saved: false,
           archived: false,
         },
@@ -112,8 +121,17 @@ describe('order form', () => {
       details: [{ field: 'items.0.quantity', messages: ['Quantity must be at most 1000000.'] }],
     });
 
-    expect(mapOrderError(inactive, state.lines).errors.fields.customerId).toBe('Customer archived');
-    expect(mapOrderError(validation, state.lines).errors.lines).toEqual({
+    const errorMessage = (error: unknown) => describeApiError(error, common.en.errors);
+    const map = (error: unknown) =>
+      mapOrderError(
+        error,
+        state.lines,
+        errorMessage,
+        common.en.errors.fieldError,
+        'Invalid value.',
+      );
+    expect(map(inactive).errors.fields.customerId).toBe('Customer archived');
+    expect(map(validation).errors.lines).toEqual({
       [state.lines[0]!.productId]: 'Quantity must be at most 1000000.',
     });
   });
@@ -122,14 +140,18 @@ describe('order form', () => {
 describe('customer form', () => {
   it('validates and normalizes like the server', () => {
     expect(
-      validateCustomer({
-        name: ' ',
-        companyName: '',
-        email: 'nope',
-        phone: 'x',
-        address: '',
-        notes: '',
-      }),
+      validateCustomer(
+        {
+          name: ' ',
+          companyName: '',
+          email: 'nope',
+          phone: 'x',
+          address: '',
+          notes: '',
+        },
+        sales.en.customerForm,
+        common.en.authValidation,
+      ),
     ).toMatchObject({
       name: 'Enter the customer’s name.',
       email: expect.any(String),

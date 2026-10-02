@@ -12,9 +12,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArchiveWarehouseDialog } from '@/components/warehouses/archive-warehouse-dialog';
 import { WarehouseFormDialog } from '@/components/warehouses/warehouse-form-dialog';
 import { useWarehouse, useWarehouseStatusChange } from '@/hooks/use-inventory';
-import { apiErrorMessage, hasErrorCode } from '@/lib/api-errors';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { stock } from '@/i18n/messages/stock';
+import { common } from '@/i18n/messages/common';
+import { hasErrorCode, useApiErrorMessage } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
-import { formatDateTime } from '@/lib/format';
 import { movementsPath, warehouseInventoryPath } from '@/lib/inventory-params';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import { paths } from '@/routes/paths';
@@ -27,25 +30,30 @@ export function WarehouseDetailPage() {
   const [editing, setEditing] = useState(false);
   const [confirmingArchive, setConfirmingArchive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const s = useMessages(stock);
+  const m = s.warehouse;
+  const c = useMessages(common);
+  const f = useFormat();
+  const errorMessage = useApiErrorMessage();
 
-  if (query.isPending) return <DetailSkeleton label="Loading warehouse" />;
+  if (query.isPending) return <DetailSkeleton label={m.loading} />;
 
   if (query.isError) {
     if (hasErrorCode(query.error, 'WAREHOUSE_NOT_FOUND')) {
       return (
         <div className="flex flex-col gap-6">
-          <title>{pageTitle(`Warehouse not found · ${organization.name}`)}</title>
+          <title>{pageTitle(`${m.notFoundTitle} · ${organization.name}`)}</title>
           <BackToWarehouses />
-          <PageHeader title="Warehouse not found" />
+          <PageHeader title={m.notFoundTitle} />
           <EmptyState
             icon={<SearchX className="size-5" aria-hidden="true" />}
-            title="This warehouse doesn't exist in this workspace."
+            title={m.notFoundText}
             action={
               <Link
                 to={paths.warehouses(organization.id)}
                 className={buttonVariants({ variant: 'secondary' })}
               >
-                View all warehouses
+                {m.viewAll}
               </Link>
             }
           />
@@ -55,11 +63,7 @@ export function WarehouseDetailPage() {
     return (
       <div className="flex flex-col gap-6">
         <BackToWarehouses />
-        <ErrorState
-          title="We couldn't load this warehouse"
-          error={query.error}
-          onRetry={() => void query.refetch()}
-        />
+        <ErrorState title={m.loadError} error={query.error} onRetry={() => void query.refetch()} />
       </div>
     );
   }
@@ -72,7 +76,7 @@ export function WarehouseDetailPage() {
       {
         onSuccess: () => {
           setConfirmingArchive(false);
-          setNotice(action === 'archive' ? 'Warehouse archived.' : 'Warehouse restored.');
+          setNotice(action === 'archive' ? m.archivedNotice : m.restoredNotice);
         },
       },
     );
@@ -83,7 +87,7 @@ export function WarehouseDetailPage() {
       <title>{pageTitle(`${warehouse.name} · ${organization.name}`)}</title>
       <BackToWarehouses />
       <PageHeader
-        eyebrow="Warehouse"
+        eyebrow={m.eyebrow}
         title={<span className="break-words">{warehouse.name}</span>}
         description={
           <span className="flex flex-wrap items-center gap-2">
@@ -102,7 +106,7 @@ export function WarehouseDetailPage() {
                 }}
               >
                 <Pencil aria-hidden="true" />
-                Edit
+                {s.warehouses.edit}
               </Button>
             )}
             {can('WAREHOUSES_ARCHIVE') &&
@@ -115,7 +119,7 @@ export function WarehouseDetailPage() {
                   }}
                 >
                   <Archive aria-hidden="true" />
-                  Archive
+                  {s.warehouses.archive}
                 </Button>
               ) : (
                 <Button
@@ -124,7 +128,7 @@ export function WarehouseDetailPage() {
                   onClick={() => changeStatus('restore')}
                 >
                   {!statusChange.isPending && <ArchiveRestore aria-hidden="true" />}
-                  Restore
+                  {s.warehouses.restore}
                 </Button>
               ))}
           </>
@@ -137,33 +141,32 @@ export function WarehouseDetailPage() {
         </Alert>
       )}
       {statusChange.isError && !confirmingArchive && (
-        <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
+        <Alert tone="danger">{errorMessage(statusChange.error)}</Alert>
       )}
       {!warehouse.isActive && (
-        <Alert tone="warning" title="This warehouse is archived">
-          Its stock and history stay visible, but no stock can be moved in or out
-          {can('WAREHOUSES_ARCHIVE')
-            ? ' until you restore it.'
-            : '. An owner or admin can restore it.'}
+        <Alert tone="warning" title={m.archivedTitle}>
+          {can('WAREHOUSES_ARCHIVE') ? m.archivedRestore : m.archivedAsk}
         </Alert>
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Details</CardTitle>
+            <CardTitle>{m.details}</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-5 text-sm sm:grid-cols-2">
-              <Field label="Code">
+              <Field label={s.warehouses.code}>
                 <span className="font-mono">{warehouse.code}</span>
               </Field>
-              <Field label="Status">{warehouse.isActive ? 'Active' : 'Archived'}</Field>
-              <Field label="Address" className="sm:col-span-2">
+              <Field label={s.warehouses.status}>
+                {warehouse.isActive ? c.status.active : c.status.archived}
+              </Field>
+              <Field label={s.warehouses.address} className="sm:col-span-2">
                 {warehouse.address ? (
                   <span className="whitespace-pre-line">{warehouse.address}</span>
                 ) : (
-                  <span className="text-subtle-foreground">No address</span>
+                  <span className="text-subtle-foreground">{m.noAddress}</span>
                 )}
               </Field>
             </dl>
@@ -171,18 +174,18 @@ export function WarehouseDetailPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Stock</CardTitle>
+            <CardTitle>{m.stock}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <dl className="grid grid-cols-2 gap-5 text-sm">
-              <Field label="Products in stock">
+              <Field label={m.productsInStock}>
                 <span className="text-lg font-semibold tabular-nums">
-                  {warehouse.productCount.toLocaleString()}
+                  {f.number(warehouse.productCount)}
                 </span>
               </Field>
-              <Field label="Total units">
+              <Field label={m.totalUnits}>
                 <span className="text-lg font-semibold tabular-nums">
-                  {warehouse.totalUnits.toLocaleString()}
+                  {f.number(warehouse.totalUnits)}
                 </span>
               </Field>
             </dl>
@@ -192,14 +195,14 @@ export function WarehouseDetailPage() {
                 className={buttonVariants({ variant: 'secondary' })}
               >
                 <Package aria-hidden="true" />
-                View inventory
+                {m.viewInventory}
               </Link>
               <Link
                 to={movementsPath(organization.id, { warehouseId: warehouse.id })}
                 className={buttonVariants({ variant: 'secondary' })}
               >
                 <History aria-hidden="true" />
-                View stock movements
+                {m.viewMovements}
               </Link>
             </div>
           </CardContent>
@@ -208,12 +211,12 @@ export function WarehouseDetailPage() {
 
       <dl className="flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:gap-6">
         <div className="flex gap-1">
-          <dt>Created</dt>
-          <dd>{formatDateTime(warehouse.createdAt)}</dd>
+          <dt>{m.created}</dt>
+          <dd>{f.dateTime(warehouse.createdAt)}</dd>
         </div>
         <div className="flex gap-1">
-          <dt>Last updated</dt>
-          <dd>{formatDateTime(warehouse.updatedAt)}</dd>
+          <dt>{m.updated}</dt>
+          <dd>{f.dateTime(warehouse.updatedAt)}</dd>
         </div>
       </dl>
 
@@ -239,7 +242,8 @@ export function WarehouseDetailPage() {
 
 function BackToWarehouses() {
   const { organization } = useCurrentOrganization();
-  return <BackLink to={paths.warehouses(organization.id)} label="Warehouses" />;
+  const m = useMessages(stock).warehouse;
+  return <BackLink to={paths.warehouses(organization.id)} label={m.back} />;
 }
 
 function Field({

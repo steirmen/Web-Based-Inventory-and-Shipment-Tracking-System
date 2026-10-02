@@ -7,6 +7,14 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Nexora</title>
     <script>
+      // Language: the code last used on this device ('en' | 'tr', nothing else), so the first
+      // paint has the right lang attribute; the app's I18nProvider owns it afterwards.
+      try {
+        var language = localStorage.getItem('app:language');
+        if (language === 'en' || language === 'tr') document.documentElement.lang = language;
+      } catch (error) {
+        // Storage unavailable: keep English.
+      }
       // Personalization: re-apply the last applied appearance before the app starts, so a
       // reload does not flash another theme. Presentation data only (see
       // src/lib/appearance/apply.ts); the API stays the source of truth. Without a cache

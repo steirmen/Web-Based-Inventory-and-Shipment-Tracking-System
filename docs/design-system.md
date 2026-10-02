@@ -101,7 +101,7 @@ Never animate business values (numbers, totals, chart data).
 
 ## Layout
 
-- `AppShell`: sticky header (brand, workspace switcher, account menu), main content, footer. Content width `max-w-page` (88rem) via `Container`, with `px-4 sm:px-6 lg:px-8` gutters. A new page starts at the top (`ScrollRestoration`, keyed by path so filter changes never jump).
+- `AppShell`: sticky header (brand, workspace switcher, then `[Appearance][TR|EN][User ▼]` at the top right), main content, footer. Content width `max-w-page` (88rem) via `Container`, with `px-4 sm:px-6 lg:px-8` gutters. A new page starts at the top (`ScrollRestoration`, keyed by path so filter changes never jump).
 - **Workspace pages** (`OrganizationLayout`): the workspace navigation (`WorkspaceNav`) is a sticky sidebar with labelled groups (Sales, Catalog, Stock, Insights, Workspace) from `lg`, and the same links in one horizontally scrolling bar below that. The page column is a **CSS container** (`@container`), so pages adapt to the space they actually have next to the sidebar: inside a workspace, use container variants (`@3xl:`, `@4xl:`, `@5xl:`) for lists rather than viewport breakpoints.
 - Layouts must work at 375px wide with no page-level horizontal scroll. Stack on mobile, then use `sm:` / `md:` (or container variants) for rows and grids.
 
@@ -135,9 +135,15 @@ Search first (`SearchInput`), then selects, then "Clear filters" (ghost) when an
 
 `Menu` (`ui/menu.tsx`) for dropdown menus (workspace switcher, account menu): `role="menu"`, ↑/↓/Home/End, Escape returns focus to the trigger, a click outside closes it. Pickers with server-side search (`CustomerPicker`, `ProductPicker`) share one pattern: `SearchInput` + results with loading, "no matches", and error-with-retry states. Keyboard focus never falls back to the page when results update (a replaced result hands focus to the first new one). Short fixed lists use the native `Select`.
 
+**Combobox** (`CategoryPicker`, the product form's category field): the WAI-ARIA combobox pattern — an input (`role="combobox"`) that searches on the server as you type, a `listbox` of options under it, ↑/↓/Home/End/Enter/Escape on the input (`aria-activedescendant`), the current choice marked selected, a clear button, loading / no-matches / error-with-retry states, and a polite live announcement of the choice. A "Create “Name”" option appears only for members allowed to create (`CATEGORIES_CREATE`) and never for a name that exists in another letter case.
+
+**Language switch** (`LanguageSwitch`): a compact `radiogroup` (TR | EN, each with its full language name as `aria-label`) in the top bar and on the sign-in pages; switching is immediate. See [localization.md](localization.md).
+
+**Money inputs**: the amount stays a text field with the currency symbol inside it (`₺`, `€`, `$`); the product form puts the currency `Select` next to the price and shows the same currency next to the cost, stacking on narrow screens. See [currency.md](currency.md).
+
 ### Feedback
 
-One pattern: an inline `Alert` next to what it is about. Success after an action (`tone="success"`, dismissible with `onDismiss`) appears under the page header; notices that survive a navigation (e.g. "Product created.") travel in router state (`useFlashNotice`) and are shown once. Errors are `tone="danger"` (`role="alert"`), with the API message from `apiErrorMessage()`, never raw details. No `window.alert`/`confirm`, no toasts.
+One pattern: an inline `Alert` next to what it is about. Success after an action (`tone="success"`, dismissible with `onDismiss`) appears under the page header; notices that survive a navigation (e.g. "Product created.") travel in router state (`useFlashNotice`) and are shown once. Errors are `tone="danger"` (`role="alert"`), with the message from `useApiErrorMessage()` (the API error code translated into the interface language), never raw details. No `window.alert`/`confirm`, no toasts.
 
 ### Loading, empty, and error states
 
@@ -151,6 +157,10 @@ One pattern: an inline `Alert` next to what it is about. Success after an action
 ### Status badges
 
 `Badge` with a label (and `dot` for live states). Tones carry the same meaning everywhere: `success` active/completed/in stock, `warning` processing/low stock/adjustment, `danger` out of stock/cancelled, `neutral` draft/archived, `primary` informational. Color never stands alone.
+
+### Text and formatting
+
+No visible text is hard-coded in components: every label, hint, state, `aria-label`, and page title comes from the typed dictionary (`useMessages`), in English and Turkish. Numbers, dates, percentages, and money always go through `useFormat()` (locale-aware `Intl`), and money always shows its currency. Leave room for Turkish, which runs ~20–30% longer than English: buttons and badges must wrap or truncate gracefully, never overflow. User data (names, SKUs, notes) is shown exactly as entered.
 
 ## Interaction states
 

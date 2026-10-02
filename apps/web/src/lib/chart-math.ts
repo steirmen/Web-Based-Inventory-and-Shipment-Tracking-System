@@ -15,7 +15,7 @@ export function toCents(value: string): bigint {
   return sign ? -cents : cents;
 }
 
-/** 123450n → "1234.50" (for formatMoney). */
+/** 123450n → "1234.50" (for the money formatter). */
 export function centsToDecimal(cents: bigint): string {
   const negative = cents < 0n;
   const absolute = negative ? -cents : cents;

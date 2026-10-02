@@ -51,16 +51,17 @@ function sortParam<Field extends string>(
 
 // --- Customers -----------------------------------------------------------------------
 
-type CustomerSort = `${CustomerSortField}:${SortOrder}`;
+export type CustomerSort = `${CustomerSortField}:${SortOrder}`;
 export const DEFAULT_CUSTOMER_SORT: CustomerSort = 'name:asc';
 
-export const CUSTOMER_SORT_OPTIONS: { value: CustomerSort; label: string }[] = [
-  { value: 'name:asc', label: 'Name (A–Z)' },
-  { value: 'name:desc', label: 'Name (Z–A)' },
-  { value: 'companyName:asc', label: 'Company (A–Z)' },
-  { value: 'createdAt:desc', label: 'Newest first' },
-  { value: 'updatedAt:desc', label: 'Recently updated' },
-];
+/** Sort options in menu order (labels: `sales.customers.sortOptions`). */
+export const CUSTOMER_SORT_OPTIONS = [
+  'name:asc',
+  'name:desc',
+  'companyName:asc',
+  'createdAt:desc',
+  'updatedAt:desc',
+] as const satisfies readonly CustomerSort[];
 
 export interface CustomerParams {
   search: string;
@@ -103,17 +104,18 @@ export function toCustomerQuery(params: CustomerParams): CustomerListQuery {
 
 // --- Orders --------------------------------------------------------------------------
 
-type OrderSort = `${OrderSortField}:${SortOrder}`;
+export type OrderSort = `${OrderSortField}:${SortOrder}`;
 export const DEFAULT_ORDER_SORT: OrderSort = 'createdAt:desc';
 
-export const ORDER_SORT_OPTIONS: { value: OrderSort; label: string }[] = [
-  { value: 'createdAt:desc', label: 'Newest first' },
-  { value: 'createdAt:asc', label: 'Oldest first' },
-  { value: 'updatedAt:desc', label: 'Recently updated' },
-  { value: 'orderNumber:desc', label: 'Order number (high to low)' },
-  { value: 'total:desc', label: 'Total (high to low)' },
-  { value: 'total:asc', label: 'Total (low to high)' },
-];
+/** Sort options in menu order (labels: `sales.orders.sortOptions`). */
+export const ORDER_SORT_OPTIONS = [
+  'createdAt:desc',
+  'createdAt:asc',
+  'updatedAt:desc',
+  'orderNumber:desc',
+  'total:desc',
+  'total:asc',
+] as const satisfies readonly OrderSort[];
 
 export interface OrderParams {
   search: string;
@@ -207,70 +209,20 @@ export function customerOrdersPath(organizationId: string, customerId: string): 
   return `${paths.orders(organizationId)}?${query}`;
 }
 
-// --- Labels and actions --------------------------------------------------------------
-
-export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  DRAFT: 'Draft',
-  CONFIRMED: 'Confirmed',
-  PROCESSING: 'Processing',
-  SHIPPED: 'Shipped',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
-};
+// --- Actions (labels: `sales.actions`; status names: `common.orderStatus`) ---------------
 
 export interface OrderActionInfo {
   action: OrderAction;
-  label: string;
   permission: Permission;
-  /** Shown in the confirmation dialog. */
-  title: string;
-  description: string;
   tone: 'primary' | 'danger';
 }
 
 export const ORDER_ACTION_INFO: Record<OrderAction, OrderActionInfo> = {
-  confirm: {
-    action: 'confirm',
-    label: 'Confirm',
-    permission: 'ORDERS_CONFIRM',
-    title: 'Confirm order?',
-    description:
-      'The order can no longer be edited. Stock is not deducted yet — that happens when it is processed.',
-    tone: 'primary',
-  },
-  process: {
-    action: 'process',
-    label: 'Process',
-    permission: 'ORDERS_PROCESS',
-    title: 'Process order?',
-    description:
-      'Stock for every line is deducted from the warehouse now. After this the order can no longer be cancelled.',
-    tone: 'primary',
-  },
-  ship: {
-    action: 'ship',
-    label: 'Mark as shipped',
-    permission: 'ORDERS_SHIP',
-    title: 'Mark as shipped?',
-    description: 'Records that the order left the warehouse. Stock is not changed.',
-    tone: 'primary',
-  },
-  complete: {
-    action: 'complete',
-    label: 'Complete',
-    permission: 'ORDERS_COMPLETE',
-    title: 'Complete order?',
-    description: 'Closes the order. It can’t be changed afterwards.',
-    tone: 'primary',
-  },
-  cancel: {
-    action: 'cancel',
-    label: 'Cancel order',
-    permission: 'ORDERS_CANCEL',
-    title: 'Cancel order?',
-    description: 'The order is kept for the record but can’t be continued. Stock is not changed.',
-    tone: 'danger',
-  },
+  confirm: { action: 'confirm', permission: 'ORDERS_CONFIRM', tone: 'primary' },
+  process: { action: 'process', permission: 'ORDERS_PROCESS', tone: 'primary' },
+  ship: { action: 'ship', permission: 'ORDERS_SHIP', tone: 'primary' },
+  complete: { action: 'complete', permission: 'ORDERS_COMPLETE', tone: 'primary' },
+  cancel: { action: 'cancel', permission: 'ORDERS_CANCEL', tone: 'danger' },
 };
 
 /** Lifecycle actions per status, in display order (mirrors ORDER_TRANSITIONS). */

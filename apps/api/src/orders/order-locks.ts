@@ -1,4 +1,4 @@
-import type { OrderStatus } from '@app/shared';
+import type { Currency, OrderStatus } from '@app/shared';
 import type { Prisma } from '../generated/prisma/client.js';
 
 export interface LockedOrder {
@@ -7,6 +7,7 @@ export interface LockedOrder {
   status: OrderStatus;
   customerId: string | null;
   warehouseId: string;
+  currency: Currency | null;
 }
 
 /**
@@ -22,7 +23,7 @@ export async function lockOrder(
 ): Promise<LockedOrder | null> {
   const [row] = await tx.$queryRaw<LockedOrder[]>`
     SELECT id, order_number AS "orderNumber", status::text AS status,
-           customer_id AS "customerId", warehouse_id AS "warehouseId"
+           customer_id AS "customerId", warehouse_id AS "warehouseId", currency::text AS currency
     FROM orders
     WHERE organization_id = ${organizationId}::uuid AND id = ${orderId}::uuid
     FOR UPDATE`;

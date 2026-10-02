@@ -1,11 +1,12 @@
 import {
   CATALOG_LIMITS,
+  type CategoryListQuery,
   type CreateCategoryRequest,
   type UpdateCategoryRequest,
 } from '@app/shared';
 import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
-import { toNormalizedName, toOptionalText } from '../../common/validation/transforms.js';
+import { toNormalizedName, toOptionalText, toTrimmed } from '../../common/validation/transforms.js';
 
 const NAME_MAX = CATALOG_LIMITS.categoryNameMaxLength;
 const DESCRIPTION_MAX = CATALOG_LIMITS.categoryDescriptionMaxLength;
@@ -25,6 +26,16 @@ export class CreateCategoryDto implements CreateCategoryRequest {
     message: `Description must be at most ${DESCRIPTION_MAX} characters.`,
   })
   description?: string | null;
+}
+
+export class CategoryListQueryDto implements CategoryListQuery {
+  @IsOptional()
+  @Transform(toTrimmed)
+  @IsString()
+  @MaxLength(CATALOG_LIMITS.searchMaxLength, {
+    message: `Search must be at most ${CATALOG_LIMITS.searchMaxLength} characters.`,
+  })
+  search?: string;
 }
 
 /** Only name and description; anything else (id, organizationId) is rejected. */

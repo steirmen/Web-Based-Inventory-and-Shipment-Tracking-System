@@ -1,36 +1,41 @@
 import type { ApiErrorCode } from '@app/shared';
 import { ApiError } from '@/api/http-client';
+import type { Translation } from '@/i18n/define';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 
-const GENERIC_MESSAGES: Partial<Record<ApiErrorCode, string>> = {
-  ORGANIZATION_NOT_FOUND: "Workspace not found or you don't have access to it.",
-  ORGANIZATION_FORBIDDEN: "You don't have permission to perform this action.",
-  RATE_LIMITED: 'Too many requests. Please wait a moment and try again.',
-  INTERNAL_ERROR: 'Something went wrong on our side. Please try again.',
-};
+type ErrorMessages = Translation<typeof common.en>['errors'];
+
+/** Codes whose generic text is clearer than the API's specific message. */
+const GENERIC: readonly ApiErrorCode[] = [
+  'ORGANIZATION_NOT_FOUND',
+  'ORGANIZATION_FORBIDDEN',
+  'RATE_LIMITED',
+  'INTERNAL_ERROR',
+];
 
 /**
- * A safe, user-facing message for any failed API call. The API's own messages
- * for 4xx responses are written for end users; anything else gets generic text.
- * Raw server details are never shown.
+ * A safe, user-facing message for any failed API call, in the interface
+ * language. The API stays language-independent: it sends stable error codes,
+ * translated here (in English its own user-facing message is shown, which
+ * names the records involved). Raw server details are never shown, and 5xx
+ * responses always get generic text.
  */
-export function apiErrorMessage(error: unknown): string {
-  if (!(error instanceof ApiError)) {
-    return 'Something went wrong. Please try again.';
-  }
-  if (error.isNetworkError) {
-    return "We couldn't reach the server. Check your connection and try again.";
-  }
-  const generic = error.code ? GENERIC_MESSAGES[error.code] : undefined;
-  if (generic) {
-    return generic;
-  }
-  if (error.status === 403) {
-    return "You don't have permission to perform this action.";
-  }
+export function describeApiError(error: unknown, messages: ErrorMessages): string {
+  if (!(error instanceof ApiError)) return messages.generic;
+  if (error.isNetworkError) return messages.network;
+  if (error.code && GENERIC.includes(error.code)) return messages.codes[error.code];
+  if (error.status === 403) return messages.forbidden;
   if (error.status !== null && error.status < 500) {
-    return error.message;
+    return messages.clientError({ message: error.message, code: error.code ?? null });
   }
-  return 'Something went wrong on our side. Please try again.';
+  return messages.server;
+}
+
+/** `describeApiError` in the current language. */
+export function useApiErrorMessage(): (error: unknown) => string {
+  const messages = useMessages(common).errors;
+  return (error) => describeApiError(error, messages);
 }
 
 export function hasErrorCode(error: unknown, code: ApiErrorCode): boolean {

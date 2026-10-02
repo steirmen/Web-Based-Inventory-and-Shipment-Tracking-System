@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { workspace } from '@/i18n/messages/workspace';
 import { slugify, validateSlug } from './organization-form';
+
+const m = workspace.en.validation;
 
 describe('slugify', () => {
   it.each([
@@ -15,10 +18,10 @@ describe('slugify', () => {
 
 describe('validateSlug', () => {
   it.each(['acme', 'acme-supplies-2'])('accepts %j', (slug) => {
-    expect(validateSlug(slug)).toBeUndefined();
+    expect(validateSlug(slug, m)).toBeUndefined();
   });
 
   it.each(['', 'ab', 'Acme', 'acme--co', '-acme', 'acme_co'])('rejects %j', (slug) => {
-    expect(validateSlug(slug)).toBeDefined();
+    expect(validateSlug(slug, m)).toBeDefined();
   });
 });

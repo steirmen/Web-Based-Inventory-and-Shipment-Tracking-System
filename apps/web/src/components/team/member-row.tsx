@@ -12,10 +12,12 @@ import {
   useRemoveMember,
   useTransferOwnership,
 } from '@/hooks/use-organizations';
-import { apiErrorMessage } from '@/lib/api-errors';
-import { formatDate } from '@/lib/format';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { workspace } from '@/i18n/messages/workspace';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { useCurrentOrganization } from '@/lib/organization-context';
-import { ROLE_LABELS } from '@/lib/organization-form';
 
 type Confirmation = 'remove' | 'transfer' | null;
 
@@ -29,6 +31,10 @@ export function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean 
   const remove = useRemoveMember(organization.id);
   const transfer = useTransferOwnership(organization.id);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
+  const m = useMessages(workspace).member;
+  const c = useMessages(common);
+  const f = useFormat();
+  const errorMessage = useApiErrorMessage();
 
   const manageable = !isSelf && canManage(member.role);
   const roleOptions = ASSIGNABLE_ROLES[viewerRole];
@@ -45,7 +51,7 @@ export function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean 
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="truncate font-medium text-foreground">{member.name}</span>
-          {isSelf && <Badge tone="primary">You</Badge>}
+          {isSelf && <Badge tone="primary">{m.you}</Badge>}
         </div>
         <span className="block truncate text-sm text-muted-foreground">{member.email}</span>
       </div>
@@ -54,7 +60,7 @@ export function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean 
         {canChangeRole ? (
           <>
             <Select
-              aria-label={`Role for ${member.name}`}
+              aria-label={m.roleFor({ name: member.name })}
               value={member.role}
               disabled={changeRole.isPending}
               wrapperClassName="w-full max-w-40 md:w-36"
@@ -64,11 +70,11 @@ export function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean 
             >
               {roleOptions.map((option) => (
                 <option key={option} value={option}>
-                  {ROLE_LABELS[option]}
+                  {c.roles[option]}
                 </option>
               ))}
             </Select>
-            {changeRole.isPending && <Spinner size="sm" label="Updating role" />}
+            {changeRole.isPending && <Spinner size="sm" label={m.updatingRole} />}
           </>
         ) : (
           <RoleBadge role={member.role} />
@@ -76,15 +82,15 @@ export function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean 
       </div>
 
       <div className="text-sm text-muted-foreground">
-        <span className="md:hidden">Joined </span>
-        {formatDate(member.createdAt)}
+        <span className="md:hidden">{m.joined} </span>
+        {f.date(member.createdAt)}
       </div>
 
       <div className="flex flex-wrap gap-2 md:justify-end">
         {canTransfer && (
           <Button variant="ghost" size="sm" onClick={() => setConfirmation('transfer')}>
             <Crown aria-hidden="true" />
-            Make owner
+            {m.makeOwner}
           </Button>
         )}
         {canRemove && (
@@ -93,26 +99,26 @@ export function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean 
             size="sm"
             className="text-danger hover:bg-danger-soft hover:text-danger"
             onClick={() => setConfirmation('remove')}
-            aria-label={`Remove ${member.name}`}
+            aria-label={m.removeNamed({ name: member.name })}
           >
             <UserMinus aria-hidden="true" />
-            Remove
+            {m.remove}
           </Button>
         )}
       </div>
 
       {error && confirmation === null && (
         <Alert tone="danger" className="md:col-span-4">
-          {apiErrorMessage(error)}
+          {errorMessage(error)}
         </Alert>
       )}
 
       {confirmation === 'remove' && (
         <Confirm
           tone="danger"
-          title={`Remove ${member.name}?`}
-          description={`They'll lose access to ${organization.name} immediately. Their account isn't deleted.`}
-          confirmLabel="Remove member"
+          title={m.removeTitle({ name: member.name })}
+          description={m.removeText({ organization: organization.name })}
+          confirmLabel={m.removeConfirm}
           pending={remove.isPending}
           error={remove.error}
           onCancel={() => {
@@ -126,9 +132,9 @@ export function MemberRow({ member, isSelf }: { member: Member; isSelf: boolean 
       {confirmation === 'transfer' && (
         <Confirm
           tone="warning"
-          title={`Make ${member.name} the owner?`}
-          description="You'll become an admin. Only the new owner can transfer ownership again."
-          confirmLabel="Transfer ownership"
+          title={m.transferTitle({ name: member.name })}
+          description={m.transferText}
+          confirmLabel={m.transferConfirm}
           pending={transfer.isPending}
           error={transfer.error}
           onCancel={() => {
@@ -161,15 +167,17 @@ function Confirm({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const c = useMessages(common);
+  const errorMessage = useApiErrorMessage();
   return (
     <div className="flex flex-col gap-3 md:col-span-4">
       <Alert tone={tone} title={title}>
         {description}
-        {error && <p className="mt-1 font-medium">{apiErrorMessage(error)}</p>}
+        {error && <p className="mt-1 font-medium">{errorMessage(error)}</p>}
       </Alert>
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
-          Cancel
+          {c.actions.cancel}
         </Button>
         <Button
           variant={tone === 'danger' ? 'danger' : 'primary'}

@@ -14,6 +14,9 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router';
+import type { Translation } from '@/i18n/define';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { cn } from '@/lib/cn';
 import { paths } from '@/routes/paths';
 
@@ -31,13 +34,15 @@ interface NavGroup {
   items: NavItem[];
 }
 
-function navGroups(organizationId: string): NavGroup[] {
+type NavMessages = Translation<typeof common.en>['nav'];
+
+function navGroups(organizationId: string, m: NavMessages): NavGroup[] {
   return [
     {
       label: null,
       items: [
         {
-          label: 'Overview',
+          label: m.overview,
           to: paths.organization(organizationId),
           icon: LayoutDashboard,
           end: true,
@@ -45,41 +50,41 @@ function navGroups(organizationId: string): NavGroup[] {
       ],
     },
     {
-      label: 'Sales',
+      label: m.sales,
       items: [
-        { label: 'Orders', to: paths.orders(organizationId), icon: ShoppingCart },
-        { label: 'Customers', to: paths.customers(organizationId), icon: Users },
+        { label: m.orders, to: paths.orders(organizationId), icon: ShoppingCart },
+        { label: m.customers, to: paths.customers(organizationId), icon: Users },
       ],
     },
     {
-      label: 'Catalog',
+      label: m.catalog,
       items: [
-        { label: 'Products', to: paths.products(organizationId), icon: Package },
-        { label: 'Categories', to: paths.categories(organizationId), icon: Tags },
+        { label: m.products, to: paths.products(organizationId), icon: Package },
+        { label: m.categories, to: paths.categories(organizationId), icon: Tags },
       ],
     },
     {
-      label: 'Stock',
+      label: m.stock,
       items: [
-        { label: 'Inventory', to: paths.inventory(organizationId), icon: Boxes },
-        { label: 'Warehouses', to: paths.warehouses(organizationId), icon: Warehouse },
+        { label: m.inventory, to: paths.inventory(organizationId), icon: Boxes },
+        { label: m.warehouses, to: paths.warehouses(organizationId), icon: Warehouse },
         {
-          label: 'Stock movements',
+          label: m.stockMovements,
           to: paths.stockMovements(organizationId),
           icon: ArrowLeftRight,
         },
       ],
     },
     {
-      label: 'Insights',
-      items: [{ label: 'Reports', to: paths.reports(organizationId), icon: BarChart3 }],
+      label: m.insights,
+      items: [{ label: m.reports, to: paths.reports(organizationId), icon: BarChart3 }],
     },
     {
-      label: 'Workspace',
+      label: m.workspace,
       items: [
-        { label: 'Team', to: paths.organizationTeam(organizationId), icon: UsersRound },
+        { label: m.team, to: paths.organizationTeam(organizationId), icon: UsersRound },
         {
-          label: 'Settings',
+          label: m.settings,
           to: paths.organizationSettings(organizationId),
           icon: Settings,
         },
@@ -98,6 +103,7 @@ function navGroups(organizationId: string): NavGroup[] {
 export function WorkspaceNav({ organizationId }: { organizationId: string }) {
   const navRef = useRef<HTMLElement>(null);
   const { pathname } = useLocation();
+  const m = useMessages(common).nav;
 
   // On the narrow bar, center the current section after a navigation (scrolls only the bar).
   useEffect(() => {
@@ -111,7 +117,7 @@ export function WorkspaceNav({ organizationId }: { organizationId: string }) {
   return (
     <nav
       ref={navRef}
-      aria-label="Workspace"
+      aria-label={m.label}
       className={cn(
         // Narrow: one scrolling row under the header.
         '-mx-4 flex [scrollbar-width:none] gap-1 overflow-x-auto border-b border-border px-4 pb-2 sm:-mx-6 sm:px-6 [&::-webkit-scrollbar]:hidden',
@@ -121,7 +127,7 @@ export function WorkspaceNav({ organizationId }: { organizationId: string }) {
         'lg:sticky lg:top-20 lg:mx-0 lg:max-h-[calc(100dvh-6rem)] lg:flex-col lg:gap-5 lg:self-start lg:overflow-x-visible lg:overflow-y-auto lg:border-b-0 lg:px-0 lg:pb-0',
       )}
     >
-      {navGroups(organizationId).map((group) => (
+      {navGroups(organizationId, m).map((group) => (
         <div key={group.label ?? 'main'} className="contents lg:flex lg:flex-col lg:gap-0.5">
           {group.label && (
             <p className="hidden px-3 pb-1 text-[0.6875rem] font-semibold tracking-wider text-subtle-foreground uppercase lg:block">
@@ -130,7 +136,7 @@ export function WorkspaceNav({ organizationId }: { organizationId: string }) {
           )}
           {group.items.map((item) => (
             <NavLink
-              key={item.label}
+              key={item.to}
               to={item.to}
               end={item.end}
               className={({ isActive }) =>

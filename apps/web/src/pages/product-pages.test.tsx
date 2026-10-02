@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { formatMoney } from '@/lib/money';
+import { money } from '@/test/format';
 import {
   ORG_API,
   ORG_APP,
@@ -19,7 +19,8 @@ describe('New product page', () => {
   async function fillValidForm(user: Awaited<ReturnType<typeof renderCatalog>>['user']) {
     await user.type(screen.getByLabelText('Name'), '  Stapler  ');
     await user.type(screen.getByLabelText('SKU'), 'OFF-STP');
-    await user.selectOptions(screen.getByLabelText('Category'), 'Office');
+    await user.click(screen.getByRole('combobox', { name: 'Category' }));
+    await user.click(await screen.findByRole('option', { name: 'Office' }));
     await user.type(screen.getByLabelText('Price'), '12.5');
     await user.type(screen.getByLabelText('Cost'), '0.1');
     await user.clear(screen.getByLabelText('Minimum stock'));
@@ -37,8 +38,6 @@ describe('New product page', () => {
       },
       { waitForHeading: 'New product' },
     );
-    await screen.findByRole('option', { name: 'Office' });
-
     await fillValidForm(user);
     await user.click(screen.getByRole('button', { name: 'Create product' }));
 
@@ -52,9 +51,37 @@ describe('New product page', () => {
         categoryId: testCategory().id,
         price: '12.5',
         cost: '0.1',
+        currency: 'TRY',
         minimumStock: 5,
       },
     ]);
+  });
+
+  it('prices a product in another currency: one currency for price and cost', async () => {
+    const created = testProduct({ id: '0198c0de-0000-7000-8000-0000000000e2', currency: 'EUR' });
+    const { user, fetchMock } = await renderCatalog(
+      `${ORG_APP}/products/new`,
+      'OWNER',
+      {
+        [`POST ${ORG_API}/products`]: json(201, { product: created }),
+        [`GET ${ORG_API}/products/${created.id}`]: json(200, { product: created }),
+      },
+      { waitForHeading: 'New product' },
+    );
+
+    await fillValidForm(user);
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Currency' }), 'EUR');
+    // The cost follows the price's currency.
+    expect(screen.getAllByText('€')).toHaveLength(2);
+    await user.click(screen.getByRole('button', { name: 'Create product' }));
+
+    expect(await screen.findByText('Product created.')).toBeVisible();
+    expect(sentBodies(fetchMock, 'POST', `${ORG_API}/products`)[0]).toMatchObject({
+      price: '12.5',
+      cost: '0.1',
+      currency: 'EUR',
+    });
+    expect(screen.getByText(money('1234.50', 'EUR'))).toBeVisible();
   });
 
   it('validates on the client before sending anything', async () => {
@@ -120,8 +147,6 @@ describe('New product page', () => {
       },
       { waitForHeading: 'New product' },
     );
-    await screen.findByRole('option', { name: 'Office' });
-
     await fillValidForm(user);
     await user.click(screen.getByRole('button', { name: 'Create product' }));
 
@@ -182,8 +207,8 @@ describe('Product detail page', () => {
     expect(screen.getByText('OFF-PEN')).toBeVisible();
     expect(screen.getByText('Office')).toBeVisible();
     expect(screen.getByText('Blue ink, box of 12')).toBeVisible();
-    expect(screen.getByText(formatMoney('1234.50'))).toBeVisible();
-    expect(screen.getByText(formatMoney('0.40'))).toBeVisible();
+    expect(screen.getByText(money('1234.50'))).toBeVisible();
+    expect(screen.getByText(money('0.40'))).toBeVisible();
     expect(screen.getByText('20')).toBeVisible();
     expect(screen.getByText('Created')).toBeVisible();
     expect(screen.getByText('Last updated')).toBeVisible();
@@ -299,7 +324,7 @@ describe('Edit product page', () => {
     expect(router.state.location.pathname).toBe(PRODUCT_APP);
     expect(sentBodies(fetchMock, 'PATCH', PRODUCT_API)).toEqual([{ price: '99.99' }]);
     // The detail page shows the saved product from the cache.
-    expect(screen.getByText(formatMoney('99.99'))).toBeVisible();
+    expect(screen.getByText(money('99.99'))).toBeVisible();
   });
 
   it('does not send a request when nothing changed', async () => {

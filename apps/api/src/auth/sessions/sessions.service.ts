@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env.js';
 import { PrismaService } from '../../database/prisma.service.js';
+import { AUTH_USER_SELECT, toAuthUser } from '../auth-user.js';
 import { generateSecureToken, hashToken } from '../../common/security/secure-token.js';
 
 const DAY_MS = 86_400_000;
@@ -90,7 +91,7 @@ export class SessionsService {
         expiresAt: true,
         revokedAt: true,
         lastSeenAt: true,
-        user: { select: { id: true, name: true, email: true } },
+        user: { select: AUTH_USER_SELECT },
       },
     });
 
@@ -112,7 +113,7 @@ export class SessionsService {
 
     return {
       status: 'valid',
-      user: session.user,
+      user: toAuthUser(session.user),
       session: { id: session.id, expiresAt: session.expiresAt },
     };
   }

@@ -1,4 +1,6 @@
 import type { ProductStatus, SortOrder } from './catalog.js';
+import type { Currency, MoneyAmount } from './currency.js';
+import type { Language } from './i18n.js';
 import type { DashboardRange, DashboardSelectedPeriod } from './dashboard.js';
 import { REALIZED_ORDER_STATUSES } from './dashboard.js';
 import type { StockStatus } from './inventory.js';
@@ -18,9 +20,29 @@ export const REPORT_LIMITS = {
   pageSizeDefault: 25,
   pageSizeMax: 100,
   searchMaxLength: 100,
-  /** Largest CSV export; above it the API answers 422 REPORT_EXPORT_TOO_LARGE. */
+  /** Largest export (CSV or Excel); above it the API answers 422 REPORT_EXPORT_TOO_LARGE. */
   exportMaxRows: 10_000,
 } as const;
+
+/**
+ * Export file formats: `xlsx` is a real Excel workbook (typed number, money,
+ * and date cells; opens as a table in every Excel locale), `csv` is RFC 4180
+ * (comma-separated, UTF-8 with BOM) for other tools. See docs/export.md.
+ */
+export const EXPORT_FORMATS = ['csv', 'xlsx'] as const;
+export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+
+/**
+ * Extra query parameters of every `…/export` endpoint (besides the report's
+ * own filters and sorting). `lang` translates only the generated labels
+ * (headers, statuses); user data is exported as entered.
+ */
+export interface ReportExportQuery {
+  /** Default `csv`. */
+  format?: ExportFormat;
+  /** Default `en`. */
+  lang?: Language;
+}
 
 /** The sales report lists realized orders only; its status filter narrows within them. */
 export const SALES_REPORT_STATUSES = REALIZED_ORDER_STATUSES;
@@ -100,6 +122,11 @@ export interface SalesReportQuery extends ReportPeriodQuery, ReportPageQuery<Sal
   /** Only orders with lines of products in this category; units and revenue count those lines only. */
   categoryId?: string;
   status?: SalesReportStatus;
+  /**
+   * Only orders in this currency (the totals are in it). Default: the currency
+   * with the most matching orders, as on the dashboard (`SalesReportResponse.currency`).
+   */
+  currency?: Currency;
 }
 
 /** One realized order. */
@@ -112,12 +139,17 @@ export interface SalesReportRow {
   customer: ReportCustomerRef | null;
   warehouse: ReportWarehouseRef;
   units: number;
-  /** Σ quantity × unit price of the (matching) lines; decimal string. */
+  /** Σ quantity × unit price of the (matching) lines; decimal string, in `currency`. */
   revenue: string;
+  currency: Currency;
 }
 
 export interface SalesReportResponse {
   period: DashboardSelectedPeriod;
+  /** The currency of every row and of the totals (requested, or the default above). */
+  currency: Currency;
+  /** Currencies of the orders matching the other filters (always includes `currency`). */
+  currencies: Currency[];
   items: SalesReportRow[];
   pagination: ReportPagination;
   /** Over every row matching the filters (not just this page). */
@@ -131,6 +163,8 @@ export interface OrdersReportQuery
   status?: OrderStatus;
   warehouseId?: string;
   customerId?: string;
+  /** Only orders in this currency (default: every order). */
+  currency?: Currency;
 }
 
 export interface OrdersReportRow {
@@ -140,8 +174,10 @@ export interface OrdersReportRow {
   customer: ReportCustomerRef | null;
   warehouse: ReportWarehouseRef;
   itemCount: number;
-  /** Decimal string. */
+  /** Decimal string, in `currency`. */
   total: string;
+  /** null for an order without lines. */
+  currency: Currency | null;
   createdAt: string;
 }
 
@@ -149,8 +185,12 @@ export interface OrdersReportResponse {
   period: DashboardSelectedPeriod;
   items: OrdersReportRow[];
   pagination: ReportPagination;
-  /** Over every row matching the filters: count and summed order totals (every listed status). */
-  totals: { orders: number; value: string };
+  /**
+   * Over every row matching the filters: the count, and the summed order
+   * totals PER CURRENCY (every listed status; amounts in different currencies
+   * are never added). Orders without lines have no currency and add nothing.
+   */
+  totals: { orders: number; values: MoneyAmount[] };
 }
 
 // --- Inventory -------------------------------------------------------------------------

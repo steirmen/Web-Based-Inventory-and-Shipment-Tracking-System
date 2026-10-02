@@ -3,7 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { eastWarehouse, mainWarehouse } from '@/test/inventory-fixtures';
 import { ORG_API, ORG_APP, renderCatalog } from '@/test/catalog-fixtures';
-import { formatMoney } from '@/lib/money';
+import { money } from '@/test/format';
 import { json } from '@/test/mock-api';
 import { confirmedOrder, orderPage, riverside, testOrder, toListItem } from '@/test/sales-fixtures';
 
@@ -85,7 +85,7 @@ describe('OrdersPage', () => {
     );
     expect(within(draft!).getByText('Riverside Dental')).toBeInTheDocument();
     expect(within(draft!).getByText('Draft')).toBeInTheDocument();
-    expect(within(draft!).getByText(formatMoney('49.98'))).toBeInTheDocument();
+    expect(within(draft!).getByText(money('49.98'))).toBeInTheDocument();
     expect(within(confirmed!).getByText('Confirmed')).toBeInTheDocument();
     expect(within(confirmed!).getByText('EAST')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'New order' })).toHaveAttribute(

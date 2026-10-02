@@ -18,10 +18,11 @@ import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCustomer, useCustomerStatusChange, useOrders } from '@/hooks/use-sales';
-import { apiErrorMessage, hasErrorCode } from '@/lib/api-errors';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { sales } from '@/i18n/messages/sales';
+import { hasErrorCode, useApiErrorMessage } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
-import { formatDate, formatDateTime } from '@/lib/format';
-import { formatMoney } from '@/lib/money';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import { customerOrdersPath } from '@/lib/sales-params';
 import { paths } from '@/routes/paths';
@@ -36,26 +37,27 @@ export function CustomerDetailPage() {
   const [editing, setEditing] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const s = useMessages(sales);
+  const m = s.customer;
+  const f = useFormat();
+  const errorMessage = useApiErrorMessage();
 
-  const back = <BackLink to={paths.customers(organization.id)} label="Customers" />;
+  const back = <BackLink to={paths.customers(organization.id)} label={m.back} />;
 
-  if (query.isPending) return <DetailSkeleton label="Loading customer" />;
+  if (query.isPending) return <DetailSkeleton label={m.loading} />;
   if (query.isError) {
     return (
       <div className="flex flex-col gap-6">
         {back}
         {hasErrorCode(query.error, 'CUSTOMER_NOT_FOUND') ? (
           <>
-            <title>{pageTitle('Customer not found')}</title>
-            <PageHeader title="Customer not found" />
-            <EmptyState
-              title="This customer doesn't exist in this workspace."
-              description="It may belong to another workspace, or the link is wrong."
-            />
+            <title>{pageTitle(m.notFoundTitle)}</title>
+            <PageHeader title={m.notFoundTitle} />
+            <EmptyState title={m.notFoundText} description={m.notFoundHint} />
           </>
         ) : (
           <ErrorState
-            title="We couldn't load this customer"
+            title={m.loadError}
             error={query.error}
             onRetry={() => void query.refetch()}
           />
@@ -72,7 +74,7 @@ export function CustomerDetailPage() {
       {
         onSuccess: () => {
           setConfirmArchive(false);
-          setNotice(action === 'archive' ? 'Customer archived.' : 'Customer restored.');
+          setNotice(action === 'archive' ? m.archivedNotice : m.restoredNotice);
         },
       },
     );
@@ -83,7 +85,7 @@ export function CustomerDetailPage() {
       <title>{pageTitle(`${customer.name} · ${organization.name}`)}</title>
       {back}
       <PageHeader
-        eyebrow="Customer"
+        eyebrow={m.eyebrow}
         title={
           <span className="inline-flex flex-wrap items-center gap-3 break-words">
             {customer.name}
@@ -96,7 +98,7 @@ export function CustomerDetailPage() {
             <Can permission="CUSTOMERS_UPDATE">
               <Button variant="secondary" onClick={() => setEditing(true)}>
                 <Pencil aria-hidden="true" />
-                Edit
+                {s.customers.edit}
               </Button>
             </Can>
             <Can permission="CUSTOMERS_ARCHIVE">
@@ -109,7 +111,7 @@ export function CustomerDetailPage() {
                   }}
                 >
                   <Archive aria-hidden="true" />
-                  Archive
+                  {s.customers.archive}
                 </Button>
               ) : (
                 <Button
@@ -118,7 +120,7 @@ export function CustomerDetailPage() {
                   isLoading={statusChange.isPending}
                 >
                   <ArchiveRestore aria-hidden="true" />
-                  Restore
+                  {s.customers.restore}
                 </Button>
               )}
             </Can>
@@ -132,32 +134,32 @@ export function CustomerDetailPage() {
         </Alert>
       )}
       {statusChange.isError && !confirmArchive && (
-        <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
+        <Alert tone="danger">{errorMessage(statusChange.error)}</Alert>
       )}
       {!customer.isActive && (
-        <Alert tone="warning" title="This customer is archived">
-          Existing orders keep this customer. Restore the customer to put them on new orders.
+        <Alert tone="warning" title={m.archivedTitle}>
+          {m.archivedText}
         </Alert>
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>Contact</CardTitle>
+            <CardTitle>{m.contact}</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="flex flex-col gap-3 text-sm">
-              <Field label="Email">{customer.email ?? '—'}</Field>
-              <Field label="Phone">{customer.phone ?? '—'}</Field>
-              <Field label="Address">
+              <Field label={m.email}>{customer.email ?? '—'}</Field>
+              <Field label={m.phone}>{customer.phone ?? '—'}</Field>
+              <Field label={m.address}>
                 <span className="whitespace-pre-line">{customer.address ?? '—'}</span>
               </Field>
               {customer.notes && (
-                <Field label="Notes">
+                <Field label={m.notes}>
                   <span className="whitespace-pre-line">{customer.notes}</span>
                 </Field>
               )}
-              <Field label="Customer since">{formatDateTime(customer.createdAt)}</Field>
+              <Field label={m.since}>{f.dateTime(customer.createdAt)}</Field>
             </dl>
           </CardContent>
         </Card>
@@ -198,6 +200,8 @@ function RecentOrders({
   active: boolean;
 }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(sales).customer;
+  const f = useFormat();
   const orders = useOrders(organization.id, {
     customerId,
     sortBy: 'createdAt',
@@ -210,13 +214,13 @@ function RecentOrders({
   return (
     <Card className="lg:col-span-2">
       <CardHeader>
-        <CardTitle>Orders</CardTitle>
+        <CardTitle>{m.orders}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {orders.isPending && <LoadingState label="Loading orders" />}
+        {orders.isPending && <LoadingState label={m.loadingOrders} />}
         {orders.isError && (
           <ErrorState
-            title="We couldn't load this customer's orders"
+            title={m.ordersError}
             error={orders.error}
             onRetry={() => void orders.refetch()}
           />
@@ -224,13 +228,13 @@ function RecentOrders({
         {orders.isSuccess && items.length === 0 && (
           <EmptyState
             icon={<ClipboardList className="size-5" aria-hidden="true" />}
-            title="No orders yet"
+            title={m.noOrders}
             action={
               active ? (
                 <Can permission="ORDERS_CREATE">
                   <Link to={paths.orderNew(organization.id)} className={buttonVariants()}>
                     <Plus aria-hidden="true" />
-                    New order
+                    {m.newOrder}
                   </Link>
                 </Can>
               ) : undefined
@@ -238,7 +242,7 @@ function RecentOrders({
           />
         )}
         {items.length > 0 && (
-          <ul className="divide-y divide-border" aria-label="Recent orders">
+          <ul className="divide-y divide-border" aria-label={m.recentOrders}>
             {items.map((order) => (
               <li
                 key={order.id}
@@ -252,12 +256,12 @@ function RecentOrders({
                     {order.orderNumber}
                   </Link>
                   <span className="ml-2 text-xs text-muted-foreground">
-                    {formatDate(order.createdAt)} · {order.warehouse.code}
+                    {f.date(order.createdAt)} · {order.warehouse.code}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-medium tabular-nums">
-                    {formatMoney(order.total)}
+                    {f.money(order.total, order.currency)}
                   </span>
                   <OrderStatusBadge status={order.status} />
                 </div>
@@ -270,7 +274,7 @@ function RecentOrders({
             to={customerOrdersPath(organization.id, customerId)}
             className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'self-start' })}
           >
-            All {total} orders
+            {m.allOrders({ count: f.number(total) })}
           </Link>
         )}
       </CardContent>

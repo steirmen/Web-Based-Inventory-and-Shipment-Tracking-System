@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { CurrencySwitch } from '@/components/dashboard/currency-switch';
 import { ChangeIndicator, KpiCard } from '@/components/dashboard/kpi-card';
 import { InventoryOverview, WarehouseOverview } from '@/components/dashboard/inventory-overview';
 import { OrderStatusChart } from '@/components/dashboard/order-status-chart';
@@ -24,12 +25,15 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDashboardSummary } from '@/hooks/use-dashboard';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { insights } from '@/i18n/messages/insights';
 import { pageTitle } from '@/lib/app-config';
 import { cn } from '@/lib/cn';
 import {
   browserTimeZone,
   type DashboardParams,
-  formatCount,
   formatDayRange,
   inventoryStatusPath,
   ordersInPeriodPath,
@@ -38,7 +42,6 @@ import {
   writeDashboardParams,
 } from '@/lib/dashboard-params';
 import { useFlashNotice } from '@/lib/flash-notice';
-import { formatMoney } from '@/lib/money';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import { salesReportPath } from '@/lib/report-params';
 import { paths } from '@/routes/paths';
@@ -64,23 +67,34 @@ export function DashboardPage() {
   );
   const summary = useDashboardSummary(organization.id, query);
   const data = summary.data;
+  const m = useMessages(insights).dashboard;
 
   const changeRange = (next: DashboardParams) => setSearchParams(writeDashboardParams(next));
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Overview · ${organization.name}`)}</title>
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
       <PageHeader
         eyebrow={organization.name}
-        title="Overview"
-        description="Sales, orders, customers, and stock of this workspace at a glance."
+        title={m.title}
+        description={m.description}
         actions={
-          <RangePicker
-            key={paramsKey}
-            value={params}
-            period={data?.period}
-            onChange={changeRange}
-          />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+            <RangePicker
+              key={paramsKey}
+              value={params}
+              period={data?.period}
+              onChange={changeRange}
+            />
+            {data && (
+              <CurrencySwitch
+                label={m.currency}
+                value={data.currency}
+                currencies={data.currencies}
+                onChange={(currency) => changeRange({ ...params, currency })}
+              />
+            )}
+          </div>
         }
       />
 
@@ -92,7 +106,7 @@ export function DashboardPage() {
 
       {summary.isError && !data ? (
         <ErrorState
-          title="We couldn't load the dashboard"
+          title={m.loadError}
           error={summary.error}
           onRetry={() => void summary.refetch()}
         />
@@ -109,7 +123,7 @@ export function DashboardPage() {
           <PeriodCaption data={data} updating={summary.isPlaceholderData} />
           {summary.isError && (
             <ErrorState
-              title="We couldn't refresh the dashboard"
+              title={m.refreshError}
               error={summary.error}
               onRetry={() => void summary.refetch()}
             />
@@ -123,18 +137,26 @@ export function DashboardPage() {
 
 function PeriodCaption({ data, updating }: { data: DashboardSummaryResponse; updating: boolean }) {
   const { period, comparisonPeriod } = data;
+  const m = useMessages(insights).dashboard;
+  const c = useMessages(common);
+  const f = useFormat();
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
       <CalendarRange className="size-4 shrink-0" aria-hidden="true" />
       <span>
         <span className="font-medium text-foreground">
-          {formatDayRange(period.from, period.to)}
+          {formatDayRange(period.from, period.to, f.locale)}
         </span>{' '}
-        compared with {formatDayRange(comparisonPeriod.from, comparisonPeriod.to)}
+        {m.comparedWith({
+          previous: formatDayRange(comparisonPeriod.from, comparisonPeriod.to, f.locale),
+        })}
       </span>
       <span className="text-xs">({period.timeZone})</span>
+      <span className="text-xs" title={m.currencyHint}>
+        · {data.currency} ({c.currency[data.currency]})
+      </span>
       <span className="sr-only" aria-live="polite">
-        {updating ? 'Updating the dashboard' : ''}
+        {updating ? m.updating : ''}
       </span>
     </p>
   );
@@ -147,8 +169,10 @@ function DashboardContent({
   organizationId: string;
   data: DashboardSummaryResponse;
 }) {
-  const { kpis, period, comparisonPeriod } = data;
-  const comparison = formatDayRange(comparisonPeriod.from, comparisonPeriod.to);
+  const { kpis, period, comparisonPeriod, currency } = data;
+  const m = useMessages(insights).dashboard;
+  const f = useFormat();
+  const comparison = formatDayRange(comparisonPeriod.from, comparisonPeriod.to, f.locale);
   const isNewWorkspace =
     kpis.activeProducts + kpis.archivedProducts === 0 &&
     kpis.activeCustomers + kpis.archivedCustomers === 0 &&
@@ -160,49 +184,60 @@ function DashboardContent({
 
       <section aria-labelledby="dashboard-kpis" className="flex flex-col gap-3">
         <h2 id="dashboard-kpis" className="sr-only">
-          Key figures
+          {m.keyFigures}
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <KpiCard label="Total sales" value={formatMoney(kpis.sales.current)} icon={<Wallet />}>
-            <ChangeIndicator metric={kpis.sales} kind="money" comparison={comparison} />
+          <KpiCard
+            label={m.totalSales}
+            value={f.money(kpis.sales.current, currency)}
+            icon={<Wallet />}
+          >
+            <ChangeIndicator
+              metric={kpis.sales}
+              kind="money"
+              comparison={comparison}
+              currency={currency}
+            />
           </KpiCard>
-          <KpiCard label="Orders" value={formatCount(kpis.orders.current)} icon={<ShoppingCart />}>
+          <KpiCard label={m.orders} value={f.number(kpis.orders.current)} icon={<ShoppingCart />}>
             <ChangeIndicator metric={kpis.orders} kind="count" comparison={comparison} />
           </KpiCard>
-          <KpiCard label="Customers" value={formatCount(kpis.activeCustomers)} icon={<Users />}>
-            <p>Active · {formatCount(kpis.newCustomers.current)} new in this period</p>
+          <KpiCard label={m.customers} value={f.number(kpis.activeCustomers)} icon={<Users />}>
+            <p>{m.customersLine({ count: f.number(kpis.newCustomers.current) })}</p>
           </KpiCard>
-          <KpiCard label="Products" value={formatCount(kpis.activeProducts)} icon={<Package />}>
-            <p>Active · {formatCount(kpis.archivedProducts)} archived</p>
+          <KpiCard label={m.products} value={f.number(kpis.activeProducts)} icon={<Package />}>
+            <p>{m.productsLine({ count: f.number(kpis.archivedProducts) })}</p>
           </KpiCard>
           <KpiCard
-            label="Inventory units"
+            label={m.inventoryUnits}
             value={
               <>
-                {formatCount(kpis.inventoryUnits)}{' '}
-                <span className="text-base font-medium text-muted-foreground">units</span>
+                {f.number(kpis.inventoryUnits)}{' '}
+                <span className="text-base font-medium text-muted-foreground">{m.units}</span>
               </>
             }
             icon={<Boxes />}
           >
             <p>
-              On hand in {formatCount(kpis.activeWarehouses)} active{' '}
-              {kpis.activeWarehouses === 1 ? 'warehouse' : 'warehouses'}
+              {m.unitsLine({
+                count: f.number(kpis.activeWarehouses),
+                warehouses: kpis.activeWarehouses,
+              })}
             </p>
           </KpiCard>
           <KpiCard
-            label="Low stock"
-            value={formatCount(kpis.lowStockItems)}
+            label={m.lowStock}
+            value={f.number(kpis.lowStockItems)}
             icon={<TriangleAlert />}
             emphasis={kpis.lowStockItems + kpis.outOfStockItems > 0}
           >
             <p className="flex flex-wrap gap-x-2">
-              <span>{formatCount(kpis.outOfStockItems)} out of stock</span>
+              <span>{m.outOfStock({ count: f.number(kpis.outOfStockItems) })}</span>
               <Link
                 to={inventoryStatusPath(organizationId, 'LOW_STOCK')}
                 className="rounded-sm font-medium text-primary focus-ring hover:underline"
               >
-                View low stock
+                {m.viewLowStock}
               </Link>
             </p>
           </KpiCard>
@@ -216,6 +251,7 @@ function DashboardContent({
             series={data.timeSeries}
             totalRevenue={kpis.sales.current}
             totalOrders={kpis.orders.current}
+            currency={currency}
           />
         </div>
         <OrderStatusChart
@@ -234,10 +270,12 @@ function DashboardContent({
         <TopProducts
           organizationId={organizationId}
           products={data.topProducts}
+          currency={currency}
           salesReportHref={salesReportPath(organizationId, {
             range: period.range,
             from: period.range === 'CUSTOM' ? period.from : '',
             to: period.range === 'CUSTOM' ? period.to : '',
+            currency,
           })}
         />
         <RecentOrders
@@ -253,31 +291,30 @@ function DashboardContent({
 /** Shown while a workspace has no products, customers, or orders yet. */
 function GetStarted({ organizationId }: { organizationId: string }) {
   const link = buttonVariants({ variant: 'secondary', size: 'sm' });
+  const m = useMessages(insights).dashboard;
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Set up your workspace</CardTitle>
-        <CardDescription>
-          The overview fills in as you add products, stock, customers, and orders.
-        </CardDescription>
+        <CardTitle>{m.setupTitle}</CardTitle>
+        <CardDescription>{m.setupText}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
         <Can permission="PRODUCTS_CREATE">
           <Link to={paths.productNew(organizationId)} className={link}>
-            Add product
+            {m.addProduct}
           </Link>
         </Can>
         <Link to={paths.warehouses(organizationId)} className={link}>
-          Warehouses
+          {m.warehouses}
         </Link>
         <Can permission="CUSTOMERS_CREATE">
           <Link to={paths.customers(organizationId)} className={link}>
-            Create customer
+            {m.createCustomer}
           </Link>
         </Can>
         <Can permission="ORDERS_CREATE">
           <Link to={paths.orderNew(organizationId)} className={link}>
-            Create order
+            {m.createOrder}
           </Link>
         </Can>
       </CardContent>
@@ -287,9 +324,10 @@ function GetStarted({ organizationId }: { organizationId: string }) {
 
 /** Placeholders in the shape of the dashboard (the header and range picker stay usable). */
 function DashboardSkeleton() {
+  const m = useMessages(insights).dashboard;
   return (
     <output className="flex flex-col gap-6">
-      <span className="sr-only">Loading the dashboard</span>
+      <span className="sr-only">{m.loading}</span>
       <Skeleton className="h-5 w-72 max-w-full" />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[0, 1, 2, 3, 4, 5].map((card) => (

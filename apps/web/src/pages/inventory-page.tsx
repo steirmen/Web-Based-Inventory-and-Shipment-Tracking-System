@@ -37,6 +37,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useInventory, useWarehouses } from '@/hooks/use-inventory';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { stock } from '@/i18n/messages/stock';
 import { pageTitle } from '@/lib/app-config';
 import { cn } from '@/lib/cn';
 import {
@@ -45,7 +49,6 @@ import {
   type InventoryParams,
   movementsPath,
   readInventoryParams,
-  STOCK_STATUS_LABELS,
   toInventoryQuery,
   writeInventoryParams,
 } from '@/lib/inventory-params';
@@ -61,6 +64,9 @@ const SEARCH_DEBOUNCE_MS = 300;
  */
 export function InventoryPage() {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(stock).inventory;
+  const c = useMessages(common);
+  const f = useFormat();
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readInventoryParams(searchParams);
   const inventory = useInventory(organization.id, toInventoryQuery(params));
@@ -105,22 +111,22 @@ export function InventoryPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Inventory · ${organization.name}`)}</title>
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
       <PageHeader
-        title="Inventory"
-        description="Stock on hand per warehouse. Every change is recorded in the stock movement history."
+        title={m.title}
+        description={m.description}
         actions={
           <>
             <Can permission="INVENTORY_RECEIVE">
               <Button onClick={() => open({ kind: 'receive' })}>
                 <PackagePlus aria-hidden="true" />
-                Receive stock
+                {m.receive}
               </Button>
             </Can>
             <Can permission="INVENTORY_TRANSFER">
               <Button variant="secondary" onClick={() => open({ kind: 'transfer' })}>
                 <ArrowLeftRight aria-hidden="true" />
-                Transfer
+                {m.transfer}
               </Button>
             </Can>
           </>
@@ -131,62 +137,62 @@ export function InventoryPage() {
         <SearchInput
           wrapperClassName="lg:max-w-sm lg:flex-1"
 
-          aria-label="Search inventory"
-          placeholder="Search products by name or SKU…"
+          aria-label={m.search}
+          placeholder={m.searchPlaceholder}
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:flex lg:flex-none">
           <Select
-            aria-label="Warehouse"
+            aria-label={m.warehouse}
             wrapperClassName="lg:w-48"
             value={params.warehouseId}
             onChange={(event) => setParams({ warehouseId: event.target.value })}
           >
-            <option value="">All warehouses</option>
+            <option value="">{m.allWarehouses}</option>
             {warehouses.data?.warehouses.map((warehouse) => (
               <option key={warehouse.id} value={warehouse.id}>
                 {warehouse.name}
-                {warehouse.isActive ? '' : ' (archived)'}
+                {warehouse.isActive ? '' : m.archivedSuffix}
               </option>
             ))}
           </Select>
           <Select
-            aria-label="Stock status"
+            aria-label={m.stockStatus}
             wrapperClassName="lg:w-40"
             value={params.status}
             onChange={(event) =>
               setParams({ status: event.target.value as InventoryParams['status'] })
             }
           >
-            <option value="">All stock levels</option>
-            {Object.entries(STOCK_STATUS_LABELS).map(([value, label]) => (
+            <option value="">{m.allLevels}</option>
+            {Object.entries(c.stockStatus).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
           </Select>
           <Select
-            aria-label="Sort"
+            aria-label={m.sort}
             wrapperClassName="lg:w-52"
             value={params.sort}
             onChange={(event) => setParams({ sort: event.target.value as InventoryParams['sort'] })}
           >
             {INVENTORY_SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+              <option key={option} value={option}>
+                {m.sortOptions[option]}
               </option>
             ))}
           </Select>
         </div>
         <div className="flex items-center gap-2 lg:ml-auto">
           {inventory.isFetching && !inventory.isPending && (
-            <Spinner size="sm" label="Updating results" className="text-muted-foreground" />
+            <Spinner size="sm" label={m.updating} className="text-muted-foreground" />
           )}
           {filtered && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               <X aria-hidden="true" />
-              Clear filters
+              {c.actions.clearFilters}
             </Button>
           )}
         </div>
@@ -198,10 +204,10 @@ export function InventoryPage() {
         </Alert>
       )}
 
-      {inventory.isPending && <ListSkeleton label="Loading inventory" />}
+      {inventory.isPending && <ListSkeleton label={m.loading} />}
       {inventory.isError && (
         <ErrorState
-          title="We couldn't load inventory"
+          title={m.loadError}
           error={inventory.error}
           onRetry={() => void inventory.refetch()}
         />
@@ -210,13 +216,13 @@ export function InventoryPage() {
       {data && data.pagination.totalItems === 0 && !filtered && (
         <EmptyState
           icon={<PackageOpen className="size-5" aria-hidden="true" />}
-          title="No stock recorded yet"
-          description="Receive stock into a warehouse to start tracking quantities."
+          title={m.emptyTitle}
+          description={m.emptyText}
           action={
             <Can permission="INVENTORY_RECEIVE">
               <Button onClick={() => open({ kind: 'receive' })}>
                 <PackagePlus aria-hidden="true" />
-                Receive stock
+                {m.receive}
               </Button>
             </Can>
           }
@@ -225,10 +231,10 @@ export function InventoryPage() {
       {data && data.pagination.totalItems === 0 && filtered && (
         <EmptyState
           icon={<Search className="size-5" aria-hidden="true" />}
-          title="No stock matches your filters."
+          title={m.noMatches}
           action={
             <Button variant="secondary" onClick={clearFilters}>
-              Clear filters
+              {c.actions.clearFilters}
             </Button>
           }
         />
@@ -240,14 +246,14 @@ export function InventoryPage() {
             <Table className="hidden @5xl:table">
               <TableHeader>
                 <tr>
-                  <TableHead>Product</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Warehouse</TableHead>
-                  <TableHead align="right">Quantity</TableHead>
-                  <TableHead align="right">Minimum</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{m.product}</TableHead>
+                  <TableHead>{m.sku}</TableHead>
+                  <TableHead>{m.warehouse}</TableHead>
+                  <TableHead align="right">{m.quantity}</TableHead>
+                  <TableHead align="right">{m.minimum}</TableHead>
+                  <TableHead>{m.status}</TableHead>
                   <TableHead>
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{m.actions}</span>
                   </TableHead>
                 </tr>
               </TableHeader>
@@ -272,10 +278,10 @@ export function InventoryPage() {
                       </span>
                     </TableCell>
                     <TableCell align="right" className="font-medium">
-                      {item.quantity.toLocaleString()}
+                      {f.number(item.quantity)}
                     </TableCell>
                     <TableCell align="right" className="text-muted-foreground">
-                      {item.minimumStock.toLocaleString()}
+                      {f.number(item.minimumStock)}
                     </TableCell>
                     <TableCell>
                       <StockStatusBadge status={item.status} />
@@ -288,7 +294,7 @@ export function InventoryPage() {
               </TableBody>
             </Table>
 
-            <ul className="divide-y divide-border @5xl:hidden" aria-label="Inventory">
+            <ul className="divide-y divide-border @5xl:hidden" aria-label={m.list}>
               {data.items.map((item) => (
                 <li key={item.id} className="flex flex-col gap-3 p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -307,16 +313,16 @@ export function InventoryPage() {
                   </div>
                   <dl className="grid grid-cols-3 gap-3 text-sm">
                     <div className="min-w-0">
-                      <dt className="text-xs text-muted-foreground">Warehouse</dt>
+                      <dt className="text-xs text-muted-foreground">{m.warehouse}</dt>
                       <dd className="truncate">{item.warehouse.name}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-muted-foreground">Quantity</dt>
-                      <dd className="font-medium tabular-nums">{item.quantity.toLocaleString()}</dd>
+                      <dt className="text-xs text-muted-foreground">{m.quantity}</dt>
+                      <dd className="font-medium tabular-nums">{f.number(item.quantity)}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-muted-foreground">Minimum</dt>
-                      <dd className="tabular-nums">{item.minimumStock.toLocaleString()}</dd>
+                      <dt className="text-xs text-muted-foreground">{m.minimum}</dt>
+                      <dd className="tabular-nums">{f.number(item.minimumStock)}</dd>
                     </div>
                   </dl>
                   <InventoryActions item={item} onOpen={open} />
@@ -337,10 +343,10 @@ export function InventoryPage() {
 
       {data && data.items.length === 0 && data.pagination.totalItems > 0 && (
         <EmptyState
-          title="This page is empty."
+          title={m.pageEmpty}
           action={
             <Button variant="secondary" onClick={() => setParams({ page: 1 })}>
-              Go to the first page
+              {m.firstPage}
             </Button>
           }
         />
@@ -360,15 +366,14 @@ export function InventoryPage() {
 
 const OPERATION_BUTTONS: {
   kind: StockOperationKind;
-  label: string;
   permission: 'INVENTORY_RECEIVE' | 'INVENTORY_ISSUE' | 'INVENTORY_ADJUST' | 'INVENTORY_TRANSFER';
   icon: typeof PackagePlus;
 }[] = [
-  { kind: 'receive', label: 'Receive', permission: 'INVENTORY_RECEIVE', icon: PackagePlus },
-  { kind: 'issue', label: 'Issue', permission: 'INVENTORY_ISSUE', icon: MinusCircle },
-  { kind: 'damage', label: 'Damage', permission: 'INVENTORY_ISSUE', icon: TriangleAlert },
-  { kind: 'adjust', label: 'Adjust', permission: 'INVENTORY_ADJUST', icon: ClipboardCheck },
-  { kind: 'transfer', label: 'Transfer', permission: 'INVENTORY_TRANSFER', icon: ArrowLeftRight },
+  { kind: 'receive', permission: 'INVENTORY_RECEIVE', icon: PackagePlus },
+  { kind: 'issue', permission: 'INVENTORY_ISSUE', icon: MinusCircle },
+  { kind: 'damage', permission: 'INVENTORY_ISSUE', icon: TriangleAlert },
+  { kind: 'adjust', permission: 'INVENTORY_ADJUST', icon: ClipboardCheck },
+  { kind: 'transfer', permission: 'INVENTORY_TRANSFER', icon: ArrowLeftRight },
 ];
 
 /**
@@ -386,11 +391,12 @@ function InventoryActions({
   compact?: boolean;
 }) {
   const { organization, can } = useCurrentOrganization();
+  const m = useMessages(stock).inventory;
   const blocked =
     item.product.status !== 'ACTIVE'
-      ? 'Product archived: no stock changes.'
+      ? m.productArchived
       : !item.warehouse.isActive
-        ? 'Warehouse archived: no stock changes.'
+        ? m.warehouseArchived
         : null;
   const empty = item.quantity === 0;
 
@@ -400,7 +406,8 @@ function InventoryActions({
         <span className="px-2 text-xs text-muted-foreground">{blocked}</span>
       ) : (
         OPERATION_BUTTONS.filter(({ permission }) => can(permission)).map(
-          ({ kind, label, icon: Icon }) => {
+          ({ kind, icon: Icon }) => {
+            const label = m.operation[kind];
             // Nothing to remove or move out of an empty location.
             const nothingToMove = empty && kind !== 'receive' && kind !== 'adjust';
             return (
@@ -409,8 +416,12 @@ function InventoryActions({
                 variant="ghost"
                 size={compact ? 'icon-sm' : 'sm'}
                 disabled={nothingToMove}
-                title={nothingToMove ? 'No stock in this warehouse' : compact ? label : undefined}
-                aria-label={`${label} ${item.product.name} in ${item.warehouse.code}`}
+                title={nothingToMove ? m.noStockHere : compact ? label : undefined}
+                aria-label={m.operationNamed({
+                  label,
+                  product: item.product.name,
+                  warehouse: item.warehouse.code,
+                })}
                 onClick={() =>
                   onOpen({
                     kind,
@@ -439,11 +450,11 @@ function InventoryActions({
           variant: 'ghost',
           size: compact ? 'icon-sm' : 'sm',
         })}
-        aria-label={`History of ${item.product.name} in ${item.warehouse.code}`}
-        title={compact ? 'History' : undefined}
+        aria-label={m.historyNamed({ product: item.product.name, warehouse: item.warehouse.code })}
+        title={compact ? m.history : undefined}
       >
         <History aria-hidden="true" />
-        {!compact && 'History'}
+        {!compact && m.history}
       </Link>
     </div>
   );

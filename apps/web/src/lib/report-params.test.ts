@@ -80,7 +80,11 @@ describe('report URL params', () => {
 
   it('links to the sales report of a dashboard range and product', () => {
     expect(
-      salesReportPath('org-1', { range: 'CUSTOM', from: '2025-01-01', to: '2025-01-31' }, ID),
+      salesReportPath(
+        'org-1',
+        { range: 'CUSTOM', from: '2025-01-01', to: '2025-01-31', currency: '' },
+        ID,
+      ),
     ).toBe(`/org/org-1/reports/sales?range=CUSTOM&from=2025-01-01&to=2025-01-31&productId=${ID}`);
   });
 });

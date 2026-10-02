@@ -1,6 +1,5 @@
 import type { DependencyStatus } from '@app/shared';
 import { Database, Globe, RefreshCw, type LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -15,30 +14,31 @@ import {
 } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { useHealthCheck } from '@/hooks/use-health-check';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { workspace } from '@/i18n/messages/workspace';
 import { pageTitle } from '@/lib/app-config';
 import { getApiBaseUrl } from '@/lib/env';
 
 type CheckState = 'pending' | 'up' | 'degraded' | 'down' | 'unknown';
 
-const stateBadges: Record<CheckState, ReactNode> = {
-  pending: <Badge tone="neutral">Checking…</Badge>,
-  up: (
-    <Badge tone="success" dot>
-      Operational
+const STATE_TONES = {
+  pending: 'neutral',
+  up: 'success',
+  degraded: 'warning',
+  down: 'danger',
+  unknown: 'neutral',
+} as const satisfies Record<CheckState, string>;
+
+function StateBadge({ state }: { state: CheckState }) {
+  const m = useMessages(workspace).health;
+  const tone = STATE_TONES[state];
+  return (
+    <Badge tone={tone} dot={tone !== 'neutral'}>
+      {m.states[state]}
     </Badge>
-  ),
-  degraded: (
-    <Badge tone="warning" dot>
-      Degraded
-    </Badge>
-  ),
-  down: (
-    <Badge tone="danger" dot>
-      Unavailable
-    </Badge>
-  ),
-  unknown: <Badge tone="neutral">Unknown</Badge>,
-};
+  );
+}
 
 /**
  * Technical page that exercises the full request path:
@@ -47,7 +47,9 @@ const stateBadges: Record<CheckState, ReactNode> = {
 export function HealthCheckPage() {
   const { data, error, isPending, isError, isFetching, refetch } = useHealthCheck();
 
-  const apiBaseUrl = readApiBaseUrl();
+  const m = useMessages(workspace).health;
+  const f = useFormat();
+  const apiBaseUrl = readApiBaseUrl(m.noBaseUrl);
   const overall: CheckState = isPending
     ? 'pending'
     : isError
@@ -64,16 +66,16 @@ export function HealthCheckPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <title>{pageTitle('System status')}</title>
+      <title>{pageTitle(m.pageTitle)}</title>
 
       <PageHeader
-        eyebrow="Diagnostics"
-        title="System status"
-        description="Verifies that this web app can reach the API, and that the API can reach the database."
+        eyebrow={m.eyebrow}
+        title={m.title}
+        description={m.description}
         actions={
           <Button variant="secondary" onClick={() => void refetch()} isLoading={isFetching}>
             {!isFetching && <RefreshCw aria-hidden="true" />}
-            Run check
+            {m.run}
           </Button>
         }
       />
@@ -81,23 +83,23 @@ export function HealthCheckPage() {
       <Card>
         <CardHeader className="flex-row items-start justify-between gap-4">
           <div className="flex flex-col gap-1.5">
-            <CardTitle>Connectivity</CardTitle>
-            <CardDescription>Live result of the API health endpoint.</CardDescription>
+            <CardTitle>{m.connectivity}</CardTitle>
+            <CardDescription>{m.connectivityText}</CardDescription>
           </div>
-          {stateBadges[overall]}
+          <StateBadge state={overall} />
         </CardHeader>
 
         <CardContent className="flex flex-col gap-4">
           <ul className="divide-y divide-border rounded-control border border-border">
             <CheckRow
               icon={Globe}
-              name="Web app → API"
+              name={m.webToApi}
               detail={`GET ${apiBaseUrl}/health`}
               state={apiState}
             />
             <CheckRow
               icon={Database}
-              name="API → PostgreSQL"
+              name={m.apiToDb}
               detail="Prisma query: SELECT 1"
               state={databaseState}
             />
@@ -105,39 +107,36 @@ export function HealthCheckPage() {
 
           {isPending && (
             <div className="flex items-center gap-2 text-muted-foreground">
-              <Spinner size="sm" label="Checking API status" />
-              <span>Contacting the API…</span>
+              <Spinner size="sm" label={m.checking} />
+              <span>{m.contacting}</span>
             </div>
           )}
 
           {isError && (
-            <Alert tone="danger" title="API unreachable">
+            <Alert tone="danger" title={m.apiDown}>
               <p>{error.message}</p>
               <p className="mt-1">
-                Make sure the API is running (<code className="font-mono">npm run dev:api</code>)
-                and that <code className="font-mono">VITE_API_BASE_URL</code> points to it.
+                {m.apiDownBefore}
+                <code className="font-mono">npm run dev:api</code>
+                {m.apiDownMiddle}
+                <code className="font-mono">VITE_API_BASE_URL</code>
+                {m.apiDownAfter}
               </p>
             </Alert>
           )}
 
           {databaseState === 'down' && (
-            <Alert tone="warning" title="Database unreachable">
-              The API is running but cannot connect to PostgreSQL. Check that the PostgreSQL service
-              is started and that the <code className="font-mono">DB_*</code> values in{' '}
-              <code className="font-mono">.env</code> are correct, then run{' '}
-              <code className="font-mono">npm run db:check</code>.
+            <Alert tone="warning" title={m.dbDown}>
+              {m.dbDownText} <code className="font-mono">npm run db:check</code>
             </Alert>
           )}
         </CardContent>
 
         {data && !isError && (
           <CardFooter className="flex-wrap gap-x-6 gap-y-1 text-xs">
-            <Meta label="Response time" value={`${data.latencyMs} ms`} />
-            <Meta label="API uptime" value={formatDuration(data.response.uptime)} />
-            <Meta
-              label="Checked at"
-              value={new Date(data.response.timestamp).toLocaleTimeString()}
-            />
+            <Meta label={m.responseTime} value={`${f.number(data.latencyMs)} ms`} />
+            <Meta label={m.uptime} value={formatDuration(data.response.uptime)} />
+            <Meta label={m.checkedAt} value={f.time(data.response.timestamp)} />
           </CardFooter>
         )}
       </Card>
@@ -145,8 +144,8 @@ export function HealthCheckPage() {
       {data && !isError && (
         <Card>
           <CardHeader>
-            <CardTitle>Raw response</CardTitle>
-            <CardDescription>Body returned by GET /health.</CardDescription>
+            <CardTitle>{m.raw}</CardTitle>
+            <CardDescription>{m.rawText}</CardDescription>
           </CardHeader>
           <CardContent>
             <pre className="overflow-x-auto rounded-control border border-border bg-surface-muted p-4 font-mono text-xs leading-5 text-foreground">
@@ -177,7 +176,7 @@ function CheckRow({
         <span className="font-medium text-foreground">{name}</span>
         <span className="truncate font-mono text-xs text-muted-foreground">{detail}</span>
       </div>
-      {stateBadges[state]}
+      <StateBadge state={state} />
     </li>
   );
 }
@@ -194,11 +193,11 @@ function fromDependency(status: DependencyStatus): CheckState {
   return status === 'up' ? 'up' : 'down';
 }
 
-function readApiBaseUrl(): string {
+function readApiBaseUrl(fallback: string): string {
   try {
     return getApiBaseUrl();
   } catch {
-    return '(VITE_API_BASE_URL not set)';
+    return fallback;
   }
 }
 

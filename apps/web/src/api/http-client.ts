@@ -126,7 +126,10 @@ export async function apiDownload(
   try {
     response = await fetch(url, {
       method: 'GET',
-      headers: { Accept: 'text/csv, application/json' },
+      headers: {
+        Accept:
+          'text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/json',
+      },
       credentials: 'include',
       signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
     });

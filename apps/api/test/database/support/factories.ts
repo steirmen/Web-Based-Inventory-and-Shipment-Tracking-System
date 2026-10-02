@@ -64,7 +64,8 @@ export function createOrder(
   data: Scoped<Omit<Prisma.OrderUncheckedCreateInput, 'warehouseId'>> = {},
 ) {
   return prisma.order.create({
-    data: { organizationId, warehouseId, orderNumber: `SO-${next()}`, ...data },
+    // TRY like the factory products, so lines can be added (one currency per order).
+    data: { organizationId, warehouseId, orderNumber: `SO-${next()}`, currency: 'TRY', ...data },
   });
 }
 

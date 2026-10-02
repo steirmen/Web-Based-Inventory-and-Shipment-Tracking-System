@@ -1,4 +1,4 @@
-import type { DashboardRecentOrder, DashboardTopProduct } from '@app/shared';
+import type { Currency, DashboardRecentOrder, DashboardTopProduct } from '@app/shared';
 import { ArrowRight, Package, ReceiptText } from 'lucide-react';
 import { Link } from 'react-router';
 import { EmptyState } from '@/components/layout/page-state';
@@ -8,9 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
-import { formatCount } from '@/lib/dashboard-params';
-import { formatDate } from '@/lib/format';
-import { formatMoney } from '@/lib/money';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { insights } from '@/i18n/messages/insights';
+
 import { paths } from '@/routes/paths';
 
 /** Best sellers of the period by units sold in realized orders. */
@@ -18,24 +19,29 @@ export function TopProducts({
   organizationId,
   products,
   salesReportHref,
+  currency,
 }: {
   organizationId: string;
   products: DashboardTopProduct[];
   /** The sales report for the same period. */
   salesReportHref: string;
+  /** Currency of the revenue figures. */
+  currency: Currency;
 }) {
+  const m = useMessages(insights).topProducts;
+  const f = useFormat();
   return (
     <Card>
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1.5">
-          <CardTitle>Top products</CardTitle>
-          <CardDescription>By units sold in realized orders of this period.</CardDescription>
+          <CardTitle>{m.title}</CardTitle>
+          <CardDescription>{m.description}</CardDescription>
         </div>
         <Link
           to={salesReportHref}
           className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'self-start')}
         >
-          Sales report
+          {m.salesReport}
           <ArrowRight aria-hidden="true" />
         </Link>
       </CardHeader>
@@ -43,23 +49,23 @@ export function TopProducts({
         {products.length === 0 ? (
           <EmptyState
             icon={<Package className="size-5" aria-hidden="true" />}
-            title="No products sold in this period."
-            description="Products appear here once orders containing them are processed."
+            title={m.empty}
+            description={m.emptyText}
           />
         ) : (
           <div className="-mx-6 overflow-x-auto px-6">
             <table className="w-full min-w-[20rem] text-sm">
-              <caption className="sr-only">Top products by units sold</caption>
+              <caption className="sr-only">{m.caption}</caption>
               <thead className="text-left text-xs text-muted-foreground">
                 <tr className="border-b border-border">
                   <th scope="col" className="py-2 pr-3 font-medium">
-                    Product
+                    {m.product}
                   </th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">
-                    Units sold
+                    {m.unitsSold}
                   </th>
                   <th scope="col" className="py-2 pl-3 text-right font-medium">
-                    Revenue
+                    {m.revenue}
                   </th>
                 </tr>
               </thead>
@@ -75,14 +81,16 @@ export function TopProducts({
                       </Link>
                       <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <span className="font-mono">{product.sku}</span>
-                        {product.status === 'ARCHIVED' && <Badge tone="neutral">Archived</Badge>}
+                        {product.status === 'ARCHIVED' && (
+                          <Badge tone="neutral">{m.archived}</Badge>
+                        )}
                       </span>
                     </th>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {formatCount(product.unitsSold)}
+                      {f.number(product.unitsSold)}
                     </td>
                     <td className="py-2 pl-3 text-right tabular-nums">
-                      {formatMoney(product.revenue)}
+                      {f.money(product.revenue, currency)}
                     </td>
                   </tr>
                 ))}
@@ -109,18 +117,20 @@ export function RecentOrders({
   /** The orders list filtered to the same days. */
   allOrdersHref: string;
 }) {
+  const m = useMessages(insights).recentOrders;
+  const f = useFormat();
   return (
     <Card>
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1.5">
-          <CardTitle>Recent orders</CardTitle>
-          <CardDescription>The newest orders created in this period.</CardDescription>
+          <CardTitle>{m.title}</CardTitle>
+          <CardDescription>{m.description}</CardDescription>
         </div>
         <Link
           to={allOrdersHref}
           className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'self-start')}
         >
-          Orders in this period
+          {m.inPeriod}
           <ArrowRight aria-hidden="true" />
         </Link>
       </CardHeader>
@@ -128,14 +138,14 @@ export function RecentOrders({
         {items.length === 0 ? (
           <EmptyState
             icon={<ReceiptText className="size-5" aria-hidden="true" />}
-            title="No orders in this period."
+            title={m.empty}
             action={
               <Can permission="ORDERS_CREATE">
                 <Link
                   to={paths.orderNew(organizationId)}
                   className={buttonVariants({ variant: 'secondary', size: 'sm' })}
                 >
-                  Create order
+                  {m.createOrder}
                 </Link>
               </Can>
             }
@@ -143,17 +153,17 @@ export function RecentOrders({
         ) : (
           <div className="-mx-6 overflow-x-auto px-6">
             <table className="w-full min-w-[20rem] text-sm">
-              <caption className="sr-only">Five newest orders</caption>
+              <caption className="sr-only">{m.caption}</caption>
               <thead className="text-left text-xs text-muted-foreground">
                 <tr className="border-b border-border">
                   <th scope="col" className="py-2 pr-3 font-medium">
-                    Order
+                    {m.order}
                   </th>
                   <th scope="col" className="px-3 py-2 font-medium">
-                    Status
+                    {m.status}
                   </th>
                   <th scope="col" className="py-2 pl-3 text-right font-medium">
-                    Total
+                    {m.total}
                   </th>
                 </tr>
               </thead>
@@ -168,14 +178,14 @@ export function RecentOrders({
                         {order.orderNumber}
                       </Link>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {order.customer?.name ?? 'No customer'} · {formatDate(order.createdAt)}
+                        {order.customer?.name ?? m.noCustomer} · {f.date(order.createdAt)}
                       </span>
                     </th>
                     <td className="px-3 py-2">
                       <OrderStatusBadge status={order.status} />
                     </td>
                     <td className="py-2 pl-3 text-right tabular-nums">
-                      {formatMoney(order.total)}
+                      {f.money(order.total, order.currency)}
                     </td>
                   </tr>
                 ))}

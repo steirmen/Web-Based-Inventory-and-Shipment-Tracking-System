@@ -9,7 +9,7 @@ import {
   keyboardInMain,
   mainWarehouse,
 } from '@/test/inventory-fixtures';
-import { formatMoney } from '@/lib/money';
+import { money } from '@/test/format';
 import { apiError, json, pending } from '@/test/mock-api';
 import {
   customerPage,
@@ -18,6 +18,7 @@ import {
   riverside,
   testOrder,
   testOrderItem,
+  testProductItem,
 } from '@/test/sales-fixtures';
 
 type Handler = (init: RequestInit | undefined, url: URL) => Response | Promise<Response>;
@@ -58,7 +59,12 @@ const addProduct = async (
   user: Awaited<ReturnType<typeof renderCatalog>>['user'],
   label: string,
 ) => {
-  await user.selectOptions(await screen.findByRole('combobox', { name: 'Add a product' }), label);
+  const picker = await screen.findByRole('combobox', { name: 'Add a product' });
+  // Options read "Name (SKU) · price"; pick by the product part.
+  const option = await within(picker).findByRole('option', {
+    name: (name) => name.startsWith(`${label} · `),
+  });
+  await user.selectOptions(picker, option);
   await user.click(screen.getByRole('button', { name: 'Add to order' }));
 };
 
@@ -93,7 +99,7 @@ describe('New order (builder)', () => {
     await user.clear(within(lines).getByLabelText('Quantity of Ballpoint Pen'));
     await user.type(within(lines).getByLabelText('Quantity of Ballpoint Pen'), '3');
     // 2 × 24.99 + 3 × 0.10 = 49.98 + 0.30 (exact, no float drift)
-    expect(screen.getByLabelText('Order total')).toHaveTextContent(formatMoney('50.28'));
+    expect(screen.getByLabelText('Order total')).toHaveTextContent(money('50.28'));
 
     await user.click(screen.getByRole('button', { name: 'Create draft' }));
 
@@ -110,6 +116,37 @@ describe('New order (builder)', () => {
       },
     ]);
     expect(await screen.findByText('Draft SO-1003 created.')).toBeVisible();
+  });
+
+  it('keeps one currency per order: the first line sets it, other currencies are refused', async () => {
+    const chair = testProductItem({
+      id: '0198c0de-0000-7000-8000-0000000000d7',
+      name: 'Office Chair',
+      sku: 'CHAIR-1',
+      price: '249.00',
+      currency: 'EUR',
+    });
+    const { user } = await renderCatalog(
+      `${ORDERS_APP}/new`,
+      'STAFF',
+      builderApi({
+        [`GET ${ORG_API}/products`]: json(200, {
+          items: [keyboardProduct, chair],
+          pagination: { page: 1, pageSize: 50, totalItems: 2, totalPages: 1 },
+        }),
+      }),
+      { waitForHeading: 'New order' },
+    );
+
+    await addProduct(user, 'Office Chair (CHAIR-1)');
+    expect(screen.getByLabelText('Order total')).toHaveTextContent(money('249.00', 'EUR'));
+
+    await addProduct(user, 'Keyboard K2 (KEY-002)');
+    expect(screen.getByRole('combobox', { name: 'Add a product' })).toHaveAccessibleDescription(
+      "Keyboard K2 is priced in TRY, but this order is in EUR. An order can't mix currencies.",
+    );
+    const lines = screen.getByRole('list', { name: 'Order lines' });
+    expect(within(lines).queryByLabelText('Quantity of Keyboard K2')).toBeNull();
   });
 
   it('warns about stock per warehouse, blocks invalid quantities, and removes lines', async () => {
@@ -133,7 +170,7 @@ describe('New order (builder)', () => {
     await user.type(within(lines).getByLabelText('Quantity of Keyboard K2'), '1.5');
     await user.click(screen.getByRole('button', { name: 'Create draft' }));
     expect(within(lines).getByLabelText('Quantity of Keyboard K2')).toHaveAccessibleDescription(
-      `Enter a whole number from 1 to ${(1_000_000).toLocaleString()}.`,
+      'Enter a whole number from 1 to 1,000,000.',
     );
     expect(screen.getByRole('searchbox', { name: 'Customer' })).toHaveAccessibleDescription(
       'Choose a customer.',
@@ -142,7 +179,7 @@ describe('New order (builder)', () => {
 
     await user.click(within(lines).getByRole('button', { name: 'Remove Keyboard K2' }));
     expect(screen.queryByRole('list', { name: 'Order lines' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Order total')).toHaveTextContent(formatMoney('0.00'));
+    expect(screen.getByLabelText('Order total')).toHaveTextContent(money('0.00', null));
   });
 
   /** Opens the builder and picks the customer and the MAIN warehouse. */
@@ -205,7 +242,7 @@ describe('New order (layout)', () => {
     const review = screen
       .getByRole('heading', { level: 2, name: 'Review and save' })
       .closest('.rounded-card') as HTMLElement;
-    expect(within(review).getByLabelText('Order total')).toHaveTextContent(formatMoney('0.00'));
+    expect(within(review).getByLabelText('Order total')).toHaveTextContent(money('0.00', null));
     expect(within(review).getByRole('button', { name: 'Create draft' })).toBeVisible();
     // Back to the list, above the page header.
     expect(screen.getByRole('link', { name: 'Orders', current: false })).toHaveAttribute(
@@ -235,10 +272,10 @@ describe('Edit order (builder)', () => {
     const lines = await screen.findByRole('list', { name: 'Order lines' });
 
     // The saved snapshot price (20.00), not the product's current price (24.99).
-    expect(within(lines).getByText(formatMoney('20.00'))).toBeVisible();
+    expect(within(lines).getByText(money('20.00'))).toBeVisible();
     await user.clear(within(lines).getByLabelText('Quantity of Keyboard K2'));
     await user.type(within(lines).getByLabelText('Quantity of Keyboard K2'), '5');
-    expect(screen.getByLabelText('Order total')).toHaveTextContent(formatMoney('100.00'));
+    expect(screen.getByLabelText('Order total')).toHaveTextContent(money('100.00'));
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
 
     await waitFor(() => expect(router.state.location.pathname).toBe(`${ORDERS_APP}/${draft.id}`));
@@ -303,8 +340,8 @@ describe('Order detail', () => {
     const [, line] = within(table).getAllByRole('row');
     expect(within(line!).getByText('Keyboard K2')).toBeInTheDocument();
     expect(within(line!).getByText('KEY-002')).toBeInTheDocument();
-    expect(within(line!).getByText(formatMoney('24.99'))).toBeInTheDocument();
-    expect(within(line!).getByText(formatMoney('49.98'))).toBeInTheDocument();
+    expect(within(line!).getByText(money('24.99'))).toBeInTheDocument();
+    expect(within(line!).getByText(money('49.98'))).toBeInTheDocument();
     expect(within(line!).getByText('12')).toBeInTheDocument();
     expect(screen.getByText('Draft')).toBeVisible();
     expect(screen.getByText('Deliver before noon')).toBeVisible();

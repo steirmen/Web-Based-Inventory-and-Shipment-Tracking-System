@@ -10,9 +10,13 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useInventory, useStockOperation, useWarehouses } from '@/hooks/use-inventory';
-import { apiErrorMessage } from '@/lib/api-errors';
+import { type Formatter, useFormat } from '@/i18n/format';
+import type { Translation } from '@/i18n/define';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { stock as stockMessages } from '@/i18n/messages/stock';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { type FieldErrors, hasErrors } from '@/lib/auth-form';
-import { formatDelta } from '@/lib/inventory-params';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import {
   mapStockError,
@@ -26,41 +30,7 @@ import {
 } from '@/lib/stock-form';
 import { type ProductChoice, ProductPicker } from './product-picker';
 
-const COPY: Record<
-  StockOperationKind,
-  { title: string; description: string; submit: string; quantity: string }
-> = {
-  receive: {
-    title: 'Receive stock',
-    description: 'Add units that arrived, e.g. a supplier delivery.',
-    submit: 'Receive',
-    quantity: 'Quantity to receive',
-  },
-  issue: {
-    title: 'Issue stock',
-    description: 'Remove units that left the warehouse, e.g. a sale.',
-    submit: 'Issue',
-    quantity: 'Quantity to remove',
-  },
-  damage: {
-    title: 'Record damage',
-    description: 'Write off units that are damaged, lost, or expired.',
-    submit: 'Write off',
-    quantity: 'Quantity to write off',
-  },
-  adjust: {
-    title: 'Adjust stock',
-    description: 'Set the quantity you counted. The difference is recorded as an adjustment.',
-    submit: 'Save count',
-    quantity: 'New quantity',
-  },
-  transfer: {
-    title: 'Transfer stock',
-    description: 'Move units from one warehouse to another.',
-    submit: 'Transfer',
-    quantity: 'Quantity to transfer',
-  },
-};
+type OperationMessages = Translation<typeof stockMessages.en>['operation'];
 
 export interface StockOperationStart {
   kind: StockOperationKind;
@@ -86,12 +56,13 @@ export function StockOperationDialog({
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
+  const m = useMessages(stockMessages).operation;
   return (
     <Dialog
       open={start !== null}
       onClose={onClose}
-      title={start ? COPY[start.kind].title : ''}
-      description={start ? COPY[start.kind].description : undefined}
+      title={start ? m[start.kind].title : ''}
+      description={start ? m[start.kind].description : undefined}
       size="md"
     >
       {start && (
@@ -117,6 +88,11 @@ function StockOperationForm({
 }) {
   const { kind } = start;
   const { organization } = useCurrentOrganization();
+  const s = useMessages(stockMessages);
+  const m = s.operation;
+  const c = useMessages(common);
+  const f = useFormat();
+  const errorMessage = useApiErrorMessage();
   const warehouses = useWarehouses(organization.id);
   const operation = useStockOperation(organization.id);
   const [product, setProduct] = useState<ProductChoice | null>(start.product ?? null);
@@ -159,15 +135,15 @@ function StockOperationForm({
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (operation.isPending) return;
-    const validation = validateStockForm(kind, values, current);
+    const validation = validateStockForm(kind, values, current, s.validation, f.number);
     setErrors(validation);
     setFormError(null);
     if (hasErrors(validation)) return;
 
     operation.mutate(toStockOperation(kind, values), {
-      onSuccess: (result) => onDone(successMessage(result, product?.name ?? 'the product')),
+      onSuccess: (result) => onDone(successMessage(result, product?.name ?? m.theProduct, m, f)),
       onError: (error) => {
-        const mapped = mapStockError(error);
+        const mapped = mapStockError(error, errorMessage, c.errors);
         setErrors(mapped.fields);
         setFormError(mapped.form ?? null);
       },
@@ -187,9 +163,7 @@ function StockOperationForm({
           value={values[field]}
           onChange={(event) => set(field)(event.target.value)}
         >
-          <option value="">
-            {warehouses.isPending ? 'Loading warehouses…' : 'Choose a warehouse'}
-          </option>
+          <option value="">{warehouses.isPending ? m.loadingWarehouses : m.chooseWarehouse}</option>
           {active
             .filter((warehouse) => warehouse.id !== exclude)
             .map((warehouse) => (
@@ -204,23 +178,21 @@ function StockOperationForm({
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-4">
-      {formError !== null && <Alert tone="danger">{apiErrorMessage(formError)}</Alert>}
+      {formError !== null && <Alert tone="danger">{errorMessage(formError)}</Alert>}
       {warehouses.isSuccess && active.length === 0 && (
-        <Alert tone="warning">
-          There is no active warehouse. Create or restore a warehouse first.
-        </Alert>
+        <Alert tone="warning">{m.noActiveWarehouse}</Alert>
       )}
 
       {start.product ? (
         <div className="flex flex-col gap-1.5">
-          <p className="text-sm font-medium">Product</p>
+          <p className="text-sm font-medium">{m.product}</p>
           <p className="text-sm">
             {start.product.name}{' '}
             <span className="font-mono text-xs text-muted-foreground">{start.product.sku}</span>
           </p>
         </div>
       ) : (
-        <FormField label="Product" error={errors.productId}>
+        <FormField label={m.product} error={errors.productId}>
           {(control) => (
             <ProductPicker
               control={control}
@@ -237,17 +209,17 @@ function StockOperationForm({
 
       {kind === 'transfer' ? (
         <div className="grid gap-4 sm:grid-cols-2">
-          {warehouseSelect('warehouseId', 'From warehouse')}
-          {warehouseSelect('destinationWarehouseId', 'To warehouse', values.warehouseId)}
+          {warehouseSelect('warehouseId', m.fromWarehouse)}
+          {warehouseSelect('destinationWarehouseId', m.toWarehouse, values.warehouseId)}
         </div>
       ) : (
-        warehouseSelect('warehouseId', 'Warehouse')
+        warehouseSelect('warehouseId', m.warehouse)
       )}
 
       <FormField
-        label={COPY[kind].quantity}
+        label={m[kind].quantity}
         error={errors.quantity}
-        hint={kind === 'adjust' ? 'The total you counted, not the difference.' : undefined}
+        hint={kind === 'adjust' ? m.adjustHint : undefined}
       >
         {(control) => (
           <Input
@@ -273,9 +245,9 @@ function StockOperationForm({
       />
 
       <FormField
-        label="Reason"
+        label={m.reason}
         error={errors.reason}
-        hint={REASON_REQUIRED[kind] ? 'Required.' : 'Optional, e.g. a delivery note number.'}
+        hint={REASON_REQUIRED[kind] ? m.reasonRequired : m.reasonOptional}
       >
         {(control) => (
           <Textarea
@@ -291,10 +263,10 @@ function StockOperationForm({
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button variant="secondary" onClick={onCancel} disabled={operation.isPending}>
-          Cancel
+          {m.cancel}
         </Button>
         <Button type="submit" isLoading={operation.isPending}>
-          {COPY[kind].submit}
+          {m[kind].submit}
         </Button>
       </div>
     </form>
@@ -319,51 +291,58 @@ function Preview({
   destinationCurrent: number | undefined;
   loading: boolean;
 }) {
+  const m = useMessages(stockMessages).operation;
+  const f = useFormat();
   if (current === undefined) {
-    return loading ? (
-      <p className="text-sm text-muted-foreground">Checking current stock…</p>
-    ) : null;
+    return loading ? <p className="text-sm text-muted-foreground">{m.checking}</p> : null;
   }
   const n = units ?? 0;
   const rows: [string, ReactNode][] = [];
 
   switch (kind) {
     case 'receive':
-      rows.push(['Current stock', current], ['Quantity to receive', n], ['New stock', current + n]);
+      rows.push(
+        [m.currentStock, f.number(current)],
+        [m.receive.quantity, f.number(n)],
+        [m.newStock, f.number(current + n)],
+      );
       break;
     case 'issue':
     case 'damage':
       rows.push(
-        ['Current stock', current],
-        [kind === 'issue' ? 'Quantity to remove' : 'Quantity to write off', n],
-        ['Remaining stock', current - n],
+        [m.currentStock, f.number(current)],
+        [m[kind].quantity, f.number(n)],
+        [m.remaining, f.number(current - n)],
       );
       break;
     case 'adjust':
       rows.push(
-        ['Current', current],
-        ['New', units ?? '—'],
+        [m.current, f.number(current)],
+        [m.new, units === null ? '—' : f.number(units)],
         [
-          'Adjustment',
-          units === null ? '—' : units === current ? 'No change' : formatDelta(units - current),
+          m.adjustment,
+          units === null ? '—' : units === current ? m.noChange : f.signed(units - current),
         ],
       );
       break;
     case 'transfer':
       if (!source || !destination || destinationCurrent === undefined) {
-        rows.push([`${source?.name ?? 'Source'} now`, current]);
+        rows.push([m.sourceNow({ name: source?.name ?? m.source }), f.number(current)]);
         break;
       }
       rows.push(
-        [`${source.name} (${source.code})`, `${current} units`],
-        [`${destination.name} (${destination.code})`, `${destinationCurrent} units`],
-        ['Transfer', n],
+        [`${source.name} (${source.code})`, m.units({ count: f.number(current) })],
         [
-          'After',
+          `${destination.name} (${destination.code})`,
+          m.units({ count: f.number(destinationCurrent) }),
+        ],
+        [m.transferRow, f.number(n)],
+        [
+          m.after,
           <span key="after" className="inline-flex flex-wrap items-center gap-1">
-            {source.code} {current - n}
+            {source.code} {f.number(current - n)}
             <ArrowRight className="size-3" aria-hidden="true" />
-            {destination.code} {destinationCurrent + n}
+            {destination.code} {f.number(destinationCurrent + n)}
           </span>,
         ],
       );
@@ -377,7 +356,7 @@ function Preview({
 
   return (
     <div className="flex flex-col gap-2 rounded-control border border-border bg-surface-muted/50 p-3">
-      <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm" aria-label="Preview">
+      <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm" aria-label={m.preview}>
         {rows.map(([label, value]) => (
           <div key={label} className="contents">
             <dt className="text-muted-foreground">{label}</dt>
@@ -386,35 +365,60 @@ function Preview({
         ))}
       </dl>
       {insufficient && (
-        <p className="text-xs text-danger">More than the {current} units on hand.</p>
+        <p className="text-xs text-danger">{m.moreThanOnHand({ count: f.number(current) })}</p>
       )}
-      <p className="text-xs text-subtle-foreground">
-        Preview only. The final numbers are checked when you submit.
-      </p>
+      <p className="text-xs text-subtle-foreground">{m.previewOnly}</p>
     </div>
   );
 }
 
-function successMessage(result: StockOperationResult, productName: string): string {
+function successMessage(
+  result: StockOperationResult,
+  product: string,
+  m: OperationMessages,
+  f: Formatter,
+): string {
   switch (result.kind) {
     case 'receive': {
       const { movement, inventory } = result.data;
-      return `Received ${movement.quantityDelta} × ${productName} into ${inventory.warehouse.code}. New stock: ${inventory.quantity}.`;
+      return m.received({
+        count: f.number(movement.quantityDelta),
+        product,
+        warehouse: inventory.warehouse.code,
+        total: f.number(inventory.quantity),
+      });
     }
     case 'issue':
     case 'damage': {
       const { movement, inventory } = result.data;
-      const verb = result.kind === 'issue' ? 'Issued' : 'Wrote off';
-      return `${verb} ${Math.abs(movement.quantityDelta)} × ${productName} from ${inventory.warehouse.code}. Remaining: ${inventory.quantity}.`;
+      const params = {
+        count: f.number(Math.abs(movement.quantityDelta)),
+        product,
+        warehouse: inventory.warehouse.code,
+        total: f.number(inventory.quantity),
+      };
+      return result.kind === 'issue' ? m.issued(params) : m.wroteOff(params);
     }
     case 'adjust': {
       const { movement, inventory } = result.data;
-      if (!movement) return 'No changes were made: the count matches the current quantity.';
-      return `Adjusted ${productName} in ${inventory?.warehouse.code ?? 'the warehouse'} by ${formatDelta(movement.quantityDelta)} to ${movement.quantityAfter}.`;
+      if (!movement) return m.noAdjustment;
+      return m.adjusted({
+        product,
+        warehouse: inventory?.warehouse.code ?? m.theWarehouse,
+        delta: f.signed(movement.quantityDelta),
+        total: f.number(movement.quantityAfter),
+      });
     }
     case 'transfer': {
       const { source, destination, movements } = result.data;
-      return `Transferred ${movements[1].quantityDelta} × ${productName} from ${source.warehouse.code} (now ${source.quantity}) to ${destination.warehouse.code} (now ${destination.quantity}).`;
+      return m.transferred({
+        count: f.number(movements[1].quantityDelta),
+        product,
+        from: source.warehouse.code,
+        fromTotal: f.number(source.quantity),
+        to: destination.warehouse.code,
+        toTotal: f.number(destination.quantity),
+      });
     }
   }
 }

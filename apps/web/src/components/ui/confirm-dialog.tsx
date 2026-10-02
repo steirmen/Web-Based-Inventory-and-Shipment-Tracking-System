@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
-import { apiErrorMessage } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { Alert } from './alert';
 import { Button } from './button';
 import { Dialog } from './dialog';
@@ -26,6 +28,8 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const m = useMessages(common);
+  const errorMessage = useApiErrorMessage();
   return (
     <Dialog
       open={open}
@@ -36,7 +40,7 @@ export function ConfirmDialog({
       footer={
         <>
           <Button variant="secondary" onClick={onCancel} disabled={pending} data-autofocus>
-            Cancel
+            {m.actions.cancel}
           </Button>
           <Button
             variant={tone === 'danger' ? 'danger' : 'primary'}
@@ -48,7 +52,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      {error ? <Alert tone="danger">{apiErrorMessage(error)}</Alert> : null}
+      {error ? <Alert tone="danger">{errorMessage(error)}</Alert> : null}
     </Dialog>
   );
 }

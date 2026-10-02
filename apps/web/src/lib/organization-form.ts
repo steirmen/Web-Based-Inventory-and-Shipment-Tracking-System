@@ -1,5 +1,9 @@
-import { ORGANIZATION_LIMITS, ORGANIZATION_SLUG_PATTERN, type MemberRole } from '@app/shared';
+import { ORGANIZATION_LIMITS, ORGANIZATION_SLUG_PATTERN } from '@app/shared';
+import type { Translation } from '@/i18n/define';
+import type { workspace } from '@/i18n/messages/workspace';
 import type { FieldErrors } from './auth-form';
+
+type ValidationMessages = Translation<(typeof workspace)['en']>['validation'];
 
 /** Characters that Unicode decomposition does not reduce to ASCII. */
 const SPECIAL_LETTERS: Record<string, string> = {
@@ -24,26 +28,18 @@ export function slugify(name: string): string {
     .replace(/-+$/, '');
 }
 
-export function validateOrganizationName(value: string): string | undefined {
+export function validateOrganizationName(value: string, m: ValidationMessages): string | undefined {
   const name = value.trim();
-  if (!name) return 'Enter a workspace name.';
-  if (name.length > ORGANIZATION_LIMITS.nameMaxLength) {
-    return `Use at most ${ORGANIZATION_LIMITS.nameMaxLength} characters.`;
-  }
+  if (!name) return m.nameRequired;
+  if (name.length > ORGANIZATION_LIMITS.nameMaxLength) return m.nameTooLong;
   return undefined;
 }
 
-export function validateSlug(slug: string): string | undefined {
-  if (!slug) return 'Enter a workspace slug.';
-  if (slug.length < ORGANIZATION_LIMITS.slugMinLength) {
-    return `Use at least ${ORGANIZATION_LIMITS.slugMinLength} characters.`;
-  }
-  if (slug.length > ORGANIZATION_LIMITS.slugMaxLength) {
-    return `Use at most ${ORGANIZATION_LIMITS.slugMaxLength} characters.`;
-  }
-  if (!ORGANIZATION_SLUG_PATTERN.test(slug)) {
-    return 'Use lowercase letters, numbers, and single hyphens.';
-  }
+export function validateSlug(slug: string, m: ValidationMessages): string | undefined {
+  if (!slug) return m.slugRequired;
+  if (slug.length < ORGANIZATION_LIMITS.slugMinLength) return m.slugTooShort;
+  if (slug.length > ORGANIZATION_LIMITS.slugMaxLength) return m.slugTooLong;
+  if (!ORGANIZATION_SLUG_PATTERN.test(slug)) return m.slugPattern;
   return undefined;
 }
 
@@ -54,18 +50,7 @@ export interface OrganizationValues {
 
 export function validateOrganization(
   values: OrganizationValues,
+  m: ValidationMessages,
 ): FieldErrors<keyof OrganizationValues> {
-  return { name: validateOrganizationName(values.name), slug: validateSlug(values.slug) };
+  return { name: validateOrganizationName(values.name, m), slug: validateSlug(values.slug, m) };
 }
-
-export const ROLE_LABELS: Record<MemberRole, string> = {
-  OWNER: 'Owner',
-  ADMIN: 'Admin',
-  STAFF: 'Staff',
-};
-
-export const ROLE_DESCRIPTIONS: Record<MemberRole, string> = {
-  OWNER: 'Full control of the workspace, including its team and ownership.',
-  ADMIN: 'Manages workspace settings, invites staff, and manages staff members.',
-  STAFF: 'Can view the workspace and its team.',
-};

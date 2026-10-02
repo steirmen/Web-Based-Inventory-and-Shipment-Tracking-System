@@ -7,7 +7,8 @@ import {
 } from '@app/shared';
 import { describe, expect, it } from 'vitest';
 import { contrast, fromHex, parseCss, toHex } from './color';
-import { buildPalette, THEMES } from './themes';
+import { common } from '@/i18n/messages/common';
+import { buildPalette } from './themes';
 
 const ratio = (palette: Record<string, string>, a: string, b: string) =>
   contrast(parseCss(palette[a]!), parseCss(palette[b]!));
@@ -70,8 +71,11 @@ describe('theme engine', () => {
     expect(palette['--surface']).toBe('oklch(100% 0 0)');
   });
 
-  it('defines a display name for every theme id, and nothing else', () => {
-    expect(THEMES.map((theme) => theme.id)).toEqual([...THEME_IDS]);
+  it('defines a display name for every theme id, in both languages', () => {
+    for (const messages of [common.en, common.tr]) {
+      expect(Object.keys(messages.themes.names)).toEqual([...THEME_IDS]);
+      expect(Object.keys(messages.themes.descriptions)).toEqual([...THEME_IDS]);
+    }
   });
 
   it('builds the same complete token set for every theme and mode', () => {

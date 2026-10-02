@@ -1,5 +1,5 @@
-import { CATALOG_LIMITS } from '@app/shared';
-import { type FormEvent, type ReactNode, useState } from 'react';
+import { CATALOG_LIMITS, CURRENCIES, type Currency } from '@app/shared';
+import { type ComponentProps, type FormEvent, type ReactNode, useState } from 'react';
 import { Link } from 'react-router';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -9,41 +9,28 @@ import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { useCategories } from '@/hooks/use-catalog';
-import { apiErrorMessage, hasErrorCode } from '@/lib/api-errors';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { catalog } from '@/i18n/messages/catalog';
+import { common } from '@/i18n/messages/common';
+import { hasErrorCode, useApiErrorMessage } from '@/lib/api-errors';
 import { type FieldErrors, hasErrors, serverFieldErrors } from '@/lib/auth-form';
-import { useCurrentOrganization } from '@/lib/organization-context';
+import { currencySymbol } from '@/lib/money';
 import {
   PRODUCT_FIELDS,
   type ProductField,
   type ProductFormValues,
   validateProduct,
 } from '@/lib/product-form';
+import { CategoryPicker } from './category-picker';
 
 const L = CATALOG_LIMITS;
 
 /**
- * Where an API error belongs: a specific field (validation, duplicate SKU,
- * missing category) or the form as a whole.
- */
-function mapSubmitError(error: unknown): { fields: FieldErrors<ProductField>; form?: unknown } {
-  if (hasErrorCode(error, 'VALIDATION_ERROR')) {
-    const fields = serverFieldErrors(error, PRODUCT_FIELDS);
-    return hasErrors(fields) ? { fields } : { fields, form: error };
-  }
-  if (hasErrorCode(error, 'PRODUCT_SKU_TAKEN')) {
-    return { fields: { sku: apiErrorMessage(error) } };
-  }
-  if (hasErrorCode(error, 'PRODUCT_CATEGORY_NOT_FOUND')) {
-    return { fields: { categoryId: 'This category no longer exists. Choose another one.' } };
-  }
-  return { fields: {}, form: error };
-}
-
-/**
  * Create/edit form for a product. `onSubmit` returns the mutation promise so
  * server errors can be mapped onto the fields; the button is disabled while
- * it is pending, which prevents duplicate submissions.
+ * it is pending, which prevents duplicate submissions. Price and cost share
+ * one currency (chosen next to the price, shown next to the cost).
  */
 export function ProductForm({
   initialValues,
@@ -63,8 +50,10 @@ export function ProductForm({
   notice?: ReactNode;
   onSubmit: (values: ProductFormValues) => Promise<unknown>;
 }) {
-  const { organization, can } = useCurrentOrganization();
-  const categories = useCategories(organization.id);
+  const m = useMessages(catalog);
+  const c = useMessages(common);
+  const f = useFormat();
+  const errorMessage = useApiErrorMessage();
   const [values, setValues] = useState(initialValues);
   const [errors, setErrors] = useState<FieldErrors<ProductField>>({});
   const [formError, setFormError] = useState<unknown>(null);
@@ -74,10 +63,30 @@ export function ProductForm({
     setErrors((current) => ({ ...current, [field]: undefined }));
   };
 
+  /** Where an API error belongs: a specific field, or the form as a whole. */
+  const mapSubmitError = (
+    error: unknown,
+  ): { fields: FieldErrors<ProductField>; form?: unknown } => {
+    if (hasErrorCode(error, 'VALIDATION_ERROR')) {
+      const fields = serverFieldErrors(error, PRODUCT_FIELDS, c.errors);
+      return hasErrors(fields) ? { fields } : { fields, form: error };
+    }
+    if (hasErrorCode(error, 'PRODUCT_SKU_TAKEN')) {
+      return { fields: { sku: errorMessage(error) } };
+    }
+    if (hasErrorCode(error, 'PRODUCT_CATEGORY_NOT_FOUND')) {
+      return { fields: { categoryId: m.form.categoryGone } };
+    }
+    return { fields: {}, form: error };
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending) return;
-    const validation = validateProduct(values, { costOptional });
+    const validation = validateProduct(values, m.validation, {
+      costOptional,
+      formatNumber: f.number,
+    });
     setErrors(validation);
     setFormError(null);
     if (hasErrors(validation)) return;
@@ -87,30 +96,24 @@ export function ProductForm({
       const mapped = mapSubmitError(error);
       setErrors(mapped.fields);
       setFormError(mapped.form ?? null);
-      if (mapped.fields.categoryId) void categories.refetch();
     }
   };
 
-  const categoryList = categories.data?.categories ?? [];
-  // Keep a selected category visible even if the list has not loaded (or it was just removed).
-  const selectedMissing =
-    values.categoryId !== '' && !categoryList.some((c) => c.id === values.categoryId);
+  const symbol = currencySymbol(values.currency, f.locale);
 
   return (
     <form noValidate onSubmit={(event) => void submit(event)} className="flex flex-col gap-6">
       {notice}
-      {formError !== null && <Alert tone="danger">{apiErrorMessage(formError)}</Alert>}
-      {hasErrors(errors) && formError === null && (
-        <Alert tone="danger">Please check the highlighted fields.</Alert>
-      )}
+      {formError !== null && <Alert tone="danger">{errorMessage(formError)}</Alert>}
+      {hasErrors(errors) && formError === null && <Alert tone="danger">{m.form.checkFields}</Alert>}
 
       <Card>
         <CardHeader>
-          <CardTitle>Details</CardTitle>
-          <CardDescription>How the product is identified in your catalog.</CardDescription>
+          <CardTitle>{m.form.details}</CardTitle>
+          <CardDescription>{m.form.detailsHint}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-5 sm:grid-cols-2">
-          <FormField label="Name" error={errors.name} className="sm:col-span-2">
+          <FormField label={m.form.name} error={errors.name} className="sm:col-span-2">
             {(control) => (
               <Input
                 {...control}
@@ -122,11 +125,7 @@ export function ProductForm({
               />
             )}
           </FormField>
-          <FormField
-            label="SKU"
-            error={errors.sku}
-            hint="Unique in this workspace. Letters, numbers, and . _ - /"
-          >
+          <FormField label={m.form.sku} error={errors.sku} hint={m.form.skuHint}>
             {(control) => (
               <Input
                 {...control}
@@ -140,40 +139,28 @@ export function ProductForm({
               />
             )}
           </FormField>
-          <FormField
-            label="Category"
-            error={errors.categoryId}
-            hint={
-              categories.isError
-                ? "Categories couldn't be loaded. You can still save without one."
-                : categoryList.length === 0 && categories.isSuccess
-                  ? can('CATEGORIES_CREATE')
-                    ? 'No categories yet. Create them on the Categories page.'
-                    : 'No categories yet.'
-                  : undefined
-            }
-          >
+          <FormField label={m.form.category} error={errors.categoryId}>
             {(control) => (
-              <Select
-                {...control}
-                name="categoryId"
-                value={values.categoryId}
-                onChange={(event) => set('categoryId')(event.target.value)}
-              >
-                <option value="">No category</option>
-                {categoryList.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-                {selectedMissing && <option value={values.categoryId}>Current category</option>}
-              </Select>
+              <CategoryPicker
+                control={control}
+                value={
+                  values.categoryId ? { id: values.categoryId, name: values.categoryName } : null
+                }
+                onChange={(category) => {
+                  setValues((current) => ({
+                    ...current,
+                    categoryId: category?.id ?? '',
+                    categoryName: category?.name ?? '',
+                  }));
+                  setErrors((current) => ({ ...current, categoryId: undefined }));
+                }}
+              />
             )}
           </FormField>
           <FormField
-            label="Description"
+            label={m.form.description}
             error={errors.description}
-            hint="Optional."
+            hint={m.form.optional}
             className="sm:col-span-2"
           >
             {(control) => (
@@ -191,46 +178,67 @@ export function ProductForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Pricing and stock level</CardTitle>
-          <CardDescription>
-            Amounts in your workspace currency, with up to 2 decimals.
-          </CardDescription>
+          <CardTitle>{m.form.pricing}</CardTitle>
+          <CardDescription>{m.form.pricingHint}</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-5 sm:grid-cols-3">
-          <FormField label="Price" error={errors.price} hint="Selling price, e.g. 19.99">
-            {(control) => (
-              <Input
-                {...control}
-                name="price"
-                inputMode="decimal"
-                autoComplete="off"
-                className="tabular-nums"
-                value={values.price}
-                onChange={(event) => set('price')(event.target.value)}
-              />
-            )}
-          </FormField>
+        <CardContent className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <FormField
-            label="Cost"
-            error={errors.cost}
-            hint={costOptional ? 'What you pay. Optional for this product.' : 'What you pay.'}
+            label={m.form.price}
+            error={errors.price ?? errors.currency}
+            hint={m.form.priceHint}
           >
             {(control) => (
-              <Input
-                {...control}
-                name="cost"
-                inputMode="decimal"
-                autoComplete="off"
-                className="tabular-nums"
-                value={values.cost}
-                onChange={(event) => set('cost')(event.target.value)}
-              />
+              <div className="flex gap-2">
+                <MoneyInput
+                  {...control}
+                  name="price"
+                  symbol={symbol}
+                  value={values.price}
+                  onChange={(event) => set('price')(event.target.value)}
+                />
+                <Select
+                  aria-label={m.form.currency}
+                  name="currency"
+                  wrapperClassName="w-28 shrink-0"
+                  value={values.currency}
+                  onChange={(event) => set('currency')(event.target.value as Currency)}
+                >
+                  {CURRENCIES.map((currency) => (
+                    <option key={currency} value={currency}>
+                      {currency} ({currencySymbol(currency, f.locale)})
+                    </option>
+                  ))}
+                </Select>
+              </div>
             )}
           </FormField>
           <FormField
-            label="Minimum stock"
+            label={m.form.cost}
+            error={errors.cost}
+            hint={costOptional ? m.form.costOptionalHint : m.form.costHint}
+          >
+            {(control) => (
+              <div className="flex gap-2">
+                <MoneyInput
+                  {...control}
+                  name="cost"
+                  symbol={symbol}
+                  value={values.cost}
+                  onChange={(event) => set('cost')(event.target.value)}
+                />
+                <span
+                  className="flex h-9 w-28 shrink-0 items-center justify-center rounded-control border border-border bg-surface-muted text-sm font-medium text-muted-foreground"
+                  title={m.form.currency}
+                >
+                  {values.currency}
+                </span>
+              </div>
+            )}
+          </FormField>
+          <FormField
+            label={m.form.minimumStock}
             error={errors.minimumStock}
-            hint="Reorder level. 0 for none."
+            hint={m.form.minimumStockHint}
           >
             {(control) => (
               <Input
@@ -249,12 +257,30 @@ export function ProductForm({
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Link to={cancelTo} className={buttonVariants({ variant: 'secondary' })}>
-          Cancel
+          {m.form.cancel}
         </Link>
         <Button type="submit" isLoading={pending}>
           {submitLabel}
         </Button>
       </div>
     </form>
+  );
+}
+
+/** A decimal amount field with the currency symbol in front (the amount stays a string). */
+function MoneyInput({
+  symbol,
+  ...props
+}: Omit<ComponentProps<'input'>, 'type'> & { symbol: string }) {
+  return (
+    <div className="relative min-w-0 flex-1">
+      <span
+        className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground"
+        aria-hidden="true"
+      >
+        {symbol}
+      </span>
+      <Input {...props} inputMode="decimal" autoComplete="off" className="pl-8 tabular-nums" />
+    </div>
   );
 }

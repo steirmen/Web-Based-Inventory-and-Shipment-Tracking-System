@@ -1,4 +1,5 @@
 import type {
+  ReportExportQuery,
   InventoryReportQuery,
   OrdersReportQuery,
   ReportType,
@@ -54,7 +55,9 @@ export function useInventoryReport(organizationId: string, query: InventoryRepor
 /** Downloads the CSV of a report with its current filters (read-only on the server). */
 export function useReportExport(organizationId: string, type: ReportType) {
   return useMutation({
-    mutationFn: (query: ReportQuery) => exportReport(organizationId, type, query),
-    onSuccess: ({ blob, filename }) => saveFile(blob, filename ?? `${type}-report.csv`),
+    mutationFn: ({ query, ...options }: { query: ReportQuery } & ReportExportQuery) =>
+      exportReport(organizationId, type, query, options),
+    onSuccess: ({ blob, filename }, { format }) =>
+      saveFile(blob, filename ?? `${type}-report.${format ?? 'csv'}`),
   });
 }

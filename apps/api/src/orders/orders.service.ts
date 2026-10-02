@@ -1,4 +1,5 @@
 import {
+  type Currency,
   canTransition,
   ORDER_LIMITS,
   type OrderHistoryEntry,
@@ -30,6 +31,7 @@ import {
   orderInvalidTransition,
   orderNotEditable,
   orderNotFound,
+  orderCurrencyMismatch,
   orderProductInactive,
   orderProductNotFound,
   orderStatusInvalid,
@@ -69,6 +71,7 @@ interface OrderProduct {
   name: string;
   sku: string;
   price: Prisma.Decimal;
+  currency: Currency;
   status: 'ACTIVE' | 'ARCHIVED';
 }
 
@@ -141,15 +144,20 @@ export class OrdersService {
       const items = input.items ?? [];
       assertUniqueProducts(items);
       const products = await this.products(tx, organizationId, items);
+      // The first line sets the order's currency; every other line must match it.
+      const currency = assertAddable(
+        items.map((item) => products.get(item.productId)!),
+        null,
+      );
       const lines = items.map((item) => {
         const product = products.get(item.productId)!;
-        if (product.status !== 'ACTIVE') throw orderProductInactive(label(product));
-        // Price snapshot: the product's current price at the moment the line is added.
+        // Price and currency snapshot: the product's current values when the line is added.
         return {
           productId: product.id,
           productNameSnapshot: product.name,
           skuSnapshot: product.sku,
           unitPrice: product.price,
+          currency: product.currency,
           quantity: item.quantity,
         };
       });
@@ -165,6 +173,7 @@ export class OrdersService {
           notes: input.notes ?? null,
           subtotal,
           total,
+          currency,
           // organizationId and orderId are inherited from the order (composite relation).
           items: {
             create: lines.map((line, index) => ({ ...line, lineTotal: lineTotals[index]! })),
@@ -184,6 +193,7 @@ export class OrdersService {
           warehouseId: input.warehouseId,
           itemCount: lines.length,
           total: total.toFixed(2),
+          currency,
         },
       });
       return this.read(tx, organizationId, order.id);
@@ -411,18 +421,33 @@ export class OrdersService {
     assertUniqueProducts(items);
     const current = await tx.orderItem.findMany({
       where: { organizationId, orderId: order.id },
-      select: { id: true, productId: true, quantity: true, unitPrice: true },
+      select: { id: true, productId: true, quantity: true, unitPrice: true, currency: true },
     });
     const byProduct = new Map(current.map((line) => [line.productId, line]));
     const wanted = new Set(items.map((item) => item.productId));
     const products = await this.products(tx, organizationId, items);
     let changed = false;
 
+    // Kept lines keep their currency snapshot; new lines must be in the same currency
+    // (or, when no line is kept, the first new line sets the order's currency).
+    const kept = current.filter((line) => wanted.has(line.productId));
+    const currency = assertAddable(
+      items
+        .filter((item) => !byProduct.has(item.productId))
+        .map((item) => products.get(item.productId)!),
+      kept[0]?.currency ?? null,
+    );
+
     const removed = current.filter((line) => !wanted.has(line.productId));
     if (removed.length > 0) {
       await tx.orderItem.deleteMany({
         where: { organizationId, orderId: order.id, id: { in: removed.map((line) => line.id) } },
       });
+      changed = true;
+    }
+    // Before inserting lines: the database checks every line against the order's currency.
+    if (currency !== order.currency) {
+      await tx.order.update({ where: { id: order.id }, data: { currency } });
       changed = true;
     }
     for (const item of items) {
@@ -442,7 +467,6 @@ export class OrdersService {
         continue;
       }
       const product = products.get(item.productId)!;
-      if (product.status !== 'ACTIVE') throw orderProductInactive(label(product));
       const { lineTotals } = orderTotals([{ unitPrice: product.price, quantity: item.quantity }]);
       await tx.orderItem.create({
         data: {
@@ -452,6 +476,7 @@ export class OrdersService {
           productNameSnapshot: product.name,
           skuSnapshot: product.sku,
           unitPrice: product.price,
+          currency: product.currency,
           quantity: item.quantity,
           lineTotal: lineTotals[0]!,
         },
@@ -471,7 +496,7 @@ export class OrdersService {
     const ids = items.map((item) => item.productId);
     const rows = await tx.product.findMany({
       where: { organizationId, id: { in: ids } },
-      select: { id: true, name: true, sku: true, price: true, status: true },
+      select: { id: true, name: true, sku: true, price: true, currency: true, status: true },
     });
     if (rows.length !== new Set(ids).size) throw orderProductNotFound();
     return new Map(rows.map((row) => [row.id, row]));
@@ -504,6 +529,23 @@ export class OrdersService {
     const warehouse = await this.findWarehouse(client, organizationId, warehouseId);
     if (!warehouse.isActive) throw orderWarehouseInactive(warehouse.code);
   }
+}
+
+/**
+ * Products about to get a NEW line: each must be active and priced in the
+ * order's currency (`current`, or, for an order without lines, the first
+ * added product's currency). Returns the order's currency afterwards (null:
+ * no lines). Orders never mix currencies, and nothing is converted.
+ */
+function assertAddable(added: OrderProduct[], current: Currency | null): Currency | null {
+  const currency = current ?? added[0]?.currency ?? null;
+  for (const product of added) {
+    if (product.status !== 'ACTIVE') throw orderProductInactive(label(product));
+    if (product.currency !== currency) {
+      throw orderCurrencyMismatch(label(product), product.currency, currency!);
+    }
+  }
+  return currency;
 }
 
 /** One line per product; a repeated product is a validation error, never silently merged. */

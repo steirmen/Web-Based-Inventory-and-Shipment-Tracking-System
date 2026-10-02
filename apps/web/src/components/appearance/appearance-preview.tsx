@@ -3,11 +3,14 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { appearance } from '@/i18n/messages/appearance';
 
 const SAMPLE_ROWS = [
-  { number: 'SO-1042', customer: 'Riverside Dental', status: 'Completed', tone: 'success' },
-  { number: 'SO-1041', customer: 'Northwind Café', status: 'Processing', tone: 'warning' },
-  { number: 'SO-1040', customer: 'Bright Office', status: 'Draft', tone: 'neutral' },
+  { number: 'SO-1042', customer: 'Riverside Dental', status: 'completed', tone: 'success' },
+  { number: 'SO-1041', customer: 'Northwind Café', status: 'processing', tone: 'warning' },
+  { number: 'SO-1040', customer: 'Bright Office', status: 'draft', tone: 'neutral' },
 ] as const;
 
 /**
@@ -18,11 +21,13 @@ const SAMPLE_ROWS = [
  * technology, because the whole app already previews the draft.
  */
 export function AppearancePreview() {
+  const m = useMessages(appearance).preview;
+  const f = useFormat();
   return (
     <Card>
       <CardHeader className="pb-4">
-        <CardTitle>Preview</CardTitle>
-        <CardDescription>How pages look with these settings.</CardDescription>
+        <CardTitle>{m.title}</CardTitle>
+        <CardDescription>{m.description}</CardDescription>
       </CardHeader>
       <CardContent>
         <div
@@ -31,10 +36,10 @@ export function AppearancePreview() {
           className="flex flex-col gap-4 rounded-card border border-border bg-background p-4"
         >
           <div className="flex items-center justify-between gap-3">
-            <p className="text-base font-semibold">Orders</p>
+            <p className="text-base font-semibold">{m.orders}</p>
             <Button size="sm">
               <Plus aria-hidden="true" />
-              New order
+              {m.newOrder}
             </Button>
           </div>
           <div className="relative">
@@ -43,7 +48,7 @@ export function AppearancePreview() {
               aria-hidden="true"
             />
             <div className="flex h-9 items-center rounded-control border border-border-strong bg-surface pl-9 text-sm text-subtle-foreground shadow-card">
-              Search orders…
+              {m.search}
             </div>
           </div>
           <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
@@ -59,32 +64,34 @@ export function AppearancePreview() {
                   </span>
                 </span>
                 <Badge tone={row.tone} dot>
-                  {row.status}
+                  {m[row.status]}
                 </Badge>
               </div>
             ))}
           </div>
           <div className="flex items-center justify-between gap-3 rounded-card border border-border bg-surface p-3 shadow-card">
             <span>
-              <span className="block text-xs text-muted-foreground">Total sales</span>
-              <span className="block text-lg font-semibold tabular-nums">12,480.00</span>
+              <span className="block text-xs text-muted-foreground">{m.totalSales}</span>
+              <span className="block text-lg font-semibold tabular-nums">
+                {f.money('12480.00', 'TRY')}
+              </span>
             </span>
             <span className="flex size-8 items-center justify-center rounded-full bg-primary-soft text-primary-soft-foreground">
               <TrendingUp className="size-4" aria-hidden="true" />
             </span>
           </div>
           <Alert tone="success" role="presentation">
-            Order SO-1041 processed.
+            {m.processed}
           </Alert>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="secondary">
-              Secondary
+              {m.secondary}
             </Button>
             <Button size="sm" variant="ghost">
-              Ghost
+              {m.ghost}
             </Button>
             <Button size="sm" variant="danger">
-              Danger
+              {m.danger}
             </Button>
           </div>
         </div>

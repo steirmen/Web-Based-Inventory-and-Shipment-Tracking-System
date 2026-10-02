@@ -7,6 +7,8 @@ const SqlState = {
   CheckViolation: '23514',
   /** Raised by ON DELETE RESTRICT (NO ACTION would raise 23503 instead). */
   RestrictViolation: '23001',
+  /** A value that is not a member of an enum type (e.g. currency 'BTC'). */
+  InvalidTextRepresentation: '22P02',
 } as const;
 
 type SqlStateCode = (typeof SqlState)[keyof typeof SqlState];
@@ -65,3 +67,7 @@ export const expectForeignKeyViolation = (operation: PromiseLike<unknown>, const
  */
 export const expectRestrictViolation = (operation: PromiseLike<unknown>, constraint?: string) =>
   expectConstraintViolation(operation, SqlState.RestrictViolation, constraint);
+
+/** Writing a value that is not part of an enum type (raw SQL; Prisma rejects it earlier). */
+export const expectInvalidEnumValue = (operation: PromiseLike<unknown>) =>
+  expectConstraintViolation(operation, SqlState.InvalidTextRepresentation);

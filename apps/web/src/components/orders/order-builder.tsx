@@ -14,10 +14,14 @@ import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useInventory, useWarehouses } from '@/hooks/use-inventory';
 import { useCreateOrder, useUpdateOrder } from '@/hooks/use-sales';
-import { apiErrorMessage } from '@/lib/api-errors';
-import { formatMoney } from '@/lib/money';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { sales } from '@/i18n/messages/sales';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import {
   hasOrderErrors,
+  orderCurrency,
   linePreview,
   mapOrderError,
   type OrderFormErrors,
@@ -43,6 +47,10 @@ const NO_ERRORS: OrderFormErrors = { fields: {}, lines: {} };
  */
 export function OrderBuilder({ order }: { order: Order | null }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(sales).builder;
+  const c = useMessages(common);
+  const f = useFormat();
+  const errorMessage = useApiErrorMessage();
   const navigate = useNavigate();
   const warehouses = useWarehouses(organization.id);
   const create = useCreateOrder(organization.id);
@@ -68,10 +76,18 @@ export function OrderBuilder({ order }: { order: Order | null }) {
   const addPicked = () => {
     if (!picked) return;
     if (state.lines.some((line) => line.productId === picked.id)) {
-      setPickError(`${picked.name} is already on the order — change its quantity instead.`);
+      setPickError(m.alreadyOnOrder({ name: picked.name }));
       return;
     }
-    if (!picked.price) return;
+    if (!picked.price || !picked.currency) return;
+    // An order never mixes currencies (the server refuses it too: ORDER_CURRENCY_MISMATCH).
+    const current = orderCurrency(state);
+    if (current && picked.currency !== current) {
+      setPickError(
+        m.currencyMismatch({ name: picked.name, product: picked.currency, order: current }),
+      );
+      return;
+    }
     change({
       lines: [
         ...state.lines,
@@ -80,6 +96,7 @@ export function OrderBuilder({ order }: { order: Order | null }) {
           name: picked.name,
           sku: picked.sku,
           unitPrice: picked.price,
+          currency: picked.currency,
           quantity: '1',
           saved: false,
           archived: false,
@@ -97,13 +114,19 @@ export function OrderBuilder({ order }: { order: Order | null }) {
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending) return;
-    const validation = validateOrderForm(state);
+    const validation = validateOrderForm(state, m, f.number);
     setErrors(validation);
     setFormError(null);
     if (hasOrderErrors(validation)) return;
 
     const onError = (error: unknown) => {
-      const mapped = mapOrderError(error, state.lines);
+      const mapped = mapOrderError(
+        error,
+        state.lines,
+        errorMessage,
+        c.errors.fieldError,
+        m.invalidValue,
+      );
       setErrors(mapped.errors);
       setFormError(mapped.form);
     };
@@ -113,34 +136,36 @@ export function OrderBuilder({ order }: { order: Order | null }) {
     if (order) {
       const body = toUpdateOrderRequest(order, state);
       if (Object.keys(body).length === 0) {
-        done(order.id, 'No changes to save.');
+        done(order.id, m.noChanges);
         return;
       }
       update.mutate(
         { orderId: order.id, body },
-        { onSuccess: (data) => done(data.order.id, 'Draft saved.'), onError },
+        { onSuccess: (data) => done(data.order.id, m.draftSaved), onError },
       );
     } else {
       create.mutate(toCreateOrderRequest(state), {
-        onSuccess: (data) => done(data.order.id, `Draft ${data.order.orderNumber} created.`),
+        onSuccess: (data) =>
+          done(data.order.id, m.draftCreated({ number: data.order.orderNumber })),
         onError,
       });
     }
   };
 
   const subtotal = subtotalPreview(state.lines);
+  const currency = orderCurrency(state);
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-6">
-      {formError !== null && <Alert tone="danger">{apiErrorMessage(formError)}</Alert>}
+      {formError !== null && <Alert tone="danger">{errorMessage(formError)}</Alert>}
 
       <Card>
         <CardHeader>
-          <StepTitle step={1}>Customer and warehouse</StepTitle>
-          <CardDescription>The warehouse the order will be fulfilled from.</CardDescription>
+          <StepTitle step={1}>{m.step1}</StepTitle>
+          <CardDescription>{m.step1Hint}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
-          <FormField label="Customer" error={errors.fields.customerId}>
+          <FormField label={m.customer} error={errors.fields.customerId}>
             {(control) => (
               <CustomerPicker
                 control={control}
@@ -149,7 +174,7 @@ export function OrderBuilder({ order }: { order: Order | null }) {
               />
             )}
           </FormField>
-          <FormField label="Warehouse" error={errors.fields.warehouseId}>
+          <FormField label={m.warehouse} error={errors.fields.warehouseId}>
             {(control) => (
               <Select
                 {...control}
@@ -158,11 +183,11 @@ export function OrderBuilder({ order }: { order: Order | null }) {
                 onChange={(event) => change({ warehouseId: event.target.value })}
               >
                 <option value="">
-                  {warehouses.isPending ? 'Loading warehouses…' : 'Choose a warehouse'}
+                  {warehouses.isPending ? m.loadingWarehouses : m.chooseWarehouse}
                 </option>
                 {current && (
                   <option value={current.id}>
-                    {current.name} ({current.code}) — archived
+                    {m.archivedWarehouse({ name: current.name, code: current.code })}
                   </option>
                 )}
                 {active.map((entry) => (
@@ -178,19 +203,25 @@ export function OrderBuilder({ order }: { order: Order | null }) {
 
       <Card>
         <CardHeader>
-          <StepTitle step={2}>Products</StepTitle>
+          <StepTitle step={2}>{m.step2}</StepTitle>
           <CardDescription>
-            Prices are taken from the product when it is added and stay fixed on this order.
+            {m.step2Hint}
+            {currency && (
+              <span className="mt-1 block font-medium text-foreground">
+                {m.orderCurrency({ currency: `${currency} · ${c.currency[currency]}` })}
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-end">
-            <FormField label="Add a product" className="md:flex-1" error={pickError ?? undefined}>
+            <FormField label={m.addProduct} className="md:flex-1" error={pickError ?? undefined}>
               {(control) => (
                 <ProductPicker
                   control={control}
                   value={picked?.id ?? ''}
                   selected={picked}
+                  showPrice
                   onChange={(product) => {
                     setPicked(product);
                     setPickError(null);
@@ -205,7 +236,7 @@ export function OrderBuilder({ order }: { order: Order | null }) {
               className="md:mb-0.5"
             >
               <Plus aria-hidden="true" />
-              Add to order
+              {m.addToOrder}
             </Button>
           </div>
 
@@ -213,13 +244,12 @@ export function OrderBuilder({ order }: { order: Order | null }) {
 
           {state.lines.length === 0 ? (
             <p className="rounded-control border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-              No products yet. You can save the draft now, but it needs at least one product before
-              it can be confirmed.
+              {m.noProducts}
             </p>
           ) : (
             <ul
               className="divide-y divide-border rounded-control border border-border"
-              aria-label="Order lines"
+              aria-label={m.orderLines}
             >
               {state.lines.map((line) => (
                 <OrderLineRow
@@ -243,17 +273,11 @@ export function OrderBuilder({ order }: { order: Order | null }) {
 
       <Card>
         <CardHeader>
-          <StepTitle step={3}>Review and save</StepTitle>
-          <CardDescription>
-            Saving keeps the order as a draft: nothing is reserved or deducted yet.
-          </CardDescription>
+          <StepTitle step={3}>{m.step3}</StepTitle>
+          <CardDescription>{m.step3Hint}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
-          <FormField
-            label="Notes"
-            error={errors.fields.notes}
-            hint="Optional, visible on the order."
-          >
+          <FormField label={m.notes} error={errors.fields.notes} hint={m.notesHint}>
             {(control) => (
               <Textarea
                 {...control}
@@ -266,21 +290,21 @@ export function OrderBuilder({ order }: { order: Order | null }) {
             )}
           </FormField>
           <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
-            <dl className="flex items-baseline gap-3 text-sm" aria-label="Order total">
+            <dl className="flex items-baseline gap-3 text-sm" aria-label={m.orderTotal}>
               <dt className="text-muted-foreground">
-                Total ({state.lines.length} {state.lines.length === 1 ? 'line' : 'lines'})
+                {m.totalLines({ count: state.lines.length })}
               </dt>
-              <dd className="text-xl font-semibold tabular-nums">{formatMoney(subtotal)}</dd>
+              <dd className="text-xl font-semibold tabular-nums">{f.money(subtotal, currency)}</dd>
             </dl>
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
               <Link
                 to={order ? paths.order(organization.id, order.id) : paths.orders(organization.id)}
                 className={buttonVariants({ variant: 'secondary' })}
               >
-                Cancel
+                {m.cancel}
               </Link>
               <Button type="submit" isLoading={pending}>
-                {order ? 'Save draft' : 'Create draft'}
+                {order ? m.saveDraft : m.createDraft}
               </Button>
             </div>
           </div>
@@ -322,6 +346,8 @@ function OrderLineRow({
   onRemove: () => void;
 }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(sales).builder;
+  const f = useFormat();
   // Re-read whenever the warehouse changes; never trusted by the server.
   const stock = useInventory(
     organization.id,
@@ -345,35 +371,33 @@ function OrderLineRow({
         <p className="truncate font-mono text-xs text-muted-foreground">{line.sku}</p>
         <p className="mt-1 text-xs text-muted-foreground">
           {!warehouseId
-            ? 'Choose a warehouse to see stock.'
+            ? m.chooseWarehouseForStock
             : available === null
-              ? 'Checking stock…'
-              : `${available.toLocaleString()} in stock${warehouseCode ? ` in ${warehouseCode}` : ''}`}
+              ? m.checkingStock
+              : m.inStock({ count: f.number(available), code: warehouseCode ?? null })}
         </p>
-        {line.archived && (
-          <p className="mt-1 text-xs text-danger">
-            Product archived — remove it before confirming.
-          </p>
-        )}
+        {line.archived && <p className="mt-1 text-xs text-danger">{m.archivedLine}</p>}
       </div>
       <Button
         variant="ghost"
         size="icon-sm"
         className="justify-self-end sm:order-last"
         onClick={onRemove}
-        aria-label={`Remove ${line.name}`}
-        title="Remove"
+        aria-label={m.removeNamed({ name: line.name })}
+        title={m.remove}
       >
         <Trash2 aria-hidden="true" />
       </Button>
       <div className="text-sm sm:text-right">
-        <span className="text-xs text-muted-foreground sm:hidden">Unit price </span>
-        <span className="tabular-nums">{formatMoney(line.unitPrice)}</span>
-        {!line.saved && <span className="block text-xs text-muted-foreground">current price</span>}
+        <span className="text-xs text-muted-foreground sm:hidden">{m.unitPrice}</span>
+        <span className="tabular-nums">{f.money(line.unitPrice, line.currency)}</span>
+        {!line.saved && (
+          <span className="block text-xs text-muted-foreground">{m.currentPrice}</span>
+        )}
       </div>
       <div className="col-span-2 flex flex-col gap-1 sm:col-span-1">
         <label htmlFor={inputId} className="sr-only">
-          Quantity of {line.name}
+          {m.quantityOf({ name: line.name })}
         </label>
         <Input
           id={inputId}
@@ -393,15 +417,15 @@ function OrderLineRow({
             {error ?? (
               <span className="inline-flex items-center gap-1">
                 <TriangleAlert className="size-3" aria-hidden="true" />
-                More than the {available} in stock
+                {m.moreThanStock({ count: f.number(available ?? 0) })}
               </span>
             )}
           </p>
         )}
       </div>
       <p className="text-right text-sm font-medium tabular-nums">
-        <span className="text-xs font-normal text-muted-foreground sm:hidden">Line total </span>
-        {total === null ? '—' : formatMoney(total)}
+        <span className="text-xs font-normal text-muted-foreground sm:hidden">{m.lineTotal}</span>
+        {total === null ? '—' : f.money(total, line.currency)}
       </p>
     </li>
   );

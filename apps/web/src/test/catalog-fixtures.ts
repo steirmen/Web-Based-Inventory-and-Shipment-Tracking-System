@@ -35,6 +35,7 @@ export function testProduct(overrides: Partial<Product> = {}): Product {
     description: 'Blue ink, box of 12',
     price: '1234.50',
     cost: '0.40',
+    currency: 'TRY',
     minimumStock: 20,
     status: 'ACTIVE',
     category: { id: testCategory().id, name: testCategory().name },

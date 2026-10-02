@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { useMessages } from '@/i18n/i18n-context';
+import { appearance } from '@/i18n/messages/appearance';
 import { fromHex, parseCss, toHex, toRgb } from '@/lib/appearance/color';
-import { TONE_LABELS } from '@/lib/appearance/labels';
 import { buildPalette } from '@/lib/appearance/themes';
 
 /**
@@ -26,7 +27,9 @@ export function CustomThemeEditor({
   // otherwise the field shows the configured accent (which can also change
   // from outside, e.g. Cancel or applying a profile).
   const [typed, setTyped] = useState<string | null>(null);
-  const hexError = typed === null ? undefined : 'Use a 6-digit hex color, e.g. #4f46e5.';
+  const a = useMessages(appearance);
+  const m = a.editor;
+  const hexError = typed === null ? undefined : m.hexError;
   const appliedColor = parseCss(buildPalette(config)['--primary']!);
   const applied = toHex(appliedColor);
   // Ignore rounding from the OKLCH round trip (a channel off by one or two).
@@ -48,7 +51,7 @@ export function CustomThemeEditor({
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-end">
-        <FormField label="Accent color">
+        <FormField label={m.accent}>
           {(control) => (
             <input
               {...control}
@@ -62,7 +65,7 @@ export function CustomThemeEditor({
             />
           )}
         </FormField>
-        <FormField label="Hex value" error={hexError} className="sm:max-w-48">
+        <FormField label={m.hex} error={hexError} className="sm:max-w-48">
           {(control) => (
             <Input
               {...control}
@@ -78,38 +81,37 @@ export function CustomThemeEditor({
       </div>
 
       <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium">Background tone</span>
+        <span className="text-sm font-medium">{m.tone}</span>
         <SegmentedControl
-          label="Background tone"
+          label={m.tone}
           value={config.customTone}
-          options={CUSTOM_TONES.map((tone) => ({ value: tone, label: TONE_LABELS[tone] }))}
+          options={CUSTOM_TONES.map((tone) => ({ value: tone, label: a.tone[tone] }))}
           onChange={(customTone) => onChange({ customTone })}
         />
       </div>
 
       <div className="flex flex-col gap-2 rounded-control border border-border bg-background p-4">
         <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Preview
+          {m.preview}
         </span>
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" tabIndex={-1}>
-            Primary action
+            {m.primary}
           </Button>
           <Button size="sm" variant="secondary" tabIndex={-1}>
-            Secondary
+            {m.secondary}
           </Button>
           <Badge tone="primary" dot>
-            Selected
+            {m.selected}
           </Badge>
           <Badge tone="success" dot>
-            In stock
+            {m.inStock}
           </Badge>
         </div>
         {adjusted && (
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <Info className="mt-px size-3.5 shrink-0" aria-hidden="true" />
-            In this mode we use {applied.toUpperCase()}, a close shade of your color, so buttons,
-            links, and focus outlines stay readable.
+            {m.adjusted({ color: applied.toUpperCase() })}
           </p>
         )}
       </div>

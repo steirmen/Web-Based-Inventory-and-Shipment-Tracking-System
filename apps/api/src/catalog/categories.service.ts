@@ -1,7 +1,8 @@
-import type { CategoryListResponse, CategoryResponse } from '@app/shared';
+import { CATALOG_LIMITS, type CategoryListResponse, type CategoryResponse } from '@app/shared';
 import { Injectable } from '@nestjs/common';
 import { ActivityAction, recordActivity } from '../activity/activity-log.js';
 import { isForeignKeyViolation, isUniqueViolation } from '../common/errors/prisma-errors.js';
+import { escapeLikePattern } from '../common/validation/like-pattern.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import type { OrganizationContext } from '../organizations/organization-context.js';
@@ -17,13 +18,46 @@ import type { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto.js
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(organizationId: string): Promise<CategoryListResponse> {
-    const categories = await this.prisma.category.findMany({
-      where: { organizationId },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      select: CATEGORY_SELECT,
-    });
-    return { categories: categories.map(toCategory) };
+  /**
+   * Without `search`: every category, newest first. With `search` (the
+   * product form's category picker): a case-insensitive name match, the exact
+   * (case-insensitive) match first, then by name, at most `categorySearchMax`.
+   */
+  async list(organizationId: string, search?: string): Promise<CategoryListResponse> {
+    if (!search) {
+      const categories = await this.prisma.category.findMany({
+        where: { organizationId },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        select: CATEGORY_SELECT,
+      });
+      return { categories: categories.map(toCategory) };
+    }
+    const [exact, matches] = await Promise.all([
+      this.prisma.category.findFirst({
+        // Case-insensitive equality is an ILIKE in PostgreSQL: wildcards must be escaped.
+        where: {
+          organizationId,
+          name: { equals: escapeLikePattern(search), mode: 'insensitive' },
+        },
+        orderBy: { id: 'asc' },
+        select: CATEGORY_SELECT,
+      }),
+      this.prisma.category.findMany({
+        where: {
+          organizationId,
+          name: { contains: escapeLikePattern(search), mode: 'insensitive' },
+        },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        take: CATALOG_LIMITS.categorySearchMax,
+        select: CATEGORY_SELECT,
+      }),
+    ]);
+    const categories = exact
+      ? [exact, ...matches.filter((category) => category.id !== exact.id)]
+      : matches;
+    return {
+      categories: categories.slice(0, CATALOG_LIMITS.categorySearchMax).map(toCategory),
+    };
   }
 
   async create(context: OrganizationContext, input: CreateCategoryDto): Promise<CategoryResponse> {
@@ -149,7 +183,8 @@ async function assertNameAvailable(
   const existing = await tx.category.findFirst({
     where: {
       organizationId,
-      name: { equals: name, mode: 'insensitive' },
+      // An ILIKE in PostgreSQL: escape % and _ so they only match themselves.
+      name: { equals: escapeLikePattern(name), mode: 'insensitive' },
       ...(excludeId ? { id: { not: excludeId } } : {}),
     },
     select: { id: true },

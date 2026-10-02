@@ -58,6 +58,8 @@ export const API_ERROR_CODES = [
   'ORDER_PRODUCT_NOT_FOUND',
   'ORDER_PRODUCT_INACTIVE',
   'ORDER_TOTAL_LIMIT',
+  /** A line's product is priced in another currency than the order (orders never mix currencies). */
+  'ORDER_CURRENCY_MISMATCH',
   'APPEARANCE_PROFILE_NOT_FOUND',
   'APPEARANCE_PROFILE_NAME_TAKEN',
   'APPEARANCE_PROFILE_LIMIT',

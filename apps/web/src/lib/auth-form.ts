@@ -1,20 +1,26 @@
 import { AUTH_LIMITS } from '@app/shared';
 import { ApiError } from '@/api/http-client';
+import type { Translation } from '@/i18n/define';
+import type { common } from '@/i18n/messages/common';
 
 /**
  * Client-side validation for the auth forms. It catches obvious mistakes
- * before submitting; the API remains the authority.
+ * before submitting; the API remains the authority. Messages come from the
+ * current language (`common.authValidation`).
  */
 
 export type FieldErrors<Field extends string> = Partial<Record<Field, string>>;
 
+type AuthMessages = Translation<typeof common.en>['authValidation'];
+type ErrorMessages = Translation<typeof common.en>['errors'];
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function validateEmail(value: string): string | undefined {
+export function validateEmail(value: string, m: AuthMessages): string | undefined {
   const email = value.trim();
-  if (!email) return 'Enter your email address.';
+  if (!email) return m.emailRequired;
   if (email.length > AUTH_LIMITS.emailMaxLength || !EMAIL_PATTERN.test(email)) {
-    return 'Enter a valid email address.';
+    return m.emailInvalid;
   }
   return undefined;
 }
@@ -24,10 +30,13 @@ export interface LoginValues {
   password: string;
 }
 
-export function validateLogin(values: LoginValues): FieldErrors<keyof LoginValues> {
+export function validateLogin(
+  values: LoginValues,
+  m: AuthMessages,
+): FieldErrors<keyof LoginValues> {
   return {
-    email: validateEmail(values.email),
-    password: values.password ? undefined : 'Enter your password.',
+    email: validateEmail(values.email, m),
+    password: values.password ? undefined : m.passwordRequired,
   };
 }
 
@@ -38,28 +47,31 @@ export interface RegisterValues {
   confirmPassword: string;
 }
 
-export function validateRegister(values: RegisterValues): FieldErrors<keyof RegisterValues> {
+export function validateRegister(
+  values: RegisterValues,
+  m: AuthMessages,
+): FieldErrors<keyof RegisterValues> {
   const name = values.name.trim();
   // Passwords are checked exactly as typed — never trimmed.
   const { password } = values;
 
   return {
     name: !name
-      ? 'Enter your name.'
+      ? m.nameRequired
       : name.length > AUTH_LIMITS.nameMaxLength
-        ? `Use at most ${AUTH_LIMITS.nameMaxLength} characters.`
+        ? m.nameTooLong
         : undefined,
-    email: validateEmail(values.email),
+    email: validateEmail(values.email, m),
     password:
       password.length < AUTH_LIMITS.passwordMinLength
-        ? `Use at least ${AUTH_LIMITS.passwordMinLength} characters.`
+        ? m.passwordTooShort
         : password.length > AUTH_LIMITS.passwordMaxLength
-          ? `Use at most ${AUTH_LIMITS.passwordMaxLength} characters.`
+          ? m.passwordTooLong
           : undefined,
     confirmPassword: !values.confirmPassword
-      ? 'Confirm your password.'
+      ? m.confirmRequired
       : values.confirmPassword !== password
-        ? 'Passwords do not match.'
+        ? m.mismatch
         : undefined,
   };
 }
@@ -68,36 +80,39 @@ export function hasErrors(errors: FieldErrors<string>): boolean {
   return Object.values(errors).some(Boolean);
 }
 
-/** Maps API validation details onto form fields that exist in the form. */
+/**
+ * Maps API validation details onto form fields that exist in the form. The
+ * API's field messages are English; `errors.fieldError` shows them as-is in
+ * English and a translated message otherwise.
+ */
 export function serverFieldErrors<Field extends string>(
   error: unknown,
   fields: readonly Field[],
+  m: ErrorMessages,
 ): FieldErrors<Field> {
   if (!(error instanceof ApiError)) return {};
 
   const result: FieldErrors<Field> = {};
   for (const detail of error.details) {
-    if ((fields as readonly string[]).includes(detail.field)) {
-      result[detail.field as Field] = detail.messages[0];
+    if ((fields as readonly string[]).includes(detail.field) && detail.messages[0]) {
+      result[detail.field as Field] = m.fieldError({ message: detail.messages[0] });
     }
   }
   return result;
 }
 
 /** A user-facing message for an auth request failure that is not tied to one field. */
-export function describeAuthError(error: unknown): string {
+export function describeAuthError(error: unknown, m: AuthMessages): string {
   if (error instanceof ApiError) {
-    if (error.isNetworkError) {
-      return "We couldn't reach the server. Check your connection and try again.";
-    }
+    if (error.isNetworkError) return m.network;
     switch (error.code) {
       case 'AUTH_INVALID_CREDENTIALS':
-        return 'Incorrect email or password.';
+        return m.invalidCredentials;
       case 'RATE_LIMITED':
-        return 'Too many attempts. Please wait a few minutes and try again.';
+        return m.rateLimited;
       case 'VALIDATION_ERROR':
-        return 'Please check the highlighted fields.';
+        return m.checkFields;
     }
   }
-  return 'Something went wrong on our side. Please try again.';
+  return m.generic;
 }

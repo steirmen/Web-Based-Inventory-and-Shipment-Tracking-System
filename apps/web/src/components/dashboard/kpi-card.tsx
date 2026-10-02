@@ -1,10 +1,11 @@
-import type { DashboardCountMetric, DashboardMoneyMetric } from '@app/shared';
+import type { Currency, DashboardCountMetric, DashboardMoneyMetric } from '@app/shared';
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
-import { formatMoney } from '@/lib/money';
-import { formatCount } from '@/lib/dashboard-params';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { insights } from '@/i18n/messages/insights';
 
 /** One headline number with a label, a small icon, and an optional supporting line. */
 export function KpiCard({
@@ -55,38 +56,53 @@ export function ChangeIndicator({
   metric,
   kind,
   comparison,
+  currency = null,
 }: {
   metric: DashboardCountMetric | DashboardMoneyMetric;
   kind: 'count' | 'money';
   /** Human-readable comparison period, e.g. "Aug 3 – Sep 1, 2026". */
   comparison: string;
+  /** Currency of a money metric. */
+  currency?: Currency | null;
 }) {
+  const m = useMessages(insights).change;
+  const f = useFormat();
   const { percentageChange } = metric;
   const previous =
-    kind === 'money' ? formatMoney(String(metric.previous)) : formatCount(Number(metric.previous));
+    kind === 'money'
+      ? f.money(String(metric.previous), currency)
+      : f.number(Number(metric.previous));
   if (percentageChange === null) {
     return (
-      <p className="flex items-center gap-1" title={`Previous period: ${comparison}`}>
+      <p className="flex items-center gap-1" title={m.previousPeriod({ period: comparison })}>
         <Minus className="size-3.5" aria-hidden="true" />
-        <span>No activity in the previous period</span>
+        <span>{m.noActivity}</span>
       </p>
     );
   }
   const direction = percentageChange > 0 ? 'up' : percentageChange < 0 ? 'down' : 'flat';
   const Icon = direction === 'up' ? ArrowUpRight : direction === 'down' ? ArrowDownRight : Minus;
   const sign = percentageChange > 0 ? '+' : '';
+  const percent = new Intl.NumberFormat(f.locale, { maximumFractionDigits: 1 }).format(
+    Math.abs(percentageChange),
+  );
   const spoken =
     direction === 'flat'
-      ? 'Unchanged from the previous period'
-      : `${direction === 'up' ? 'Up' : 'Down'} ${Math.abs(percentageChange)}% from the previous period`;
+      ? m.unchanged
+      : direction === 'up'
+        ? m.up({ percent })
+        : m.down({ percent });
   return (
-    <p className="flex flex-wrap items-center gap-x-1" title={`Previous period: ${comparison}`}>
+    <p
+      className="flex flex-wrap items-center gap-x-1"
+      title={m.previousPeriod({ period: comparison })}
+    >
       <Icon className="size-3.5 shrink-0" aria-hidden="true" />
       <span className="font-medium text-foreground" aria-hidden="true">
         {sign}
-        {percentageChange}%
+        {f.percent(percentageChange)}
       </span>
-      <span aria-hidden="true">vs previous period ({previous})</span>
+      <span aria-hidden="true">{m.versus({ previous })}</span>
       <span className="sr-only">
         {spoken} ({previous}, {comparison}).
       </span>

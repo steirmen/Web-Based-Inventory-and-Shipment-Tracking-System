@@ -9,7 +9,8 @@ Uses the Phase 2 tables `categories` and `products` (see [database-design.md](da
 - Both are tenant-owned (`organization_id`). A product references its category with the composite foreign key `(organization_id, category_id) → categories(organization_id, id)`, so a product can never point at another organization's category, even if application code had a bug.
 - **Category names** are unique per organization, **case-insensitively** in the API (`Office` and `office` conflict) and exactly by the `(organization_id, name)` unique index. Different organizations may use the same name.
 - **SKUs** are unique per organization (`(organization_id, sku)` unique index). They are stored exactly as entered after trimming (case is preserved and significant). Different organizations may use the same SKU.
-- **Money** (`price`, `cost`) is `NUMERIC(12,2)`. The API accepts and returns **decimal strings** (`"19.99"`, always 2 decimals in responses), never JavaScript numbers, so values are never rounded through binary floating point. Input must match `MONEY_PATTERN` (`/^\d{1,10}(\.\d{1,2})?$/`): non-negative, up to 10 integer digits and 2 decimals, no sign, exponent, or separators. The web app formats the strings with `Intl.NumberFormat` directly.
+- **Money** (`price`, `cost`) is `NUMERIC(12,2)`. The API accepts and returns **decimal strings** (`"19.99"`, always 2 decimals in responses), never JavaScript numbers, so values are never rounded through binary floating point. Input must match `MONEY_PATTERN` (`/^\d{1,10}(\.\d{1,2})?$/`): non-negative, up to 10 integer digits and 2 decimals, no sign, exponent, or separators. The web app formats the strings with `Intl.NumberFormat` directly (`useFormat().money`).
+- **Currency (Phase 10.1):** `currency` (`TRY`, `EUR`, `USD`; default `TRY`) applies to both price and cost. It is optional on create, changeable on update, and validated against `CURRENCIES` (anything else, including `null`, is `400 VALIDATION_ERROR`). See [currency.md](currency.md).
 - `cost` is required when creating a product. It is `null` only for legacy rows created without one, and the edit form lets those keep it empty.
 - `minimum_stock` is a whole number `0…1 000 000 000` (a reorder level; there is no stock tracking yet).
 - **Status** is `ACTIVE` or `ARCHIVED`. Products are never deleted: order lines and stock history will reference them. Archiving is reversible.
@@ -22,22 +23,28 @@ Uses the Phase 2 tables `categories` and `products` (see [database-design.md](da
 
 All routes require a session and membership: `OrganizationAccessGuard` + `@RequirePermissions` on every handler. The organization comes **only** from the route; bodies containing `organizationId`, `id`, `status` (on PATCH), timestamps, or unknown fields are rejected with `400 VALIDATION_ERROR`.
 
-| Method & path                                                     | Permission          | Result                                       |
-| ----------------------------------------------------------------- | ------------------- | -------------------------------------------- |
-| `GET /organizations/:organizationId/categories`                   | `CATEGORIES_READ`   | `{ categories }`, newest first, with counts  |
-| `POST /organizations/:organizationId/categories`                  | `CATEGORIES_CREATE` | `201 { category }`                           |
-| `PATCH /organizations/:organizationId/categories/:categoryId`     | `CATEGORIES_UPDATE` | `{ category }`                               |
-| `DELETE /organizations/:organizationId/categories/:categoryId`    | `CATEGORIES_DELETE` | `204`, only when no product uses it          |
-| `GET /organizations/:organizationId/products`                     | `PRODUCTS_READ`     | `{ items, pagination }` (see below)          |
-| `POST /organizations/:organizationId/products`                    | `PRODUCTS_CREATE`   | `201 { product }`                            |
-| `GET /organizations/:organizationId/products/:productId`          | `PRODUCTS_READ`     | `{ product }`                                |
-| `PATCH /organizations/:organizationId/products/:productId`        | `PRODUCTS_UPDATE`   | `{ product }`; partial; ACTIVE products only |
-| `POST /organizations/:organizationId/products/:productId/archive` | `PRODUCTS_ARCHIVE`  | `{ product }`; idempotent                    |
-| `POST /organizations/:organizationId/products/:productId/restore` | `PRODUCTS_ARCHIVE`  | `{ product }`; idempotent                    |
+| Method & path                                                     | Permission          | Result                                                                                         |
+| ----------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------- |
+| `GET /organizations/:organizationId/categories`                   | `CATEGORIES_READ`   | `{ categories }`, newest first, with counts; `?search=` → at most 20 matches, exact name first |
+| `POST /organizations/:organizationId/categories`                  | `CATEGORIES_CREATE` | `201 { category }`                                                                             |
+| `PATCH /organizations/:organizationId/categories/:categoryId`     | `CATEGORIES_UPDATE` | `{ category }`                                                                                 |
+| `DELETE /organizations/:organizationId/categories/:categoryId`    | `CATEGORIES_DELETE` | `204`, only when no product uses it                                                            |
+| `GET /organizations/:organizationId/products`                     | `PRODUCTS_READ`     | `{ items, pagination }` (see below)                                                            |
+| `POST /organizations/:organizationId/products`                    | `PRODUCTS_CREATE`   | `201 { product }`                                                                              |
+| `GET /organizations/:organizationId/products/:productId`          | `PRODUCTS_READ`     | `{ product }`                                                                                  |
+| `PATCH /organizations/:organizationId/products/:productId`        | `PRODUCTS_UPDATE`   | `{ product }`; partial; ACTIVE products only                                                   |
+| `POST /organizations/:organizationId/products/:productId/archive` | `PRODUCTS_ARCHIVE`  | `{ product }`; idempotent                                                                      |
+| `POST /organizations/:organizationId/products/:productId/restore` | `PRODUCTS_ARCHIVE`  | `{ product }`; idempotent                                                                      |
 
 There is no `DELETE` for products.
 
 Request and response types live in `packages/shared/src/catalog.ts` (`Category`, `Product`, `ProductListItem`, `ProductListQuery`, `CreateProductRequest`, …) together with `CATALOG_LIMITS`, `MONEY_PATTERN`, and `SKU_PATTERN`, which both the API and the forms use.
+
+### Category search (Phase 10.1)
+
+`GET …/categories?search=` searches the organization's categories case-insensitively (`contains`, with `%`, `_`, and `` escaped), returns an exact (case-insensitive) match first and then names alphabetically, capped at `CATALOG_LIMITS.categorySearchMax` (20). Without `search` the full list is returned as before. The duplicate check on create/rename (`CATEGORY_NAME_TAKEN`) escapes the same characters, so `%` or `_` in a name never matches other names.
+
+The product form's **category combobox** (`components/products/category-picker.tsx`) uses it: type to search this workspace only, keyboard support, a selected state, clear, and a "Create “Name”" option only with `CATEGORIES_CREATE` (UX only; the API enforces the permission) that never duplicates an existing name in another letter case — if someone creates the same name meanwhile, the existing category is selected.
 
 ### Input normalization
 

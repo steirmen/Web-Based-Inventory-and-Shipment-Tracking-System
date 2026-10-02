@@ -9,6 +9,8 @@ import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { useRegister } from '@/hooks/use-auth';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { pageTitle } from '@/lib/app-config';
 import {
   describeAuthError,
@@ -25,6 +27,7 @@ const SERVER_FIELDS = ['name', 'email', 'password'] as const;
 export function RegisterPage() {
   const registration = useRegister();
   const location = useLocation();
+  const m = useMessages(common);
   const prefillEmail = (location.state as { email?: unknown } | null)?.email;
   const [values, setValues] = useState<RegisterValues>({
     name: '',
@@ -43,7 +46,7 @@ export function RegisterPage() {
     event.preventDefault();
     if (registration.isPending) return;
 
-    const clientErrors = validateRegister(values);
+    const clientErrors = validateRegister(values, m.authValidation);
     setErrors(clientErrors);
     if (hasErrors(clientErrors)) return;
 
@@ -51,32 +54,32 @@ export function RegisterPage() {
     registration.mutate(input, {
       onError: (error) => {
         if (error instanceof ApiError && error.code === 'AUTH_EMAIL_TAKEN') {
-          setErrors({ email: 'An account with this email already exists.' });
+          setErrors({ email: m.register.emailTaken });
         } else {
-          setErrors(serverFieldErrors(error, SERVER_FIELDS));
+          setErrors(serverFieldErrors(error, SERVER_FIELDS, m.errors));
         }
       },
     });
   };
 
   const formError =
-    registration.isError && !hasErrors(errors) ? describeAuthError(registration.error) : null;
+    registration.isError && !hasErrors(errors)
+      ? describeAuthError(registration.error, m.authValidation)
+      : null;
 
   return (
     <Card className="shadow-raised">
-      <title>{pageTitle('Create account')}</title>
+      <title>{pageTitle(m.register.pageTitle)}</title>
       <CardHeader className="gap-1 pb-5">
-        <h1 className="text-xl font-semibold tracking-tight">Create your account</h1>
-        <CardDescription>
-          It only takes a minute. You can set up your workspace later.
-        </CardDescription>
+        <h1 className="text-xl font-semibold tracking-tight">{m.register.title}</h1>
+        <CardDescription>{m.register.description}</CardDescription>
       </CardHeader>
 
       <CardContent>
         <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
           {formError && <Alert tone="danger">{formError}</Alert>}
 
-          <FormField label="Name" error={errors.name}>
+          <FormField label={m.register.name} error={errors.name}>
             {(control) => (
               <Input
                 {...control}
@@ -89,7 +92,7 @@ export function RegisterPage() {
             )}
           </FormField>
 
-          <FormField label="Email" error={errors.email}>
+          <FormField label={m.register.email} error={errors.email}>
             {(control) => (
               <Input
                 {...control}
@@ -104,9 +107,9 @@ export function RegisterPage() {
           </FormField>
 
           <FormField
-            label="Password"
+            label={m.register.password}
             error={errors.password}
-            hint={`At least ${AUTH_LIMITS.passwordMinLength} characters.`}
+            hint={m.register.passwordHint}
           >
             {(control) => (
               <PasswordInput
@@ -119,7 +122,7 @@ export function RegisterPage() {
             )}
           </FormField>
 
-          <FormField label="Confirm password" error={errors.confirmPassword}>
+          <FormField label={m.register.confirmPassword} error={errors.confirmPassword}>
             {(control) => (
               <PasswordInput
                 {...control}
@@ -137,20 +140,20 @@ export function RegisterPage() {
             className="mt-2 w-full"
             isLoading={registration.isPending}
           >
-            {registration.isPending ? 'Creating account…' : 'Create account'}
+            {registration.isPending ? m.register.submitting : m.register.submit}
           </Button>
         </form>
       </CardContent>
 
       <CardFooter className="justify-center">
         <span>
-          Already have an account?{' '}
+          {m.register.haveAccount}{' '}
           <Link
             to={paths.login}
             state={location.state}
             className="rounded-sm font-medium text-primary focus-ring hover:underline"
           >
-            Sign in
+            {m.register.signIn}
           </Link>
         </span>
       </CardFooter>

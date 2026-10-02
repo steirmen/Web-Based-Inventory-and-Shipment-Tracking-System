@@ -61,7 +61,7 @@ describe('database integrity audit', () => {
     await busyWorkspace();
     await busyWorkspace();
     const checks = await verifyIntegrity(prisma);
-    expect(checks.length).toBe(13);
+    expect(checks.length).toBe(14);
     expect(await failing()).toEqual([]);
   });
 
@@ -93,12 +93,19 @@ describe('database integrity audit', () => {
       where: { id: f.completed.id },
       data: { total: '1.00', subtotal: '1.00' },
     });
+    // An order line in another currency than its order (bypassing the API and the trigger,
+    // the way only a manual repair could).
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SET LOCAL session_replication_role = replica`;
+      await tx.$executeRaw`UPDATE order_items SET currency = 'EUR' WHERE order_id = ${f.completed.id}::uuid`;
+    });
     // A workspace whose owner left (bypassing the API).
     await prisma.organizationMember.delete({ where: { id: f.team.owner.memberId } });
 
     expect(await failing()).toEqual([
       'inventory-matches-ledger',
       'order-totals',
+      'order-currency',
       'fulfilled-orders-have-sales',
       'one-owner',
     ]);

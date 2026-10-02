@@ -1,9 +1,11 @@
 import {
+  type Currency,
   DASHBOARD_LIMITS,
   DASHBOARD_RANGES,
   type DashboardRange,
   type DashboardSummaryQuery,
   DEFAULT_DASHBOARD_RANGE,
+  isCurrency,
   type OrderStatus,
   type StockStatus,
 } from '@app/shared';
@@ -25,45 +27,42 @@ export interface DashboardParams {
   from: string;
   /** yyyy-mm-dd, only for CUSTOM. */
   to: string;
+  /** Currency of the money figures ('' = the server's default choice). */
+  currency: Currency | '';
 }
 
 export const DEFAULT_DASHBOARD_PARAMS: DashboardParams = {
   range: DEFAULT_DASHBOARD_RANGE,
   from: '',
   to: '',
+  currency: '',
 };
 
-export const DASHBOARD_RANGE_LABELS: Record<DashboardRange, string> = {
-  TODAY: 'Today',
-  LAST_7_DAYS: 'Last 7 days',
-  LAST_30_DAYS: 'Last 30 days',
-  THIS_MONTH: 'This month',
-  PREVIOUS_MONTH: 'Previous month',
-  THIS_YEAR: 'This year',
-  CUSTOM: 'Custom range',
-};
+/** Why a custom range is not acceptable (a key of `insights.rangePicker`), or undefined. */
+export type CustomRangeProblem = 'missing' | 'order' | 'tooLong';
 
-/** Why a custom range is not acceptable, or undefined when it is. */
-export function customRangeError(from: string, to: string): string | undefined {
+export function customRangeError(from: string, to: string): CustomRangeProblem | undefined {
   const first = dayOf(from);
   const last = dayOf(to);
-  if (first === null || last === null) return 'Choose a start and an end date.';
-  if (first > last) return 'The end date must not be before the start date.';
-  if (last - first + 1 > DASHBOARD_LIMITS.customRangeMaxDays) {
-    return `Choose at most ${DASHBOARD_LIMITS.customRangeMaxDays} days.`;
-  }
+  if (first === null || last === null) return 'missing';
+  if (first > last) return 'order';
+  if (last - first + 1 > DASHBOARD_LIMITS.customRangeMaxDays) return 'tooLong';
   return undefined;
 }
 
 export function readDashboardParams(searchParams: URLSearchParams): DashboardParams {
+  const currencyParam = searchParams.get('currency');
+  const currency = isCurrency(currencyParam) ? currencyParam : '';
   const range = searchParams.get('range');
   if (!range || !(DASHBOARD_RANGES as readonly string[]).includes(range)) {
-    return DEFAULT_DASHBOARD_PARAMS;
+    return { ...DEFAULT_DASHBOARD_PARAMS, currency };
   }
-  if (range !== 'CUSTOM') return { range: range as DashboardRange, from: '', to: '' };
+  if (range !== 'CUSTOM') return { range: range as DashboardRange, from: '', to: '', currency };
   const from = searchParams.get('from') ?? '';
   const to = searchParams.get('to') ?? '';
-  return customRangeError(from, to) ? DEFAULT_DASHBOARD_PARAMS : { range, from, to };
+  return customRangeError(from, to)
+    ? { ...DEFAULT_DASHBOARD_PARAMS, currency }
+    : { range, from, to, currency };
 }
 
 export function writeDashboardParams(params: DashboardParams): URLSearchParams {
@@ -73,6 +72,7 @@ export function writeDashboardParams(params: DashboardParams): URLSearchParams {
     searchParams.set('from', params.from);
     searchParams.set('to', params.to);
   }
+  if (params.currency) searchParams.set('currency', params.currency);
   return searchParams;
 }
 
@@ -81,11 +81,9 @@ export function toDashboardQuery(params: DashboardParams, timeZone: string): Das
     range: params.range,
     ...(params.range === 'CUSTOM' ? { from: params.from, to: params.to } : {}),
     timeZone,
+    ...(params.currency ? { currency: params.currency } : {}),
   };
 }
-
-const countFormatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
-export const formatCount = (value: number): string => countFormatter.format(value);
 
 // --- Links into the detailed pages ---------------------------------------------------
 

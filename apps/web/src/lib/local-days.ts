@@ -43,35 +43,43 @@ export function browserTimeZone(): string {
 // --- Display ------------------------------------------------------------------------
 
 /** Date-only values are calendar days: format them in UTC so they never shift. */
-const dayFormatter = new Intl.DateTimeFormat(undefined, {
-  timeZone: 'UTC',
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
-const shortDayFormatter = new Intl.DateTimeFormat(undefined, {
-  timeZone: 'UTC',
-  month: 'short',
-  day: 'numeric',
-});
-const monthFormatter = new Intl.DateTimeFormat(undefined, {
-  timeZone: 'UTC',
-  month: 'short',
-  year: 'numeric',
-});
+const formatters = new Map<string, Record<'day' | 'shortDay' | 'month', Intl.DateTimeFormat>>();
+function formattersFor(locale: string) {
+  let entry = formatters.get(locale);
+  if (!entry) {
+    entry = {
+      day: new Intl.DateTimeFormat(locale, {
+        timeZone: 'UTC',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+      shortDay: new Intl.DateTimeFormat(locale, {
+        timeZone: 'UTC',
+        month: 'short',
+        day: 'numeric',
+      }),
+      month: new Intl.DateTimeFormat(locale, { timeZone: 'UTC', month: 'short', year: 'numeric' }),
+    };
+    formatters.set(locale, entry);
+  }
+  return entry;
+}
 
 const asDate = (day: string) => new Date(`${day}T00:00:00Z`);
 
-/** "Sep 2 – Oct 1, 2026" (or a single day). */
-export function formatDayRange(from: string, to: string): string {
-  return from === to
-    ? dayFormatter.format(asDate(from))
-    : dayFormatter.formatRange(asDate(from), asDate(to));
+/** "Sep 2 – Oct 1, 2026" / "2 Eyl – 1 Eki 2026" (or a single day), in the interface locale. */
+export function formatDayRange(from: string, to: string, locale = 'en-US'): string {
+  const { day } = formattersFor(locale);
+  return from === to ? day.format(asDate(from)) : day.formatRange(asDate(from), asDate(to));
 }
 
 /** Short x-axis label of a time series bucket. */
-export function formatBucketLabel(period: string, bucket: DashboardBucket): string {
-  return bucket === 'MONTH'
-    ? monthFormatter.format(asDate(period))
-    : shortDayFormatter.format(asDate(period));
+export function formatBucketLabel(
+  period: string,
+  bucket: DashboardBucket,
+  locale = 'en-US',
+): string {
+  const { month, shortDay } = formattersFor(locale);
+  return bucket === 'MONTH' ? month.format(asDate(period)) : shortDay.format(asDate(period));
 }

@@ -7,35 +7,34 @@ import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { percentOf } from '@/lib/chart-math';
 import { cn } from '@/lib/cn';
-import { formatCount, inventoryStatusPath } from '@/lib/dashboard-params';
-import { STOCK_STATUS_LABELS } from '@/lib/inventory-params';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { insights } from '@/i18n/messages/insights';
+import { inventoryStatusPath } from '@/lib/dashboard-params';
 import { paths } from '@/routes/paths';
 
 const TILES: {
   status: StockStatus;
   count: (kpis: DashboardKpis) => number;
-  hint: string;
   tone: string;
   bar: string;
 }[] = [
   {
     status: 'IN_STOCK',
     count: (kpis) => kpis.inStockItems,
-    hint: 'Above the reorder level',
     tone: 'border-border',
     bar: 'bg-success',
   },
   {
     status: 'LOW_STOCK',
     count: (kpis) => kpis.lowStockItems,
-    hint: 'At or below the reorder level',
     tone: 'border-warning-border bg-warning-soft',
     bar: 'bg-warning',
   },
   {
     status: 'OUT_OF_STOCK',
     count: (kpis) => kpis.outOfStockItems,
-    hint: 'None on hand',
     tone: 'border-danger-border bg-danger-soft',
     bar: 'bg-danger',
   },
@@ -54,37 +53,36 @@ export function InventoryOverview({
   kpis: DashboardKpis;
 }) {
   const total = kpis.inStockItems + kpis.lowStockItems + kpis.outOfStockItems;
+  const m = useMessages(insights).inventory;
+  const c = useMessages(common);
+  const f = useFormat();
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Inventory</CardTitle>
+        <CardTitle>{m.title}</CardTitle>
         <CardDescription>
-          {formatCount(kpis.inventoryUnits)} {kpis.inventoryUnits === 1 ? 'unit' : 'units'} on hand.
-          Stock items are counted per product and warehouse.
+          {m.description({ count: f.number(kpis.inventoryUnits), units: kpis.inventoryUnits })}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {total === 0 ? (
           <EmptyState
             icon={<Boxes className="size-5" aria-hidden="true" />}
-            title="No stock recorded yet."
-            description="Receive stock into a warehouse to see stock levels here."
+            title={m.empty}
+            description={m.emptyText}
             action={
               <Link
                 to={paths.inventory(organizationId)}
                 className={buttonVariants({ variant: 'secondary', size: 'sm' })}
               >
-                Go to inventory
+                {m.goToInventory}
               </Link>
             }
           />
         ) : (
           <>
-            <ul
-              className="grid grid-cols-1 gap-3 sm:grid-cols-3"
-              aria-label="Stock items by status"
-            >
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label={m.byStatus}>
               {TILES.map((tile) => {
                 const count = tile.count(kpis);
                 const needsAction = tile.status !== 'IN_STOCK' && count > 0;
@@ -98,14 +96,14 @@ export function InventoryOverview({
                       )}
                     >
                       <span className="text-sm font-medium text-foreground">
-                        {STOCK_STATUS_LABELS[tile.status]}
+                        {c.stockStatus[tile.status]}
                       </span>
                       <span className="text-2xl leading-8 font-semibold text-foreground tabular-nums">
-                        {formatCount(count)}
+                        {f.number(count)}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {tile.hint}
-                        <span className="sr-only">. View in inventory</span>
+                        {m.hints[tile.status]}
+                        <span className="sr-only">{m.viewInInventory}</span>
                       </span>
                     </Link>
                   </li>
@@ -141,22 +139,24 @@ export function WarehouseOverview({
 }) {
   const active = warehouses.filter((warehouse) => warehouse.isActive);
   const archived = warehouses.length - active.length;
+  const m = useMessages(insights).warehouses;
+  const f = useFormat();
 
   return (
     <Card>
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1.5">
-          <CardTitle>Warehouses</CardTitle>
+          <CardTitle>{m.title}</CardTitle>
           <CardDescription>
-            Stock per active warehouse
-            {archived > 0 && ` (${formatCount(archived)} archived not shown)`}.
+            {m.description}
+            {archived > 0 && m.archivedHidden({ count: f.number(archived) })}.
           </CardDescription>
         </div>
         <Link
           to={paths.warehouses(organizationId)}
           className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'self-start')}
         >
-          All warehouses
+          {m.all}
           <ArrowRight aria-hidden="true" />
         </Link>
       </CardHeader>
@@ -164,15 +164,15 @@ export function WarehouseOverview({
         {active.length === 0 ? (
           <EmptyState
             icon={<Warehouse className="size-5" aria-hidden="true" />}
-            title="No active warehouses."
-            description="Add a warehouse to start tracking stock."
+            title={m.empty}
+            description={m.emptyText}
             action={
               <Can permission="WAREHOUSES_CREATE">
                 <Link
                   to={paths.warehouses(organizationId)}
                   className={buttonVariants({ variant: 'secondary', size: 'sm' })}
                 >
-                  Add warehouse
+                  {m.add}
                 </Link>
               </Can>
             }
@@ -180,20 +180,20 @@ export function WarehouseOverview({
         ) : (
           <div className="-mx-6 overflow-x-auto px-6">
             <table className="w-full min-w-[22rem] text-sm">
-              <caption className="sr-only">Stock per active warehouse</caption>
+              <caption className="sr-only">{m.caption}</caption>
               <thead className="text-left text-xs text-muted-foreground">
                 <tr className="border-b border-border">
                   <th scope="col" className="py-2 pr-3 font-medium">
-                    Warehouse
+                    {m.warehouse}
                   </th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">
-                    Units
+                    {m.units}
                   </th>
                   <th scope="col" className="px-3 py-2 text-right font-medium">
-                    Low
+                    {m.low}
                   </th>
                   <th scope="col" className="py-2 pl-3 text-right font-medium">
-                    Out
+                    {m.out}
                   </th>
                 </tr>
               </thead>
@@ -212,7 +212,7 @@ export function WarehouseOverview({
                       </span>
                     </th>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {formatCount(warehouse.totalUnits)}
+                      {f.number(warehouse.totalUnits)}
                     </td>
                     <td
                       className={cn(
@@ -220,7 +220,7 @@ export function WarehouseOverview({
                         warehouse.lowStockItems > 0 && 'font-semibold text-foreground',
                       )}
                     >
-                      {formatCount(warehouse.lowStockItems)}
+                      {f.number(warehouse.lowStockItems)}
                     </td>
                     <td
                       className={cn(
@@ -228,7 +228,7 @@ export function WarehouseOverview({
                         warehouse.outOfStockItems > 0 && 'font-semibold text-foreground',
                       )}
                     >
-                      {formatCount(warehouse.outOfStockItems)}
+                      {f.number(warehouse.outOfStockItems)}
                     </td>
                   </tr>
                 ))}

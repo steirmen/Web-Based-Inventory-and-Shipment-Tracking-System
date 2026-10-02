@@ -35,8 +35,9 @@ src/
   customers/         Customers (archive/restore); see customers-orders.md
   orders/            Sales orders, lifecycle, fulfillment through StockOperationsService; see customers-orders.md
   dashboard/         Read-only dashboard aggregates (date ranges, KPIs, time series); see dashboard-reporting.md
-  reports/           Sales, orders, inventory reports and CSV export (csv.ts); see dashboard-reporting.md
+  reports/           Sales, orders, inventory reports; CSV (csv.ts) and Excel (export/: xlsx.ts, zip.ts) exports; see export.md
   appearance/        User-level appearance settings and profiles (/me/appearance); see personalization-appearance.md
+  preferences/       User-level interface language (PATCH /me/preferences); see localization.md
   activity/          recordActivity(): audit entries written inside the caller's transaction
   health/            GET /health (public)
   generated/prisma/  Prisma client output (git-ignored, created by `prisma generate`)
@@ -55,7 +56,8 @@ test/database/       Database integration tests against the test database
 - **Authentication**: a global `SessionAuthGuard` requires a valid session cookie on every route not marked `@Public()`. See [authentication.md](authentication.md).
 - **Organizations & RBAC**: routes under `/organizations/:organizationId` are guarded by `OrganizationAccessGuard`, which verifies membership (404 for non-members) and the handler's `@RequirePermissions` (403). See [organizations-rbac.md](organizations-rbac.md).
 - **Database**: `PrismaService` extends the generated `PrismaClient` using the `@prisma/adapter-pg` driver adapter (Prisma 7). It connects lazily, so the API still starts when PostgreSQL is down. The schema, tenancy model, and constraints are described in [database-design.md](database-design.md).
-- **Read models / aggregates**: the dashboard (`src/dashboard`) and the reports (`src/reports`) answer with a few grouped or paginated SQL queries in one REPEATABLE READ snapshot instead of loading rows into memory; business rules they share (realized order statuses in `sales-semantics.ts`, date ranges in `dashboard-period.ts` on top of `common/time/local-days.ts`, stock status SQL in `inventory-mappers.ts`) are imported, never re-implemented. CSV is written by `src/reports/csv.ts` only. See [dashboard-reporting.md](dashboard-reporting.md).
+- **Read models / aggregates**: the dashboard (`src/dashboard`) and the reports (`src/reports`) answer with a few grouped or paginated SQL queries in one REPEATABLE READ snapshot instead of loading rows into memory; business rules they share (realized order statuses in `sales-semantics.ts`, date ranges in `dashboard-period.ts` on top of `common/time/local-days.ts`, stock status SQL in `inventory-mappers.ts`) are imported, never re-implemented. Exports build one typed `ExportTable` per report, written as CSV by `src/reports/csv.ts` or as `.xlsx` by `src/reports/export/xlsx.ts` (no dependency, server-side only). See [dashboard-reporting.md](dashboard-reporting.md) and [export.md](export.md).
+- **Money and currency**: decimal strings end to end; every product, order line, and order carries an ISO currency code (`TRY`/`EUR`/`USD`); one currency per order, enforced by the API and by triggers; no FX conversion. See [currency.md](currency.md).
 - **Feature modules**: one folder per domain (`src/<domain>/`) containing its module, controller, service, DTOs, and tests.
 
 ### `GET /health`
@@ -78,7 +80,8 @@ Always responds `200` while the process is alive:
 ```text
 src/
   main.tsx           Entry: global CSS, font, <App />
-  app/               App root, providers (QueryClient, AppearanceProvider), QueryClient configuration
+  app/               App root, providers (QueryClient, I18nProvider, AppearanceProvider), QueryClient configuration
+  i18n/              Typed EN/TR dictionary (define.ts, messages/*.ts), useMessages/useLanguage, useFormat (Intl); see localization.md
   api/               HTTP client + one module per backend resource (endpoint functions, query keys)
   hooks/             TanStack Query hooks wrapping api/ functions
   components/ui/     Design-system primitives (Button, Input, Card, Table, Dialog, Menu, ...)
@@ -126,7 +129,7 @@ Components never call `fetch`. The API base URL comes only from `VITE_API_BASE_U
 | `/org/:organizationId/inventory`                                | member                | Stock per product and warehouse, stock operations                          |
 | `/org/:organizationId/warehouses`, `…/warehouses/:warehouseId`  | member                | Warehouses (see warehouses-inventory.md)                                   |
 | `/org/:organizationId/stock-movements`                          | member                | Read-only stock movement history                                           |
-| `/org/:organizationId/reports/sales`, `…/orders`, `…/inventory` | member                | Reports with filters and CSV export (`…/reports` opens Sales)              |
+| `/org/:organizationId/reports/sales`, `…/orders`, `…/inventory` | member                | Reports with filters, Excel and CSV export (`…/reports` opens Sales)       |
 | `/org/:organizationId/team`                                     | member                | Team, invitations, roles, ownership                                        |
 | `/org/:organizationId/settings`                                 | member                | Workspace settings                                                         |
 | `/settings/appearance`                                          | authenticated         | Personal appearance (user-level, see personalization-appearance.md)        |
@@ -134,6 +137,10 @@ Components never call `fetch`. The API base URL comes only from `VITE_API_BASE_U
 | `/invite/:token`                                                | public                | View and accept an invitation                                              |
 | `/health-check`                                                 | public                | Technical frontend → API → database check                                  |
 | `*`                                                             | public                | 404                                                                        |
+
+### Language
+
+The interface language (English by default, or Turkish) is owned by one `I18nProvider` (inside `QueryClientProvider`, around `AppearanceProvider`). A signed-in user's saved language (`GET /auth/me` → `language`) wins; otherwise the device's last choice (`localStorage` `app:language`) applies. Components read typed messages with `useMessages(bundle)` and format numbers, dates, and money with `useFormat()`; page texts ship with their lazy chunks. Switching never reloads or remounts. Language and appearance are independent. See [localization.md](localization.md).
 
 ### Appearance
 

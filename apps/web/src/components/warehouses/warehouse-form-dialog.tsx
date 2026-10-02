@@ -7,7 +7,10 @@ import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateWarehouse, useUpdateWarehouse } from '@/hooks/use-inventory';
-import { apiErrorMessage, hasErrorCode } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { stock } from '@/i18n/messages/stock';
+import { common } from '@/i18n/messages/common';
+import { hasErrorCode, useApiErrorMessage } from '@/lib/api-errors';
 import { type FieldErrors, hasErrors, serverFieldErrors } from '@/lib/auth-form';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import {
@@ -36,15 +39,14 @@ export function WarehouseFormDialog({
   onClose: () => void;
   onSaved: (message: string, warehouse: Warehouse) => void;
 }) {
+  const m = useMessages(stock).warehouseForm;
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title={warehouse ? 'Edit warehouse' : 'New warehouse'}
+      title={warehouse ? m.editTitle : m.newTitle}
       size="md"
-      description={
-        warehouse ? undefined : 'A place where you keep stock, such as a store room or depot.'
-      }
+      description={warehouse ? undefined : m.newDescription}
     >
       {open && (
         <WarehouseForm
@@ -68,6 +70,9 @@ function WarehouseForm({
   onSaved: (message: string, warehouse: Warehouse) => void;
 }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(stock).warehouseForm;
+  const c = useMessages(common);
+  const errorMessage = useApiErrorMessage();
   const create = useCreateWarehouse(organization.id);
   const update = useUpdateWarehouse(organization.id);
   const pending = create.isPending || update.isPending;
@@ -86,10 +91,10 @@ function WarehouseForm({
 
   const onError = (error: unknown) => {
     if (hasErrorCode(error, 'WAREHOUSE_CODE_TAKEN')) {
-      setErrors({ code: apiErrorMessage(error) });
+      setErrors({ code: errorMessage(error) });
       return;
     }
-    const fields = serverFieldErrors(error, WAREHOUSE_FIELDS);
+    const fields = serverFieldErrors(error, WAREHOUSE_FIELDS, c.errors);
     setErrors(fields);
     setFormError(hasErrors(fields) ? null : error);
   };
@@ -97,7 +102,7 @@ function WarehouseForm({
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending) return;
-    const validation = validateWarehouse(values, { isNew: !warehouse });
+    const validation = validateWarehouse(values, { isNew: !warehouse }, m);
     setErrors(validation);
     setFormError(null);
     if (hasErrors(validation)) return;
@@ -105,16 +110,16 @@ function WarehouseForm({
     if (warehouse) {
       const body = toUpdateWarehouseRequest(warehouse, values);
       if (Object.keys(body).length === 0) {
-        onSaved('No changes to save.', warehouse);
+        onSaved(m.noChanges, warehouse);
         return;
       }
       update.mutate(
         { warehouseId: warehouse.id, body },
-        { onSuccess: (data) => onSaved('Warehouse saved.', data.warehouse), onError },
+        { onSuccess: (data) => onSaved(m.saved, data.warehouse), onError },
       );
     } else {
       create.mutate(toCreateWarehouseRequest(values), {
-        onSuccess: (data) => onSaved(`${data.warehouse.name} created.`, data.warehouse),
+        onSuccess: (data) => onSaved(m.created({ name: data.warehouse.name }), data.warehouse),
         onError,
       });
     }
@@ -122,8 +127,8 @@ function WarehouseForm({
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-4">
-      {formError !== null && <Alert tone="danger">{apiErrorMessage(formError)}</Alert>}
-      <FormField label="Name" error={errors.name}>
+      {formError !== null && <Alert tone="danger">{errorMessage(formError)}</Alert>}
+      <FormField label={m.name} error={errors.name}>
         {(control) => (
           <Input
             {...control}
@@ -136,15 +141,7 @@ function WarehouseForm({
           />
         )}
       </FormField>
-      <FormField
-        label="Code"
-        error={errors.code}
-        hint={
-          warehouse
-            ? "The code can't be changed after the warehouse is created."
-            : 'Short and unique, e.g. MAIN or EAST-1. It can’t be changed later.'
-        }
-      >
+      <FormField label={m.code} error={errors.code} hint={warehouse ? m.codeFixed : m.codeHint}>
         {(control) => (
           <Input
             {...control}
@@ -160,7 +157,7 @@ function WarehouseForm({
           />
         )}
       </FormField>
-      <FormField label="Address" error={errors.address} hint="Optional.">
+      <FormField label={m.address} error={errors.address} hint={m.optional}>
         {(control) => (
           <Textarea
             {...control}
@@ -174,10 +171,10 @@ function WarehouseForm({
       </FormField>
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button variant="secondary" onClick={onCancel} disabled={pending}>
-          Cancel
+          {m.cancel}
         </Button>
         <Button type="submit" isLoading={pending}>
-          {warehouse ? 'Save changes' : 'Create warehouse'}
+          {warehouse ? m.save : m.create}
         </Button>
       </div>
     </form>

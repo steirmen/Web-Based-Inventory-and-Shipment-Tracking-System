@@ -3,7 +3,9 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
-import { apiErrorMessage } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { cn } from '@/lib/cn';
 
 /** Loading placeholder for a page or section. */
@@ -72,7 +74,7 @@ export function DetailSkeleton({ label }: { label: string }) {
 
 /** Failed request with a safe message and an optional retry. */
 export function ErrorState({
-  title = 'Something went wrong',
+  title,
   error,
   onRetry,
   className,
@@ -82,14 +84,16 @@ export function ErrorState({
   onRetry?: () => void;
   className?: string;
 }) {
+  const m = useMessages(common);
+  const errorMessage = useApiErrorMessage();
   return (
     <div className={cn('flex flex-col items-start gap-3', className)}>
-      <Alert tone="danger" title={title} className="w-full">
-        {apiErrorMessage(error)}
+      <Alert tone="danger" title={title ?? m.states.somethingWentWrong} className="w-full">
+        {errorMessage(error)}
       </Alert>
       {onRetry && (
         <Button variant="secondary" size="sm" onClick={onRetry}>
-          Try again
+          {m.actions.tryAgain}
         </Button>
       )}
     </div>

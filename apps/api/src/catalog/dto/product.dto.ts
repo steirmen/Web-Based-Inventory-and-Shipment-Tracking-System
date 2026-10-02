@@ -1,6 +1,8 @@
 import {
   CATALOG_LIMITS,
   type CreateProductRequest,
+  CURRENCIES,
+  type Currency,
   MONEY_PATTERN,
   PRODUCT_SORT_FIELDS,
   PRODUCT_STATUSES,
@@ -72,6 +74,11 @@ const rules = {
     IsString({ message: MONEY_MESSAGE('Cost') }),
     Matches(MONEY_PATTERN, { message: MONEY_MESSAGE('Cost') }),
   ],
+  /** ISO code only (never a symbol, null, or arbitrary text); validated whenever sent. */
+  currency: [
+    ValidateIf((dto: Record<string, unknown>) => dto.currency !== undefined),
+    IsIn(CURRENCIES, { message: `currency must be one of: ${CURRENCIES.join(', ')}.` }),
+  ],
   minimumStock: [
     IsInt({ message: 'Minimum stock must be a whole number.' }),
     Min(0, { message: 'Minimum stock cannot be negative.' }),
@@ -95,6 +102,8 @@ export class CreateProductDto implements CreateProductRequest {
   @apply(rules.categoryId) categoryId?: string | null;
   @apply(rules.price) price: string;
   @apply(rules.cost) cost: string;
+  /** Default DEFAULT_CURRENCY. */
+  @apply(rules.currency) currency?: Currency;
   @apply(rules.minimumStock) minimumStock: number;
 }
 
@@ -106,6 +115,7 @@ export class UpdateProductDto implements UpdateProductRequest {
   @apply(rules.categoryId) categoryId?: string | null;
   @whenPresent('price') @apply(rules.price) price?: string;
   @whenPresent('cost') @apply(rules.cost) cost?: string;
+  @apply(rules.currency) currency?: Currency;
   @whenPresent('minimumStock') @apply(rules.minimumStock) minimumStock?: number;
 
   /** Accepted only so the service can answer with PRODUCT_STATUS_INVALID. */

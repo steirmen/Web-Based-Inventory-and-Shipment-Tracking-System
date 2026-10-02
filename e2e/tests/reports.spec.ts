@@ -18,11 +18,15 @@ const total = (page: Page, label: string) =>
 
 const day = (date: string) => `range=CUSTOM&from=${date}&to=${date}`;
 
-/** Downloads the current report's CSV through the Export button, as a user would. */
+/** An amount as the interface shows it (the seeded workspace sells in Turkish lira). */
+const lira = (amount: string) => `₺${amount}`;
+
+/** Downloads the current report's CSV through the Export menu, as a user would. */
 async function exportCsv(page: Page, path: string) {
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Export CSV' }).click(),
+    page.getByRole('menuitem', { name: 'CSV (.csv)' }).click(),
   ]);
   await download.saveAs(path);
   return { name: download.suggestedFilename(), bytes: readFileSync(path) };
@@ -58,7 +62,7 @@ for (const [timeZone, expected] of Object.entries(MATRIX)) {
         await page.goto(orgPath(data.acme, `?${day(date)}`));
         await expect(page.getByText(`(${timeZone})`)).toBeVisible();
         await expect(kpi(page, 'Orders')).toHaveText(String(orders));
-        await expect(kpi(page, 'Total sales')).toHaveText(revenue);
+        await expect(kpi(page, 'Total sales')).toHaveText(lira(revenue));
 
         await page.goto(orgPath(data.acme, `/orders?from=${date}&to=${date}`));
         await expect(page.getByText(`Days in ${timeZone}.`)).toBeVisible();
@@ -69,7 +73,7 @@ for (const [timeZone, expected] of Object.entries(MATRIX)) {
           // No realized order that day: the report says so instead of showing zeros.
           await expect(page.getByText('No sales in this period.')).toBeVisible();
         } else {
-          await expect(total(page, 'Revenue')).toHaveText(revenue);
+          await expect(total(page, 'Revenue')).toHaveText(lira(revenue));
         }
         await page.goto(orgPath(data.acme, `/reports/orders?${day(date)}`));
         await expect(total(page, 'Orders')).toHaveText(String(orders));
@@ -99,16 +103,16 @@ test.describe('reports', () => {
     const march = 'range=CUSTOM&from=2026-03-01&to=2026-03-31';
 
     await page.goto(orgPath(data.acme, `/reports/sales?${march}`));
-    await expect(total(page, 'Revenue')).toHaveText('60.40'); // 3.00 + 4.50 + 49.90 + 3.00
+    await expect(total(page, 'Revenue')).toHaveText(lira('60.40')); // 3.00 + 4.50 + 49.90 + 3.00
     await page.getByRole('searchbox', { name: 'Search' }).fill('Riverside');
-    await expect(total(page, 'Revenue')).toHaveText('52.90');
+    await expect(total(page, 'Revenue')).toHaveText(lira('52.90'));
     await expect(page).toHaveURL(/search=Riverside/);
 
     await page.goto(orgPath(data.acme, `/reports/sales?${march}&productId=${data.products.lamp}`));
-    await expect(total(page, 'Revenue')).toHaveText('49.90');
+    await expect(total(page, 'Revenue')).toHaveText(lira('49.90'));
     await page.goto(orgPath(data.acme, `/reports/sales?${march}`));
     await page.getByLabel('Category').selectOption({ label: 'Packaging' });
-    await expect(total(page, 'Revenue')).toHaveText('3.00'); // the =HYPERLINK… product
+    await expect(total(page, 'Revenue')).toHaveText(lira('3.00')); // the =HYPERLINK… product
 
     // Customer filter: the shared customer search.
     await page.goto(orgPath(data.acme, `/reports/sales?${march}`));
@@ -117,7 +121,7 @@ test.describe('reports', () => {
       .getByRole('list', { name: 'Matching customers' })
       .getByRole('button', { name: /Northwind Cafe/ })
       .click();
-    await expect(total(page, 'Revenue')).toHaveText('4.50');
+    await expect(total(page, 'Revenue')).toHaveText(lira('4.50'));
 
     await page.goto(orgPath(data.acme, `/reports/orders?${march}`));
     await expect(total(page, 'Orders')).toHaveText('5');
@@ -163,14 +167,14 @@ test.describe('reports', () => {
     );
     const csv = await exportCsv(page, testInfo.outputPath('sales.csv'));
 
-    expect(csv.name).toBe('sales-report_2026-03-01_2026-03-31.csv');
+    expect(csv.name).toBe('sales-report_2026-03-01_2026-03-31_TRY.csv');
     expect([...csv.bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]); // UTF-8 BOM
     const text = csv.bytes.toString('utf8').replace(/^﻿/, '');
     expect(text.endsWith('\r\n')).toBe(true);
     expect(text.replace(/\r\n/g, '')).not.toContain('\n'); // CRLF only
     const lines = text.split('\r\n').filter(Boolean);
     expect(lines[0]).toBe(
-      'Date (UTC),Order number,Status,Customer,Company,Warehouse code,Warehouse,Units,Revenue',
+      'Date (UTC),Order number,Status,Customer,Company,Warehouse code,Warehouse,Units,Revenue,Currency',
     );
     expect(lines).toHaveLength(5); // header + 4 realized orders
     expect(text).toContain(',49.90');
@@ -183,7 +187,7 @@ test.describe('reports', () => {
 
     // The export follows the active filters.
     await page.getByRole('searchbox', { name: 'Search' }).fill('Riverside');
-    await expect(total(page, 'Revenue')).toHaveText('52.90');
+    await expect(total(page, 'Revenue')).toHaveText(lira('52.90'));
     const filtered = await exportCsv(page, testInfo.outputPath('sales-filtered.csv'));
     const rows = filtered.bytes.toString('utf8').split('\r\n').filter(Boolean).slice(1);
     expect(rows).toHaveLength(2);

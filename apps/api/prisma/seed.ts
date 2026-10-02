@@ -5,8 +5,9 @@
  * - Deterministic: fixed names, SKUs, codes, quantities, prices, and timestamps.
  * - Idempotent: skips if the demo organization already exists (but still gives
  *   demo users without a password the development password, and adds missing
- *   demo team members, catalog additions, and warehouse/inventory additions — see
- *   below). Every run ends by verifying that stock matches the movement history.
+ *   demo team members, catalog additions, warehouse/inventory additions, and the
+ *   EUR/USD currency additions — see below). Every run ends by verifying that
+ *   stock matches the movement history and that every order is in one currency.
  * - Atomic: runs in a single transaction.
  * - Development only: refuses to run with NODE_ENV=production. All people,
  *   emails (reserved `.example` domain), and phone numbers (555-01xx) are fictional.
@@ -15,6 +16,7 @@
  * only its Argon2id hash is stored, and it must never be used outside local development.
  */
 import { randomUUID } from 'node:crypto';
+import { DEFAULT_CURRENCY } from '@app/shared';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config as loadEnv } from 'dotenv';
 import { buildDatabaseUrl, databaseOptionsFromEnv } from '../src/config/database-url.js';
@@ -403,6 +405,8 @@ async function seed(tx: Tx, passwordHash: string): Promise<Record<string, number
         status: input.status,
         subtotal: money(subtotalCents),
         total: money(subtotalCents),
+        // The demo catalog is priced in TRY (the default currency), so every order is too.
+        currency: DEFAULT_CURRENCY,
         createdAt: input.createdAt,
         items: {
           // organizationId and orderId are inherited from the parent order (composite key).
@@ -411,6 +415,7 @@ async function seed(tx: Tx, passwordHash: string): Promise<Record<string, number
             productNameSnapshot: product.name,
             skuSnapshot: product.sku,
             unitPrice: money(product.priceCents),
+            currency: DEFAULT_CURRENCY,
             quantity,
             lineTotal: money(lineTotalCents),
             createdAt: input.createdAt,
@@ -1054,7 +1059,7 @@ async function ensureSalesAdditions(tx: Tx): Promise<string[]> {
   } as const;
   const products = await tx.product.findMany({
     where: { organizationId, sku: { in: Object.values(skus) }, status: 'ACTIVE' },
-    select: { id: true, name: true, sku: true, price: true },
+    select: { id: true, name: true, sku: true, price: true, currency: true },
   });
   const warehouses = await tx.warehouse.findMany({
     where: { organizationId, code: { in: ['MAIN', 'EAST', 'NORTH'] }, isActive: true },
@@ -1202,6 +1207,7 @@ async function ensureSalesAdditions(tx: Tx): Promise<string[]> {
         notes: plan.notes ?? null,
         subtotal: total,
         total,
+        currency: lines[0]!.item.currency,
         createdAt: at(createdDay, createdHour),
         updatedAt: at(lastStep[0], lastStep[1]),
         items: {
@@ -1210,6 +1216,7 @@ async function ensureSalesAdditions(tx: Tx): Promise<string[]> {
             productNameSnapshot: item.name,
             skuSnapshot: item.sku,
             unitPrice: item.price,
+            currency: item.currency,
             quantity,
             lineTotal,
             createdAt: at(createdDay, createdHour),
@@ -1304,8 +1311,156 @@ async function ensureSalesAdditions(tx: Tx): Promise<string[]> {
 }
 
 /**
+ * Currency additions (Phase 10.1). The original demo catalog and its orders are
+ * in TRY (the migration default); this adds one product priced in EUR, one in
+ * USD, and one EUR draft order, so the currency selector, the product list, and
+ * the order rules have something to show. Matched by SKU, so re-running never
+ * duplicates them, and existing products, prices, and orders are never changed.
+ * No stock is moved (a draft order has no stock effect).
+ */
+const CURRENCY_ADDITIONS = {
+  products: [
+    {
+      sku: 'ACC-CHAIR-ERG',
+      name: 'Ergonomic Office Chair',
+      category: 'Accessories',
+      currency: 'EUR',
+      price: '249.00',
+      cost: '158.00',
+      minimumStock: 2,
+    },
+    {
+      sku: 'ELE-HEADSET-NC',
+      name: 'Noise-Cancelling Headset',
+      category: 'Electronics',
+      currency: 'USD',
+      price: '129.00',
+      cost: '74.00',
+      minimumStock: 5,
+    },
+  ],
+  order: { sku: 'ACC-CHAIR-ERG', quantity: 2, warehouse: 'MAIN' },
+} as const;
+
+async function ensureCurrencyAdditions(tx: Tx): Promise<string[]> {
+  const organization = await tx.organization.findUniqueOrThrow({
+    where: { slug: SEED_ORGANIZATION_SLUG },
+    select: { id: true },
+  });
+  const organizationId = organization.id;
+  const existing = await tx.product.count({
+    where: { organizationId, sku: { in: CURRENCY_ADDITIONS.products.map((item) => item.sku) } },
+  });
+  if (existing > 0) return [];
+
+  const owner = await tx.user.findUnique({
+    where: { email: 'owner@demo-trading.example' },
+    select: { id: true },
+  });
+  const staff = await tx.user.findUnique({
+    where: { email: 'staff@demo-trading.example' },
+    select: { id: true },
+  });
+  const created = new Map<string, { id: string; name: string; sku: string }>();
+  for (const [index, item] of CURRENCY_ADDITIONS.products.entries()) {
+    const category = await tx.category.findFirst({
+      where: { organizationId, name: { equals: item.category, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    const product = await tx.product.create({
+      data: {
+        organizationId,
+        categoryId: category?.id ?? null,
+        sku: item.sku,
+        name: item.name,
+        price: item.price,
+        cost: item.cost,
+        currency: item.currency,
+        minimumStock: item.minimumStock,
+        createdAt: at(25, index + 1),
+      },
+      select: { id: true, name: true, sku: true },
+    });
+    created.set(item.sku, product);
+    await tx.activityLog.create({
+      data: {
+        organizationId,
+        actorUserId: owner?.id ?? null,
+        action: 'PRODUCT_CREATED',
+        entityType: 'Product',
+        entityId: product.id,
+        metadata: { name: item.name, sku: item.sku, currency: item.currency },
+        createdAt: at(25, index + 1),
+      },
+    });
+  }
+
+  const changes = ['created an EUR and a USD product'];
+  const customer = await tx.customer.findFirst({
+    where: { organizationId, email: SALES_MARKER_EMAIL, isActive: true },
+    select: { id: true },
+  });
+  const warehouse = await tx.warehouse.findUnique({
+    where: {
+      organizationId_code: { organizationId, code: CURRENCY_ADDITIONS.order.warehouse },
+    },
+    select: { id: true, isActive: true },
+  });
+  if (!customer || !warehouse?.isActive) return changes;
+
+  const { sku, quantity } = CURRENCY_ADDITIONS.order;
+  const product = created.get(sku)!;
+  const item = CURRENCY_ADDITIONS.products.find((entry) => entry.sku === sku)!;
+  const total = new Prisma.Decimal(item.price).mul(quantity);
+  await syncOrderNumberSequence(tx, organizationId);
+  const orderNumber = await nextOrderNumber(tx, organizationId);
+  const order = await tx.order.create({
+    data: {
+      organizationId,
+      orderNumber,
+      customerId: customer.id,
+      warehouseId: warehouse.id,
+      notes: 'Quote for two chairs, priced in EUR.',
+      subtotal: total,
+      total,
+      currency: item.currency,
+      createdAt: at(25, 3),
+      items: {
+        create: [
+          {
+            productId: product.id,
+            productNameSnapshot: product.name,
+            skuSnapshot: product.sku,
+            unitPrice: item.price,
+            currency: item.currency,
+            quantity,
+            lineTotal: total,
+            createdAt: at(25, 3),
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+  await tx.activityLog.create({
+    data: {
+      organizationId,
+      actorUserId: staff?.id ?? owner?.id ?? null,
+      action: 'ORDER_CREATED',
+      entityType: 'Order',
+      entityId: order.id,
+      metadata: { orderNumber, itemCount: 1, total: total.toFixed(2), currency: item.currency },
+      createdAt: at(25, 3),
+    },
+  });
+  changes.push(`created EUR draft order ${orderNumber}`);
+  return changes;
+}
+
+/**
  * Order invariants for the demo organization: totals equal the sum of their
- * lines, and exactly the fulfilled orders (PROCESSING, SHIPPED, COMPLETED)
+ * lines, every line is in the order's currency (and only orders with lines
+ * have one), and exactly the fulfilled orders (PROCESSING, SHIPPED, COMPLETED)
  * have one SALE movement per line referencing them.
  */
 async function verifyOrders(prisma: PrismaClient): Promise<number> {
@@ -1317,14 +1472,18 @@ async function verifyOrders(prisma: PrismaClient): Promise<number> {
       status: true,
       subtotal: true,
       total: true,
-      items: { select: { lineTotal: true, unitPrice: true, quantity: true } },
+      currency: true,
+      items: { select: { lineTotal: true, unitPrice: true, quantity: true, currency: true } },
     },
   });
   for (const order of orders) {
     const sum = order.items.reduce((acc, item) => acc.add(item.lineTotal), new Prisma.Decimal(0));
-    const linesOk = order.items.every((item) =>
-      item.unitPrice.mul(item.quantity).equals(item.lineTotal),
+    const linesOk = order.items.every(
+      (item) =>
+        item.unitPrice.mul(item.quantity).equals(item.lineTotal) &&
+        item.currency === order.currency,
     );
+    const currencyOk = order.items.length > 0 === (order.currency !== null);
     const sales = await prisma.stockMovement.count({
       where: { referenceType: 'ORDER', referenceId: order.id, movementType: 'SALE' },
     });
@@ -1333,12 +1492,13 @@ async function verifyOrders(prisma: PrismaClient): Promise<number> {
       : 0;
     if (
       !linesOk ||
+      !currencyOk ||
       !sum.equals(order.subtotal) ||
       !order.total.equals(order.subtotal) ||
       sales !== expectedSales
     ) {
       throw new Error(
-        `Order ${order.orderNumber} is inconsistent with its lines or its SALE movements.`,
+        `Order ${order.orderNumber} is inconsistent with its lines, currency, or SALE movements.`,
       );
     }
   }
@@ -1440,10 +1600,19 @@ async function main(): Promise<void> {
         : 'Demo customers & orders are up to date.',
     );
 
+    const currencyChanges = await prisma.$transaction((tx) => ensureCurrencyAdditions(tx));
+    console.log(
+      currencyChanges.length > 0
+        ? `Demo currencies updated: ${currencyChanges.join('; ')}.`
+        : 'Demo currencies are up to date.',
+    );
+
     const verified = await verifyStockLedger(prisma);
     console.log(`Stock ledger verified: ${verified} stock records match their movement history.`);
     const orders = await verifyOrders(prisma);
-    console.log(`Orders verified: ${orders} orders match their lines and SALE movements.`);
+    console.log(
+      `Orders verified: ${orders} orders match their lines, currency, and SALE movements.`,
+    );
   } finally {
     await prisma.$disconnect();
   }

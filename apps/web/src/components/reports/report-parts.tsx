@@ -1,5 +1,14 @@
-import { REPORT_TYPES, type SortOrder } from '@app/shared';
-import { ArrowDown, ArrowUp, ArrowUpDown, Download, X } from 'lucide-react';
+import { type ExportFormat, REPORT_TYPES, type SortOrder } from '@app/shared';
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronDown,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  X,
+} from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink } from 'react-router';
 import { EmptyState, ErrorState, ListSkeleton } from '@/components/layout/page-state';
@@ -9,6 +18,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { CustomerPicker } from '@/components/customers/customer-picker';
 import { Card } from '@/components/ui/card';
+import { Menu, menuItemClass } from '@/components/ui/menu';
 import { type FieldControlProps, FormField } from '@/components/ui/form-field';
 import { SearchInput } from '@/components/ui/search-input';
 import { Spinner } from '@/components/ui/spinner';
@@ -21,10 +31,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useCustomer } from '@/hooks/use-sales';
-import { apiErrorMessage } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { insights } from '@/i18n/messages/insights';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import { cn } from '@/lib/cn';
-import { REPORT_TITLES, reportPath, type ReportSort } from '@/lib/report-params';
+import { reportPath, type ReportSort } from '@/lib/report-params';
 
 /** Sales / Orders / Inventory. Sales and orders links keep the current date range. */
 export function ReportTabs({
@@ -35,8 +47,9 @@ export function ReportTabs({
   /** `range=…&from=…&to=…` of the current page (kept when switching between dated reports). */
   periodSearch: string;
 }) {
+  const m = useMessages(insights).reports;
   return (
-    <nav aria-label="Reports" className="flex gap-1 overflow-x-auto">
+    <nav aria-label={m.tabs} className="flex gap-1 overflow-x-auto">
       {REPORT_TYPES.map((type) => (
         <NavLink
           key={type}
@@ -50,41 +63,85 @@ export function ReportTabs({
             )
           }
         >
-          {REPORT_TITLES[type]}
+          {m.titles[type]}
         </NavLink>
       ))}
     </nav>
   );
 }
 
-/** CSV export of the report as currently filtered and sorted (hidden without REPORTS_EXPORT; the API checks too). */
+/**
+ * Export of the report as currently filtered and sorted: an Excel workbook
+ * (opens as a table in every Excel locale) or a CSV file, with the labels in
+ * the interface language. Hidden without REPORTS_EXPORT (the API checks too).
+ */
 export function ExportButton({
   onExport,
   pending,
   error,
-  disabled,
+  disabled = false,
 }: {
-  onExport: () => void;
+  onExport: (format: ExportFormat) => void;
   pending: boolean;
   error: unknown;
   disabled?: boolean;
 }) {
+  const m = useMessages(insights).reports;
+  const errorMessage = useApiErrorMessage();
   return (
     <Can permission="REPORTS_EXPORT">
       <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-        <Button
-          variant="secondary"
-          onClick={onExport}
-          isLoading={pending}
-          disabled={disabled}
-          className="w-full sm:w-auto"
+        <Menu
+          label={m.exportMenu}
+          align="end"
+          className="w-56"
+          trigger={(props) => (
+            <Button
+              {...props}
+              variant="secondary"
+              isLoading={pending}
+              disabled={disabled || pending}
+              className="w-full sm:w-auto"
+            >
+              {!pending && <Download aria-hidden="true" />}
+              {m.export}
+              <ChevronDown aria-hidden="true" />
+            </Button>
+          )}
         >
-          {!pending && <Download aria-hidden="true" />}
-          Export CSV
-        </Button>
+          {(close) => (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                className={menuItemClass}
+                onClick={() => {
+                  close();
+                  onExport('xlsx');
+                }}
+              >
+                <FileSpreadsheet className="text-subtle-foreground" aria-hidden="true" />
+                {m.exportExcel}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className={menuItemClass}
+                onClick={() => {
+                  close();
+                  onExport('csv');
+                }}
+              >
+                <FileText className="text-subtle-foreground" aria-hidden="true" />
+                {m.exportCsv}
+              </button>
+              <p className="px-2.5 pt-1.5 pb-1 text-xs text-muted-foreground">{m.exportHint}</p>
+            </>
+          )}
+        </Menu>
         {error ? (
           <Alert tone="danger" className="sm:max-w-sm">
-            {apiErrorMessage(error)}
+            {errorMessage(error)}
           </Alert>
         ) : null}
       </div>
@@ -104,6 +161,7 @@ export function ReportSearch({
   placeholder: string;
   onSearch: (search: string) => void;
 }) {
+  const m = useMessages(insights).reports;
   const [input, setInput] = useState(value);
   // Follow outside changes (e.g. "Clear filters") without remounting (which would drop focus).
   const [lastValue, setLastValue] = useState(value);
@@ -119,7 +177,7 @@ export function ReportSearch({
   }, [input, value, onSearch]);
 
   return (
-    <FormField label="Search">
+    <FormField label={m.search}>
       {(control) => (
         <SearchInput
           {...control}
@@ -133,10 +191,11 @@ export function ReportSearch({
 }
 
 export function ClearFiltersButton({ onClear }: { onClear: () => void }) {
+  const m = useMessages(insights).reports;
   return (
     <Button variant="ghost" size="sm" onClick={onClear}>
       <X aria-hidden="true" />
-      Clear filters
+      {m.clearFilters}
     </Button>
   );
 }
@@ -282,11 +341,12 @@ export function ReportResults({
   totalPages: number;
   onPageChange: (page: number) => void;
 }) {
-  if (query.isPending) return <ListSkeleton label={`Loading the ${label}`} rows={8} />;
+  const m = useMessages(insights).reports;
+  if (query.isPending) return <ListSkeleton label={m.loading({ report: label })} rows={8} />;
   if (query.isError && totalItems === undefined) {
     return (
       <ErrorState
-        title={`We couldn't load the ${label}`}
+        title={m.loadError({ report: label })}
         error={query.error}
         onRetry={() => void query.refetch()}
       />
@@ -295,11 +355,11 @@ export function ReportResults({
   if (totalItems === 0) {
     return filtered ? (
       <EmptyState
-        title="Nothing matches these filters."
-        description="Try another search, or clear the filters."
+        title={m.noMatches}
+        description={m.noMatchesText}
         action={
           <Button variant="secondary" onClick={onClearFilters}>
-            Clear filters
+            {m.clearFilters}
           </Button>
         }
       />
@@ -311,13 +371,13 @@ export function ReportResults({
     <div className="flex flex-col gap-4">
       {query.isError && (
         <ErrorState
-          title={`We couldn't refresh the ${label}`}
+          title={m.refreshError({ report: label })}
           error={query.error}
           onRetry={() => void query.refetch()}
         />
       )}
       {query.isFetching && query.isPlaceholderData && (
-        <Spinner size="sm" label="Updating results" className="text-muted-foreground" />
+        <Spinner size="sm" label={m.updating} className="text-muted-foreground" />
       )}
       {children}
       <PaginationBar
@@ -347,6 +407,7 @@ export function ReportCustomerFilter({
   onChange: (customerId: string) => void;
 }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(insights).reports;
   const customer = useCustomer(organization.id, customerId);
   const found = customerId ? customer.data?.customer : undefined;
   const selected = found
@@ -354,7 +415,7 @@ export function ReportCustomerFilter({
     : customerId
       ? {
           id: customerId,
-          name: customer.isError ? 'Unknown customer' : '…',
+          name: customer.isError ? m.unknownCustomer : '…',
           companyName: null,
           isActive: true,
         }
@@ -366,7 +427,7 @@ export function ReportCustomerFilter({
       includeArchived
       selected={selected}
       onChange={(next) => onChange(next?.id ?? '')}
-      placeholder="All customers"
+      placeholder={m.allCustomers}
     />
   );
 }

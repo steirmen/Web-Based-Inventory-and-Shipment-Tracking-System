@@ -1,4 +1,4 @@
-import type { OrderStatus } from '@app/shared';
+import type { Currency, OrderStatus } from '@app/shared';
 import { HttpStatus } from '@nestjs/common';
 import { AppException } from '../common/errors/app-exception.js';
 
@@ -85,6 +85,14 @@ export const orderProductNotFound = () =>
     HttpStatus.UNPROCESSABLE_ENTITY,
     'ORDER_PRODUCT_NOT_FOUND',
     'A selected product does not exist in this workspace.',
+  );
+
+/** Orders never mix currencies: every line is in the currency of the order's first line. */
+export const orderCurrencyMismatch = (label: string, product: Currency, order: Currency) =>
+  new AppException(
+    HttpStatus.UNPROCESSABLE_ENTITY,
+    'ORDER_CURRENCY_MISMATCH',
+    `${label} is priced in ${product}, but this order is in ${order}. An order can't mix currencies.`,
   );
 
 export const orderProductInactive = (label: string) =>

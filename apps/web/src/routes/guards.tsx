@@ -3,6 +3,8 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/hooks/use-auth';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { paths } from './paths';
 
 interface RedirectState {
@@ -27,9 +29,10 @@ function safeRedirectTarget(from: unknown): string {
 }
 
 function SessionCheckPending() {
+  const m = useMessages(common);
   return (
     <div className="flex min-h-64 flex-1 items-center justify-center text-muted-foreground">
-      <Spinner size="lg" label="Checking your session" />
+      <Spinner size="lg" label={m.states.checkingSession} />
     </div>
   );
 }
@@ -41,6 +44,7 @@ function SessionCheckPending() {
 export function RequireAuth() {
   const auth = useAuth();
   const location = useLocation();
+  const m = useMessages(common);
 
   switch (auth.status) {
     case 'loading':
@@ -48,11 +52,11 @@ export function RequireAuth() {
     case 'error':
       return (
         <div className="mx-auto flex max-w-md flex-col gap-4 py-12">
-          <Alert tone="danger" title="We couldn't verify your session">
-            The server could not be reached. Check your connection and try again.
+          <Alert tone="danger" title={m.states.sessionErrorTitle}>
+            {m.states.sessionErrorText}
           </Alert>
           <Button variant="secondary" className="self-start" onClick={auth.retry}>
-            Try again
+            {m.actions.tryAgain}
           </Button>
         </div>
       );

@@ -15,8 +15,7 @@ import {
 } from '@/test/mock-api';
 import { renderApp } from '@/test/render-app';
 import { orderPage, testOrder, toListItem } from '@/test/sales-fixtures';
-import { formatCount } from '@/lib/dashboard-params';
-import { formatMoney } from '@/lib/money';
+import { count, money } from '@/test/format';
 
 const SUMMARY_API = `${ORG_API}/dashboard/summary`;
 const ORDERS_API = `${ORG_API}/orders`;
@@ -76,13 +75,13 @@ describe('DashboardPage', () => {
   it('shows the KPI values from the API, formatted', async () => {
     await openDashboard();
 
-    expect(within(kpiCard('Total sales')).getByText(formatMoney('200.50'))).toBeVisible();
+    expect(within(kpiCard('Total sales')).getByText(money('200.50'))).toBeVisible();
     expect(within(kpiCard('Orders')).getByText('4')).toBeVisible();
     expect(within(kpiCard('Customers')).getByText('17')).toBeVisible();
     expect(within(kpiCard('Customers')).getByText(/3 new in this period/)).toBeVisible();
     expect(within(kpiCard('Products')).getByText('23')).toBeVisible();
     expect(within(kpiCard('Products')).getByText(/4 archived/)).toBeVisible();
-    expect(within(kpiCard('Inventory units')).getByText(formatCount(4321))).toBeVisible();
+    expect(within(kpiCard('Inventory units')).getByText(count(4321))).toBeVisible();
     expect(within(kpiCard('Inventory units')).getByText('units')).toBeVisible();
     expect(within(kpiCard('Low stock')).getByText('7')).toBeVisible();
     expect(within(kpiCard('Low stock')).getByText('5 out of stock')).toBeVisible();
@@ -188,6 +187,30 @@ describe('DashboardPage', () => {
     // STAFF may create orders and products, but not warehouses.
     expect(screen.queryByRole('link', { name: 'Add warehouse' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Add product' })).toBeVisible();
+  });
+});
+
+describe('dashboard currency', () => {
+  it('shows one currency at a time and switches it through the URL', async () => {
+    const { user, fetchMock, router } = await openDashboard({
+      summary: (_init, url) => {
+        const currency = url.searchParams.get('currency') === 'EUR' ? 'EUR' : 'TRY';
+        return Response.json(dashboardSummary({ currency, currencies: ['TRY', 'EUR'] }));
+      },
+    });
+
+    expect(within(kpiCard('Total sales')).getByText(money('200.50', 'TRY'))).toBeVisible();
+    const currencies = screen.getByRole('radiogroup', { name: 'Currency' });
+    await user.click(within(currencies).getByRole('radio', { name: 'EUR €' }));
+
+    expect(await within(kpiCard('Total sales')).findByText(money('200.50', 'EUR'))).toBeVisible();
+    expect(router.state.location.search).toContain('currency=EUR');
+    expect(summaryRequests(fetchMock).at(-1)).toMatchObject({ currency: 'EUR' });
+  });
+
+  it('has no currency choice when the workspace sells in one currency', async () => {
+    await openDashboard();
+    expect(screen.queryByRole('radiogroup', { name: 'Currency' })).toBeNull();
   });
 });
 
@@ -313,7 +336,7 @@ describe('dashboard sections', () => {
 
     expect(slider).toHaveAttribute(
       'aria-valuetext',
-      expect.stringContaining(`Revenue ${formatMoney('150.00')}`),
+      expect.stringContaining(`Revenue ${money('150.00')}`),
     );
     expect(slider.getAttribute('aria-valuetext')).toMatch(/2 orders \(1 realized\)/);
   });
@@ -326,7 +349,7 @@ describe('dashboard sections', () => {
     const table = screen.getByRole('table', { name: 'Sales per day' });
     const rows = within(table).getAllByRole('row');
     expect(rows).toHaveLength(8);
-    expect(within(rows[2]!).getByText(formatMoney('150.00'))).toBeVisible();
+    expect(within(rows[2]!).getByText(money('150.00'))).toBeVisible();
     expect(screen.getByRole('button', { name: 'Hide data table' })).toHaveAttribute(
       'aria-expanded',
       'true',
@@ -368,7 +391,7 @@ describe('dashboard sections', () => {
       `${ORG_APP}/inventory?status=LOW_STOCK`,
     );
     // Units are counts, never formatted as money.
-    expect(screen.getByText(`${formatCount(4321)} units on hand.`, { exact: false })).toBeVisible();
+    expect(screen.getByText(`${count(4321)} units on hand.`, { exact: false })).toBeVisible();
   });
 
   it('shows active warehouses only, linking to their details', async () => {
@@ -394,7 +417,7 @@ describe('dashboard sections', () => {
     );
     expect(within(first!).getByText('PAP-A4')).toBeVisible();
     expect(within(first!).getByText('30')).toBeVisible();
-    expect(within(first!).getByText(formatMoney('207.00'))).toBeVisible();
+    expect(within(first!).getByText(money('207.00'))).toBeVisible();
     expect(within(second!).getByText('Archived')).toBeVisible();
   });
 
@@ -407,7 +430,7 @@ describe('dashboard sections', () => {
       `${ORG_APP}/orders/0198c0de-0000-7000-8000-0000000000d9`,
     );
     expect(within(table).getByText(/Alice Acme/)).toBeVisible();
-    expect(within(table).getByText(formatMoney('79.98'))).toBeVisible();
+    expect(within(table).getByText(money('79.98'))).toBeVisible();
     // Same days and time zone as the dashboard, no separate orders request.
     expect(screen.getByRole('link', { name: 'Orders in this period' })).toHaveAttribute(
       'href',

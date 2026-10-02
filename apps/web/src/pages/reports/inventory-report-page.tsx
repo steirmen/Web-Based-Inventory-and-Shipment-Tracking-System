@@ -23,9 +23,11 @@ import { Select } from '@/components/ui/select';
 import { useCategories } from '@/hooks/use-catalog';
 import { useWarehouses } from '@/hooks/use-inventory';
 import { useInventoryReport, useReportExport } from '@/hooks/use-reports';
+import { useFormat } from '@/i18n/format';
+import { useLanguage, useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { insights } from '@/i18n/messages/insights';
 import { pageTitle } from '@/lib/app-config';
-import { formatCount } from '@/lib/dashboard-params';
-import { STOCK_STATUS_LABELS } from '@/lib/inventory-params';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import {
   hasInventoryReportFilters,
@@ -76,10 +78,16 @@ export function InventoryReportPage() {
       includeArchived: false,
     });
 
+  const r = useMessages(insights);
+  const m = r.inventoryReport;
+  const c = useMessages(common);
+  const f = useFormat();
+  const language = useLanguage().language;
+
   const columns: ReportColumn<InventoryReportRow, InventoryReportSortField>[] = [
     {
       key: 'product',
-      header: 'Product',
+      header: m.product,
       sort: 'productName',
       className: 'max-w-64',
       cell: (row) => (
@@ -92,7 +100,7 @@ export function InventoryReportPage() {
           </Link>
           {row.product.status === 'ARCHIVED' && (
             <Badge tone="neutral" className="mt-1 self-start">
-              Archived
+              {m.archivedWarehouse}
             </Badge>
           )}
         </span>
@@ -100,19 +108,19 @@ export function InventoryReportPage() {
     },
     {
       key: 'sku',
-      header: 'SKU',
+      header: m.sku,
       sort: 'sku',
       cell: (row) => <span className="font-mono text-xs">{row.product.sku}</span>,
     },
     {
       key: 'category',
-      header: 'Category',
+      header: m.category,
       sort: 'category',
       cell: (row) => row.category?.name ?? <span className="text-muted-foreground">—</span>,
     },
     {
       key: 'warehouse',
-      header: 'Warehouse',
+      header: m.warehouse,
       sort: 'warehouse',
       cell: (row) => (
         <span className="flex flex-col">
@@ -124,43 +132,43 @@ export function InventoryReportPage() {
           </Link>
           <span className="font-mono text-xs text-muted-foreground">
             {row.warehouse.code}
-            {row.warehouse.isActive ? '' : ' · archived'}
+            {row.warehouse.isActive ? '' : ` · ${m.archivedWarehouse.toLowerCase()}`}
           </span>
         </span>
       ),
     },
     {
       key: 'quantity',
-      header: 'In stock',
+      header: m.inStock,
       sort: 'quantity',
       defaultOrder: 'desc',
       align: 'right',
       className: 'font-medium',
-      cell: (row) => formatCount(row.quantity),
+      cell: (row) => f.number(row.quantity),
     },
     {
       key: 'minimum',
-      header: 'Minimum',
+      header: m.minimum,
       sort: 'minimumStock',
       defaultOrder: 'desc',
       align: 'right',
-      cell: (row) => formatCount(row.minimumStock),
+      cell: (row) => f.number(row.minimumStock),
     },
-    { key: 'status', header: 'Status', cell: (row) => <StockStatusBadge status={row.status} /> },
+    { key: 'status', header: m.status, cell: (row) => <StockStatusBadge status={row.status} /> },
   ];
 
   const filtered = hasInventoryReportFilters(params);
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Inventory report · ${organization.name}`)}</title>
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
       <PageHeader
-        eyebrow="Reports"
-        title="Inventory report"
-        description="Current stock per product and warehouse, with its stock status. The movement history is under Stock movements."
+        eyebrow={r.reports.eyebrow}
+        title={m.title}
+        description={m.description}
         actions={
           <ExportButton
-            onExport={() => exporter.mutate(query)}
+            onExport={(format) => exporter.mutate({ query, format, lang: language })}
             pending={exporter.isPending}
             error={exporter.error}
             disabled={!data || data.pagination.totalItems === 0}
@@ -169,10 +177,14 @@ export function InventoryReportPage() {
       />
       <ReportTabs organizationId={organization.id} periodSearch="" />
 
-      <search className="flex flex-col gap-3" aria-label="Inventory report filters">
+      <search className="flex flex-col gap-3" aria-label={m.filters}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
-          <ReportSearch value={params.search} placeholder="Product or SKU…" onSearch={onSearch} />
-          <FormField label="Stock status">
+          <ReportSearch
+            value={params.search}
+            placeholder={m.searchPlaceholder}
+            onSearch={onSearch}
+          />
+          <FormField label={m.stockStatus}>
             {(control) => (
               <Select
                 {...control}
@@ -181,40 +193,40 @@ export function InventoryReportPage() {
                   setParams({ status: event.target.value as InventoryReportParams['status'] })
                 }
               >
-                <option value="">All statuses</option>
+                <option value="">{m.allStatuses}</option>
                 {STOCK_STATUSES.map((status) => (
                   <option key={status} value={status}>
-                    {STOCK_STATUS_LABELS[status]}
+                    {c.stockStatus[status]}
                   </option>
                 ))}
               </Select>
             )}
           </FormField>
-          <FormField label="Warehouse">
+          <FormField label={r.reports.warehouse}>
             {(control) => (
               <Select
                 {...control}
                 value={params.warehouseId}
                 onChange={(event) => setParams({ warehouseId: event.target.value })}
               >
-                <option value="">All warehouses</option>
+                <option value="">{r.reports.allWarehouses}</option>
                 {warehouses.data?.warehouses.map((warehouse) => (
                   <option key={warehouse.id} value={warehouse.id}>
                     {warehouse.name}
-                    {warehouse.isActive ? '' : ' (archived)'}
+                    {warehouse.isActive ? '' : r.reports.archivedSuffix}
                   </option>
                 ))}
               </Select>
             )}
           </FormField>
-          <FormField label="Category">
+          <FormField label={r.reports.category}>
             {(control) => (
               <Select
                 {...control}
                 value={params.categoryId}
                 onChange={(event) => setParams({ categoryId: event.target.value })}
               >
-                <option value="">All categories</option>
+                <option value="">{r.reports.allCategories}</option>
                 {categories.data?.categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -228,11 +240,11 @@ export function InventoryReportPage() {
           {data && data.pagination.totalItems > 0 ? (
             <ReportSummary
               items={[
-                { label: 'Stock items', value: formatCount(data.totals.rows) },
-                { label: 'Units', value: formatCount(data.totals.units) },
-                { label: 'In stock', value: formatCount(data.totals.inStock) },
-                { label: 'Low stock', value: formatCount(data.totals.lowStock) },
-                { label: 'Out of stock', value: formatCount(data.totals.outOfStock) },
+                { label: m.stockItems, value: f.number(data.totals.rows) },
+                { label: m.units, value: f.number(data.totals.units) },
+                { label: m.inStock, value: f.number(data.totals.inStock) },
+                { label: m.lowStock, value: f.number(data.totals.lowStock) },
+                { label: m.outOfStock, value: f.number(data.totals.outOfStock) },
               ]}
             />
           ) : (
@@ -246,7 +258,7 @@ export function InventoryReportPage() {
                 onChange={(event) => setParams({ includeArchived: event.target.checked })}
                 className="size-4 rounded-sm accent-primary focus-ring"
               />
-              Include archived products and warehouses
+              {m.includeArchived}
             </label>
             {filtered && <ClearFiltersButton onClear={clearFilters} />}
           </div>
@@ -254,18 +266,18 @@ export function InventoryReportPage() {
       </search>
 
       <ReportResults
-        label="inventory report"
+        label={m.noun}
         query={report}
         totalItems={data?.pagination.totalItems}
         filtered={filtered}
-        emptyTitle="No stock recorded yet."
-        emptyDescription="Receive stock into a warehouse to see it here."
+        emptyTitle={m.empty}
+        emptyDescription={m.emptyText}
         emptyAction={
           <Link
             to={paths.inventory(organization.id)}
             className="text-sm font-medium text-primary hover:underline"
           >
-            Go to inventory
+            {m.goToInventory}
           </Link>
         }
         onClearFilters={clearFilters}
@@ -276,7 +288,7 @@ export function InventoryReportPage() {
       >
         {data && (
           <ReportTable
-            caption="Stock per product and warehouse"
+            caption={m.caption}
             columns={columns}
             rows={data.items}
             rowKey={(row) => row.inventoryId}

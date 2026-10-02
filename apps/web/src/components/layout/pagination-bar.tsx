@@ -1,5 +1,8 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 
 /** Previous / "Page X of Y" / Next for server-side pagination. */
 export function PaginationBar({
@@ -17,18 +20,18 @@ export function PaginationBar({
   onPageChange: (page: number) => void;
   disabled?: boolean;
 }) {
+  const m = useMessages(common).pagination;
+  const f = useFormat();
   const first = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const last = Math.min(page * pageSize, totalItems);
 
   return (
     <nav
-      aria-label="Pagination"
+      aria-label={m.label}
       className="flex flex-col items-center justify-between gap-3 text-sm text-muted-foreground sm:flex-row"
     >
-      <p>
-        Showing <span className="font-medium text-foreground tabular-nums">{first}</span>–
-        <span className="font-medium text-foreground tabular-nums">{last}</span> of{' '}
-        <span className="font-medium text-foreground tabular-nums">{totalItems}</span>
+      <p className="tabular-nums">
+        {m.showing({ first: f.number(first), last: f.number(last), total: f.number(totalItems) })}
       </p>
       <div className="flex items-center gap-2">
         <Button
@@ -38,10 +41,10 @@ export function PaginationBar({
           disabled={disabled || page <= 1}
         >
           <ChevronLeft aria-hidden="true" />
-          Previous
+          {m.previous}
         </Button>
         <span className="px-1 tabular-nums" aria-live="polite">
-          Page {page} of {Math.max(totalPages, 1)}
+          {m.page({ page: f.number(page), total: f.number(Math.max(totalPages, 1)) })}
         </span>
         <Button
           variant="secondary"
@@ -49,7 +52,7 @@ export function PaginationBar({
           onClick={() => onPageChange(page + 1)}
           disabled={disabled || page >= totalPages}
         >
-          Next
+          {m.next}
           <ChevronRight aria-hidden="true" />
         </Button>
       </div>

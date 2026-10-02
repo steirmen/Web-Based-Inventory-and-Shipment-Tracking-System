@@ -1,5 +1,7 @@
 import { useNavigation } from 'react-router';
 import { Spinner } from '@/components/ui/spinner';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 
 /**
  * Cold-start fallback while the first route's code downloads (before any
@@ -7,9 +9,10 @@ import { Spinner } from '@/components/ui/spinner';
  * `RouteProgress` instead.
  */
 export function RouteLoading() {
+  const m = useMessages(common);
   return (
     <div className="flex min-h-dvh items-center justify-center text-sm text-muted-foreground">
-      <Spinner size="lg" label="Loading" />
+      <Spinner size="lg" label={m.actions.loading} />
     </div>
   );
 }
@@ -22,11 +25,12 @@ export function RouteLoading() {
  */
 export function RouteProgress() {
   const navigation = useNavigation();
+  const m = useMessages(common);
   if (navigation.state === 'idle') return null;
 
   return (
     <div className="fixed inset-x-0 top-0 z-60 h-0.5 animate-delayed-show overflow-hidden bg-primary/20 opacity-0">
-      <progress className="sr-only" aria-label="Loading page" />
+      <progress className="sr-only" aria-label={m.states.loadingPage} />
       <div
         aria-hidden="true"
         className="h-full w-1/3 animate-route-progress rounded-full bg-primary motion-reduce:w-full motion-reduce:animate-none"

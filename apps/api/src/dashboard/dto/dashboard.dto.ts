@@ -1,4 +1,6 @@
 import {
+  CURRENCIES,
+  type Currency,
   DASHBOARD_LIMITS,
   DASHBOARD_RANGES,
   type DashboardRange,
@@ -36,4 +38,8 @@ export class DashboardSummaryQueryDto implements DashboardSummaryQuery {
     message: `timeZone must be at most ${DASHBOARD_LIMITS.timeZoneMaxLength} characters.`,
   })
   timeZone?: string;
+
+  @IsOptional()
+  @IsIn(CURRENCIES, { message: `currency must be one of: ${CURRENCIES.join(', ')}.` })
+  currency?: Currency;
 }

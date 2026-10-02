@@ -15,18 +15,22 @@ import {
   useDeleteAppearanceProfile,
   useUpdateAppearanceProfile,
 } from '@/hooks/use-appearance';
-import { apiErrorMessage } from '@/lib/api-errors';
+import type { Translation } from '@/i18n/define';
+import { useMessages } from '@/i18n/i18n-context';
+import { appearance } from '@/i18n/messages/appearance';
+import { common } from '@/i18n/messages/common';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { describeAppearance, sameAppearance } from '@/lib/appearance/labels';
 import { themePreview } from '@/lib/appearance/themes';
 
 const L = APPEARANCE_LIMITS;
 
-const validName = (name: string) => {
+type ProfileMessages = Translation<(typeof appearance)['en']>['profiles'];
+
+const validName = (name: string, m: ProfileMessages) => {
   const trimmed = name.trim().replace(/\s+/g, ' ');
-  if (!trimmed) return 'Enter a name.';
-  if (trimmed.length > L.profileNameMaxLength) {
-    return `Use at most ${L.profileNameMaxLength} characters.`;
-  }
+  if (!trimmed) return m.nameRequired;
+  if (trimmed.length > L.profileNameMaxLength) return m.nameTooLong;
   return undefined;
 };
 
@@ -56,11 +60,21 @@ export function AppearanceProfiles({
   const [notice, setNotice] = useState<string | null>(null);
   const list = profiles.data?.profiles ?? [];
   const full = list.length >= L.profilesMax;
+  const a = useMessages(appearance);
+  const c = useMessages(common);
+  const m = a.profiles;
+  const errorMessage = useApiErrorMessage();
+  const names = {
+    modes: c.modes,
+    themes: c.themes.names,
+    effects: a.effects.names,
+    density: a.density,
+  };
 
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (create.isPending) return;
-    const error = validName(name);
+    const error = validName(name, m);
     setNameError(error);
     setNotice(null);
     if (error) return;
@@ -69,9 +83,9 @@ export function AppearanceProfiles({
       {
         onSuccess: ({ profile }) => {
           setName('');
-          setNotice(`Saved “${profile.name}”.`);
+          setNotice(m.saved({ name: profile.name }));
         },
-        onError: (failure) => setNameError(apiErrorMessage(failure)),
+        onError: (failure) => setNameError(errorMessage(failure)),
       },
     );
   };
@@ -80,13 +94,9 @@ export function AppearanceProfiles({
     <div className="flex flex-col gap-4">
       <form noValidate onSubmit={save} className="flex flex-col gap-2 sm:flex-row sm:items-start">
         <FormField
-          label="Profile name"
+          label={m.name}
           error={nameError}
-          hint={
-            full
-              ? `You have ${L.profilesMax} profiles, the maximum. Delete one to save another.`
-              : 'Saves the look you see now, e.g. “Night work” or “Presentation”.'
-          }
+          hint={full ? m.full : m.hint}
           className="sm:flex-1"
         >
           {(control) => (
@@ -111,7 +121,7 @@ export function AppearanceProfiles({
           className="sm:mt-6.5"
         >
           <Plus aria-hidden="true" />
-          Save current look
+          {m.saveCurrent}
         </Button>
       </form>
 
@@ -120,12 +130,12 @@ export function AppearanceProfiles({
           {notice}
         </Alert>
       )}
-      {apply.isError && <Alert tone="danger">{apiErrorMessage(apply.error)}</Alert>}
+      {apply.isError && <Alert tone="danger">{errorMessage(apply.error)}</Alert>}
 
-      {profiles.isPending && <LoadingState label="Loading profiles" />}
+      {profiles.isPending && <LoadingState label={m.loading} />}
       {profiles.isError && (
         <ErrorState
-          title="We couldn't load your profiles"
+          title={m.loadError}
           error={profiles.error}
           onRetry={() => void profiles.refetch()}
         />
@@ -133,14 +143,14 @@ export function AppearanceProfiles({
       {profiles.isSuccess && list.length === 0 && (
         <EmptyState
           icon={<Bookmark className="size-5" aria-hidden="true" />}
-          title="No saved profiles yet"
-          description="Save a look to switch back to it in one click."
+          title={m.empty}
+          description={m.emptyText}
         />
       )}
       {list.length > 0 && (
         <ul
           className="divide-y divide-border rounded-control border border-border"
-          aria-label="Saved profiles"
+          aria-label={m.list}
         >
           {list.map((profile) => {
             const colors = themePreview(profile.appearance.theme, profile.appearance);
@@ -157,14 +167,14 @@ export function AppearanceProfiles({
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{profile.name}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {describeAppearance(profile.appearance)}
+                    {describeAppearance(profile.appearance, names)}
                   </p>
                 </div>
                 <div className="flex w-full items-center gap-1 sm:w-auto">
                   {active ? (
                     <span className="inline-flex items-center gap-1 px-2 text-xs font-medium text-muted-foreground">
                       <Check className="size-3.5" aria-hidden="true" />
-                      In use
+                      {m.inUse}
                     </span>
                   ) : (
                     <Button
@@ -175,22 +185,22 @@ export function AppearanceProfiles({
                         setNotice(null);
                         apply.mutate(profile.id, {
                           onSuccess: () => {
-                            setNotice(`Applied “${profile.name}”.`);
+                            setNotice(m.applied({ name: profile.name }));
                             onApplied(profile);
                           },
                         });
                       }}
-                      aria-label={`Apply ${profile.name}`}
+                      aria-label={m.applyNamed({ name: profile.name })}
                     >
-                      Apply
+                      {m.apply}
                     </Button>
                   )}
                   <Button
                     size="icon-sm"
                     variant="ghost"
                     onClick={() => setRenaming(profile)}
-                    aria-label={`Rename ${profile.name}`}
-                    title="Rename"
+                    aria-label={m.renameNamed({ name: profile.name })}
+                    title={m.rename}
                   >
                     <Pencil aria-hidden="true" />
                   </Button>
@@ -201,8 +211,8 @@ export function AppearanceProfiles({
                       remove.reset();
                       setDeleting(profile);
                     }}
-                    aria-label={`Delete ${profile.name}`}
-                    title="Delete"
+                    aria-label={m.deleteNamed({ name: profile.name })}
+                    title={m.delete}
                   >
                     <Trash2 aria-hidden="true" />
                   </Button>
@@ -218,19 +228,18 @@ export function AppearanceProfiles({
         onClose={() => setRenaming(null)}
         onRenamed={(renamed) => {
           setRenaming(null);
-          setNotice(`Renamed to “${renamed}”.`);
+          setNotice(m.renamed({ name: renamed }));
         }}
       />
       <ConfirmDialog
         open={deleting !== null}
-        title="Delete profile?"
+        title={m.deleteTitle}
         description={
           <>
-            <span className="font-medium text-foreground">{deleting?.name}</span> is removed. Your
-            current appearance does not change.
+            <span className="font-medium text-foreground">{deleting?.name}</span> {m.deleteText}
           </>
         }
-        confirmLabel="Delete"
+        confirmLabel={m.delete}
         tone="danger"
         pending={remove.isPending}
         error={remove.error}
@@ -238,7 +247,7 @@ export function AppearanceProfiles({
           deleting &&
           remove.mutate(deleting.id, {
             onSuccess: () => {
-              setNotice(`Deleted “${deleting.name}”.`);
+              setNotice(m.deleted({ name: deleting.name }));
               setDeleting(null);
             },
           })
@@ -258,8 +267,9 @@ function RenameDialog({
   onClose: () => void;
   onRenamed: (name: string) => void;
 }) {
+  const m = useMessages(appearance).profiles;
   return (
-    <Dialog open={profile !== null} onClose={onClose} title="Rename profile">
+    <Dialog open={profile !== null} onClose={onClose} title={m.renameTitle}>
       {profile && (
         <RenameForm key={profile.id} profile={profile} onCancel={onClose} onRenamed={onRenamed} />
       )}
@@ -279,11 +289,13 @@ function RenameForm({
   const update = useUpdateAppearanceProfile();
   const [name, setName] = useState(profile.name);
   const [error, setError] = useState<string | undefined>();
+  const m = useMessages(appearance).profiles;
+  const errorMessage = useApiErrorMessage();
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (update.isPending) return;
-    const validation = validName(name);
+    const validation = validName(name, m);
     setError(validation);
     if (validation) return;
     const next = name.trim().replace(/\s+/g, ' ');
@@ -295,14 +307,14 @@ function RenameForm({
       { profileId: profile.id, body: { name: next } },
       {
         onSuccess: ({ profile: renamed }) => onRenamed(renamed.name),
-        onError: (failure) => setError(apiErrorMessage(failure)),
+        onError: (failure) => setError(errorMessage(failure)),
       },
     );
   };
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-4">
-      <FormField label="Name" error={error}>
+      <FormField label={m.renameName} error={error}>
         {(control) => (
           <Input
             {...control}
@@ -319,10 +331,10 @@ function RenameForm({
       </FormField>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="secondary" onClick={onCancel} disabled={update.isPending}>
-          Cancel
+          {m.cancel}
         </Button>
         <Button type="submit" isLoading={update.isPending}>
-          Rename
+          {m.rename}
         </Button>
       </div>
     </form>

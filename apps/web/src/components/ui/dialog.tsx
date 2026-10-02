@@ -1,6 +1,8 @@
 import { X } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { cn } from '@/lib/cn';
 
 const FOCUSABLE =
@@ -44,6 +46,7 @@ export function Dialog({
 }: DialogProps) {
   const titleId = useId();
   const descriptionId = useId();
+  const closeLabel = useMessages(common).actions.closeDialog;
   const panelRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -124,7 +127,7 @@ export function Dialog({
             type="button"
             onClick={onClose}
             disabled={!dismissible}
-            aria-label="Close dialog"
+            aria-label={closeLabel}
             className="-mt-1 -mr-2 flex size-8 shrink-0 items-center justify-center rounded-control text-subtle-foreground focus-ring transition-colors duration-150 hover:bg-surface-muted hover:text-foreground disabled:opacity-50"
           >
             <X className="size-4" aria-hidden="true" />

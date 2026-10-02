@@ -1,4 +1,6 @@
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useMessages } from '@/i18n/i18n-context';
+import { catalog } from '@/i18n/messages/catalog';
 
 /** Confirmation before archiving. Restoring needs no confirmation. */
 export function ArchiveProductDialog({
@@ -15,17 +17,18 @@ export function ArchiveProductDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const m = useMessages(catalog).archiveDialog;
   return (
     <ConfirmDialog
       open={product !== null}
-      title="Archive product?"
+      title={m.title}
       description={
         <>
-          <span className="font-medium text-foreground">{product?.name}</span> will be marked as
-          archived and can&apos;t be edited while archived. It can be restored later.
+          <span className="font-medium text-foreground">{product?.name}</span>
+          {m.text}
         </>
       }
-      confirmLabel="Archive"
+      confirmLabel={m.confirm}
       tone="danger"
       pending={pending}
       error={error}

@@ -84,6 +84,16 @@ const CHECKS: { name: string; description: string; sql: string }[] = [
               OR bool_or(i.line_total <> i.unit_price * i.quantity) IS TRUE`,
   },
   {
+    name: 'order-currency',
+    description:
+      'every order line has its order’s currency; an order has a currency exactly when it has lines (Phase 10.1)',
+    sql: `SELECT o.id::text AS key FROM orders o
+          LEFT JOIN order_items i ON i.organization_id = o.organization_id AND i.order_id = o.id
+          GROUP BY o.id, o.currency
+          HAVING (count(i.id) > 0) <> (o.currency IS NOT NULL)
+              OR bool_or(i.currency IS DISTINCT FROM o.currency) IS TRUE`,
+  },
+  {
     name: 'fulfilled-orders-have-sales',
     description:
       'processed/shipped/completed orders have exactly one SALE movement per line, matching product and quantity',

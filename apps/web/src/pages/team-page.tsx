@@ -9,6 +9,9 @@ import { Alert } from '@/components/ui/alert';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/use-auth';
 import { useMembers } from '@/hooks/use-organizations';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { workspace } from '@/i18n/messages/workspace';
 import { pageTitle } from '@/lib/app-config';
 import { useCurrentOrganization } from '@/lib/organization-context';
 
@@ -18,17 +21,15 @@ export function TeamPage() {
   const members = useMembers(organization.id);
   const viewerId = auth.status === 'authenticated' ? auth.user.id : null;
   const canManageTeam = can('MEMBERS_INVITE') || can('MEMBERS_REMOVE');
+  const m = useMessages(workspace).team;
+  const f = useFormat();
 
   return (
     <div className="flex flex-col gap-8">
-      <title>{pageTitle(`Team · ${organization.name}`)}</title>
-      <PageHeader title="Team" description="Everyone with access to this workspace." />
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
+      <PageHeader title={m.title} description={m.description} />
 
-      {!canManageTeam && (
-        <Alert tone="info">
-          You have view-only access to the team. Owners and admins manage members.
-        </Alert>
-      )}
+      {!canManageTeam && <Alert tone="info">{m.viewOnly}</Alert>}
 
       <Can permission="MEMBERS_INVITE">
         <InviteMemberCard />
@@ -36,19 +37,22 @@ export function TeamPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Team members</CardTitle>
+          <CardTitle>{m.members}</CardTitle>
           <CardDescription>
             {members.data
-              ? `${members.data.members.length} ${members.data.members.length === 1 ? 'member' : 'members'}`
-              : 'Everyone in this workspace.'}
+              ? m.memberCount({
+                  count: members.data.members.length,
+                  formatted: f.number(members.data.members.length),
+                })
+              : m.everyone}
           </CardDescription>
         </CardHeader>
 
-        {members.isPending && <LoadingState label="Loading members" className="min-h-32" />}
+        {members.isPending && <LoadingState label={m.loading} className="min-h-32" />}
         {members.isError && (
           <div className="px-6 pb-6">
             <ErrorState
-              title="We couldn't load the team"
+              title={m.loadError}
               error={members.error}
               onRetry={() => void members.refetch()}
             />
@@ -56,7 +60,7 @@ export function TeamPage() {
         )}
         {members.data?.members.length === 0 && (
           <div className="px-6 pb-6">
-            <EmptyState icon={<Users className="size-5" aria-hidden="true" />} title="No members" />
+            <EmptyState icon={<Users className="size-5" aria-hidden="true" />} title={m.empty} />
           </div>
         )}
         {members.data && members.data.members.length > 0 && (
@@ -65,12 +69,12 @@ export function TeamPage() {
               className="hidden grid-cols-[minmax(0,1fr)_9rem_8rem_14rem] gap-4 border-b border-border bg-surface-muted/60 px-4 py-2 text-xs font-medium text-muted-foreground md:grid"
               aria-hidden="true"
             >
-              <span>Name</span>
-              <span>Role</span>
-              <span>Joined</span>
-              <span className="text-right">Actions</span>
+              <span>{m.name}</span>
+              <span>{m.role}</span>
+              <span>{m.joined}</span>
+              <span className="text-right">{m.actions}</span>
             </div>
-            <ul aria-label="Team members" className="divide-y divide-border">
+            <ul aria-label={m.members} className="divide-y divide-border">
               {members.data.members.map((member) => (
                 <MemberRow key={member.id} member={member} isSelf={member.userId === viewerId} />
               ))}

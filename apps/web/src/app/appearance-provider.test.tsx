@@ -121,6 +121,7 @@ describe('AppearanceProvider', () => {
       id: '0198c0de-0000-7000-8000-000000000002',
       name: 'Ben Other',
       email: 'ben@test.example',
+      language: null,
     };
     let current: AuthUser | null = testUser;
     const fetchMock = mockApi({
@@ -241,6 +242,17 @@ describe('index.html startup script', () => {
     // The static browser-UI color matches the guest canvas too.
     const background = toHex(parseCss(palette['--background']!));
     expect(indexHtml).toContain(`<meta name="theme-color" content="${background}" />`);
+  });
+
+  it('sets the page language from the device choice, and only a known code', () => {
+    localStorage.setItem('app:language', 'tr');
+    run();
+    expect(document.documentElement.lang).toBe('tr');
+
+    document.documentElement.lang = 'en';
+    localStorage.setItem('app:language', '"><script>');
+    run();
+    expect(document.documentElement.lang).toBe('en');
   });
 
   it('survives a corrupt cache (guest appearance)', () => {

@@ -1,6 +1,7 @@
 import type { OrderStatus } from '@app/shared';
 import { Badge } from '@/components/ui/badge';
-import { ORDER_STATUS_LABELS } from '@/lib/sales-params';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 
 const TONES = {
   DRAFT: 'neutral',
@@ -13,19 +14,21 @@ const TONES = {
 
 /** Status as text (the color is only a supporting cue). */
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
+  const m = useMessages(common);
   return (
     <Badge tone={TONES[status]} dot>
-      {ORDER_STATUS_LABELS[status]}
+      {m.orderStatus[status]}
     </Badge>
   );
 }
 
 export function ActiveBadge({ isActive }: { isActive: boolean }) {
+  const m = useMessages(common).status;
   return isActive ? (
     <Badge tone="success" dot>
-      Active
+      {m.active}
     </Badge>
   ) : (
-    <Badge tone="neutral">Archived</Badge>
+    <Badge tone="neutral">{m.archived}</Badge>
   );
 }

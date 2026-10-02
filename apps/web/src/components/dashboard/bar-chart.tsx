@@ -1,4 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { useMessages } from '@/i18n/i18n-context';
+import { insights } from '@/i18n/messages/insights';
 import { labelIndexes, niceScale } from '@/lib/chart-math';
 
 export interface BarDatum {
@@ -55,6 +57,7 @@ export function BarChart({
   label: string;
   formatTick: (value: number) => string;
 }) {
+  const m = useMessages(insights).salesChart;
   const [containerRef, width] = useElementWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
 
@@ -78,7 +81,7 @@ export function BarChart({
         max={Math.max(0, data.length - 1)}
         step={1}
         value={active ?? 0}
-        aria-label={`${label}: choose a period`}
+        aria-label={m.choosePeriod({ label })}
         aria-valuetext={selected ? describe(selected) : undefined}
         onChange={(event) => setActive(Number(event.target.value))}
         onFocus={() => setActive((current) => current ?? 0)}

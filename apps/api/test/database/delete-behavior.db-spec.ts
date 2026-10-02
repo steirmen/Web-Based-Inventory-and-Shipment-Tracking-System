@@ -89,12 +89,14 @@ describe('cascading and nullifying deletes', () => {
         organizationId: organization.id,
         warehouseId: warehouse.id,
         orderNumber: 'SO-DRAFT',
+        currency: 'TRY',
         items: {
           create: {
             productId: product.id,
             productNameSnapshot: product.name,
             skuSnapshot: product.sku,
             unitPrice: '1.00',
+            currency: 'TRY',
             quantity: 1,
             lineTotal: '1.00',
           },

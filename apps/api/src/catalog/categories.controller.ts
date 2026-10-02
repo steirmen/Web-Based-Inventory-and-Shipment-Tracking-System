@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ResourceIdPipe } from '../common/validation/uuid.js';
@@ -20,7 +21,7 @@ import {
 } from '../organizations/organization-context.js';
 import { CategoriesService } from './categories.service.js';
 import { categoryNotFound } from './catalog-errors.js';
-import { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto.js';
+import { CategoryListQueryDto, CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto.js';
 
 /** Membership is verified for every route by OrganizationAccessGuard. */
 @Controller('organizations/:organizationId/categories')
@@ -30,8 +31,11 @@ export class CategoriesController {
 
   @Get()
   @RequirePermissions('CATEGORIES_READ')
-  list(@OrgContext() context: OrganizationContext): Promise<CategoryListResponse> {
-    return this.categories.list(context.organization.id);
+  list(
+    @OrgContext() context: OrganizationContext,
+    @Query() query: CategoryListQueryDto,
+  ): Promise<CategoryListResponse> {
+    return this.categories.list(context.organization.id, query.search);
   }
 
   @Post()

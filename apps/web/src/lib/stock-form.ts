@@ -1,7 +1,12 @@
 import { INVENTORY_LIMITS } from '@app/shared';
 import type { StockOperation } from '@/api/inventory';
-import { apiErrorMessage, hasErrorCode } from './api-errors';
+import type { Translation } from '@/i18n/define';
+import type { common } from '@/i18n/messages/common';
+import type { stock } from '@/i18n/messages/stock';
+import { hasErrorCode } from './api-errors';
 import { type FieldErrors, hasErrors, serverFieldErrors } from './auth-form';
+
+type Validation = Translation<typeof stock.en>['validation'];
 
 /**
  * Client-side checks and request building for the stock operation dialog.
@@ -45,6 +50,8 @@ export function validateStockForm(
   values: StockFormValues,
   /** Known stock at the (source) warehouse; undefined while unknown. */
   available: number | undefined,
+  m: Validation,
+  formatNumber: (value: number) => string = (value) => value.toLocaleString('en-US'),
 ): FieldErrors<StockField> {
   const units = parseUnits(values.quantity);
   const minimum = kind === 'adjust' ? 0 : 1;
@@ -52,43 +59,40 @@ export function validateStockForm(
 
   let quantity: string | undefined;
   if (units === null || units < minimum) {
-    quantity =
-      kind === 'adjust'
-        ? 'Enter the counted quantity as a whole number (0 or more).'
-        : 'Enter a whole number of units greater than 0.';
+    quantity = kind === 'adjust' ? m.countRequired : m.unitsRequired;
   } else if (units > L.quantityMax) {
-    quantity = `Use at most ${L.quantityMax.toLocaleString()} units.`;
+    quantity = m.tooMany({ max: formatNumber(L.quantityMax) });
   } else if (
     (kind === 'issue' || kind === 'damage' || kind === 'transfer') &&
     available !== undefined &&
     units > available
   ) {
-    quantity = `Only ${available.toLocaleString()} ${available === 1 ? 'unit is' : 'units are'} available.`;
+    quantity = m.onlyAvailable({ count: formatNumber(available), one: available === 1 });
   }
 
   return {
     warehouseId: values.warehouseId
       ? undefined
       : kind === 'transfer'
-        ? 'Choose the source warehouse.'
-        : 'Choose a warehouse.',
+        ? m.chooseSource
+        : m.chooseWarehouse,
     destinationWarehouseId:
       kind !== 'transfer'
         ? undefined
         : !values.destinationWarehouseId
-          ? 'Choose the destination warehouse.'
+          ? m.chooseDestination
           : values.destinationWarehouseId === values.warehouseId
-            ? 'Choose a different warehouse than the source.'
+            ? m.differentWarehouse
             : undefined,
-    productId: values.productId ? undefined : 'Choose a product.',
+    productId: values.productId ? undefined : m.chooseProduct,
     quantity,
     reason:
       REASON_REQUIRED[kind] && !reason
         ? kind === 'damage'
-          ? 'Describe what happened to the stock.'
-          : 'Explain why the count changed.'
+          ? m.describeDamage
+          : m.explainCount
         : reason.length > L.reasonMaxLength
-          ? `Use at most ${L.reasonMaxLength} characters.`
+          ? m.reasonTooLong
           : undefined,
   };
 }
@@ -134,8 +138,12 @@ const SERVER_FIELDS: Record<string, StockField> = {
 };
 
 /** Where a failed operation's error belongs: a field, or the form as a whole. */
-export function mapStockError(error: unknown): { fields: FieldErrors<StockField>; form?: unknown } {
-  const message = apiErrorMessage(error);
+export function mapStockError(
+  error: unknown,
+  errorMessage: (error: unknown) => string,
+  errors: Translation<typeof common.en>['errors'],
+): { fields: FieldErrors<StockField>; form?: unknown } {
+  const message = errorMessage(error);
   if (
     hasErrorCode(error, 'INVENTORY_INSUFFICIENT_STOCK') ||
     hasErrorCode(error, 'INVENTORY_QUANTITY_LIMIT')
@@ -155,7 +163,7 @@ export function mapStockError(error: unknown): { fields: FieldErrors<StockField>
     return { fields: { destinationWarehouseId: message } };
   }
   if (hasErrorCode(error, 'VALIDATION_ERROR')) {
-    const raw = serverFieldErrors(error, Object.keys(SERVER_FIELDS));
+    const raw = serverFieldErrors(error, Object.keys(SERVER_FIELDS), errors);
     const fields: FieldErrors<StockField> = {};
     for (const [field, text] of Object.entries(raw)) {
       const target = SERVER_FIELDS[field];

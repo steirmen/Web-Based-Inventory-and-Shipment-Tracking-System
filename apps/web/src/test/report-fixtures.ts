@@ -28,6 +28,7 @@ export const salesRow = (overrides: Partial<SalesReportRow> = {}): SalesReportRo
   },
   units: 11,
   revenue: '55.00',
+  currency: 'TRY',
   ...overrides,
 });
 
@@ -56,6 +57,8 @@ export function salesReport(
       ...pagination,
     },
     totals: { orders: items.length, units: 13, revenue: '134.98' },
+    currency: 'TRY',
+    currencies: ['TRY'],
   };
 }
 
@@ -72,6 +75,7 @@ export const ordersRow = (overrides: Partial<OrdersReportRow> = {}): OrdersRepor
   },
   itemCount: 3,
   total: '120.00',
+  currency: 'TRY',
   createdAt: '2025-09-05T10:00:00.000Z',
   ...overrides,
 });
@@ -86,7 +90,7 @@ export function ordersReport(items: OrdersReportRow[] = [ordersRow()]): OrdersRe
       totalItems: items.length,
       totalPages: items.length ? 1 : 0,
     },
-    totals: { orders: items.length, value: '120.00' },
+    totals: { orders: items.length, values: [{ currency: 'TRY', amount: '120.00' }] },
   };
 }
 

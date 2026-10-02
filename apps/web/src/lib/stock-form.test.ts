@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/api/http-client';
+import { common } from '@/i18n/messages/common';
+import { stock } from '@/i18n/messages/stock';
+import { describeApiError } from './api-errors';
 import {
   movementsPath,
   readInventoryParams,
@@ -29,6 +32,10 @@ const values = (overrides: Partial<StockFormValues> = {}): StockFormValues => ({
   ...overrides,
 });
 
+const m = stock.en.validation;
+const errorMessage = (error: unknown) => describeApiError(error, common.en.errors);
+const stockError = (error: unknown) => mapStockError(error, errorMessage, common.en.errors);
+
 const errorsOf = (errors: object) => Object.entries(errors).filter(([, value]) => value);
 
 describe('parseUnits', () => {
@@ -48,47 +55,51 @@ describe('parseUnits', () => {
 
 describe('validateStockForm', () => {
   it('accepts a valid receipt without a reason', () => {
-    expect(errorsOf(validateStockForm('receive', values(), undefined))).toEqual([]);
+    expect(errorsOf(validateStockForm('receive', values(), undefined, m))).toEqual([]);
   });
 
   it('requires positive whole units, but allows 0 as a counted quantity', () => {
-    expect(validateStockForm('issue', values({ quantity: '0' }), 10).quantity).toBeDefined();
-    expect(validateStockForm('receive', values({ quantity: '-100000' }), 0).quantity).toBeDefined();
+    expect(validateStockForm('issue', values({ quantity: '0' }), 10, m).quantity).toBeDefined();
     expect(
-      validateStockForm('adjust', values({ quantity: '0', reason: 'Count' }), 3).quantity,
+      validateStockForm('receive', values({ quantity: '-100000' }), 0, m).quantity,
+    ).toBeDefined();
+    expect(
+      validateStockForm('adjust', values({ quantity: '0', reason: 'Count' }), 3, m).quantity,
     ).toBeUndefined();
     expect(
-      validateStockForm('adjust', values({ quantity: '2.5', reason: 'Count' }), 3).quantity,
+      validateStockForm('adjust', values({ quantity: '2.5', reason: 'Count' }), 3, m).quantity,
     ).toBeDefined();
   });
 
   it('checks the known stock for removals and transfers, not for receipts', () => {
-    expect(validateStockForm('issue', values({ quantity: '11' }), 10).quantity).toBe(
+    expect(validateStockForm('issue', values({ quantity: '11' }), 10, m).quantity).toBe(
       'Only 10 units are available.',
     );
-    expect(validateStockForm('damage', values({ quantity: '2', reason: 'x' }), 1).quantity).toBe(
+    expect(validateStockForm('damage', values({ quantity: '2', reason: 'x' }), 1, m).quantity).toBe(
       'Only 1 unit is available.',
     );
-    expect(validateStockForm('receive', values({ quantity: '11' }), 10).quantity).toBeUndefined();
+    expect(
+      validateStockForm('receive', values({ quantity: '11' }), 10, m).quantity,
+    ).toBeUndefined();
     // Unknown stock: the server decides.
     expect(
-      validateStockForm('issue', values({ quantity: '11' }), undefined).quantity,
+      validateStockForm('issue', values({ quantity: '11' }), undefined, m).quantity,
     ).toBeUndefined();
   });
 
   it('requires reasons for damage and adjustments', () => {
-    expect(validateStockForm('damage', values(), 10).reason).toBeDefined();
-    expect(validateStockForm('adjust', values({ reason: '  ' }), 10).reason).toBeDefined();
+    expect(validateStockForm('damage', values(), 10, m).reason).toBeDefined();
+    expect(validateStockForm('adjust', values({ reason: '  ' }), 10, m).reason).toBeDefined();
   });
 
   it('requires two different warehouses for a transfer', () => {
-    expect(validateStockForm('transfer', values(), 10).destinationWarehouseId).toBeDefined();
+    expect(validateStockForm('transfer', values(), 10, m).destinationWarehouseId).toBeDefined();
     expect(
-      validateStockForm('transfer', values({ destinationWarehouseId: W1 }), 10)
+      validateStockForm('transfer', values({ destinationWarehouseId: W1 }), 10, m)
         .destinationWarehouseId,
     ).toBe('Choose a different warehouse than the source.');
     expect(
-      errorsOf(validateStockForm('transfer', values({ destinationWarehouseId: W2 }), 10)),
+      errorsOf(validateStockForm('transfer', values({ destinationWarehouseId: W2 }), 10, m)),
     ).toEqual([]);
   });
 });
@@ -124,17 +135,17 @@ describe('mapStockError', () => {
   ) => new ApiError(message, { status: 409, url: '/x', code: code as never, details });
 
   it('puts stock, product, and warehouse problems on their fields', () => {
-    expect(mapStockError(apiError('INVENTORY_INSUFFICIENT_STOCK', 'Not enough')).fields).toEqual({
+    expect(stockError(apiError('INVENTORY_INSUFFICIENT_STOCK', 'Not enough')).fields).toEqual({
       quantity: 'Not enough',
     });
-    expect(mapStockError(apiError('INVENTORY_PRODUCT_INACTIVE', 'Archived')).fields).toEqual({
+    expect(stockError(apiError('INVENTORY_PRODUCT_INACTIVE', 'Archived')).fields).toEqual({
       productId: 'Archived',
     });
-    expect(mapStockError(apiError('INVENTORY_SAME_WAREHOUSE', 'Same')).fields).toEqual({
+    expect(stockError(apiError('INVENTORY_SAME_WAREHOUSE', 'Same')).fields).toEqual({
       destinationWarehouseId: 'Same',
     });
     expect(
-      mapStockError(
+      stockError(
         apiError('VALIDATION_ERROR', 'Invalid', [
           { field: 'newQuantity', messages: ['Too small'] },
         ]),
@@ -144,7 +155,7 @@ describe('mapStockError', () => {
 
   it('shows other errors (e.g. an archived warehouse) above the form', () => {
     const error = apiError('INVENTORY_WAREHOUSE_INACTIVE', 'Warehouse MAIN is archived.');
-    expect(mapStockError(error)).toEqual({ fields: {}, form: error });
+    expect(stockError(error)).toEqual({ fields: {}, form: error });
   });
 });
 

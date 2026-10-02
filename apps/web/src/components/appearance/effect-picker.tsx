@@ -2,7 +2,8 @@ import { BACKGROUND_EFFECTS, type BackgroundEffect } from '@app/shared';
 import { Check } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { radioOptionProps } from '@/components/ui/use-radio-group';
-import { EFFECTS } from '@/lib/appearance/labels';
+import { useMessages } from '@/i18n/i18n-context';
+import { appearance } from '@/i18n/messages/appearance';
 import { cn } from '@/lib/cn';
 
 /** Deterministic pseudo-random positions so previews look the same on every render. */
@@ -127,19 +128,20 @@ export function EffectPicker({
   value: BackgroundEffect;
   onChange: (effect: BackgroundEffect) => void;
 }) {
+  const m = useMessages(appearance).effects;
   return (
     <div
       role="radiogroup"
-      aria-label="Background effect"
+      aria-label={m.label}
       className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
     >
-      {EFFECTS.map((effect) => {
-        const checked = value === effect.id;
+      {BACKGROUND_EFFECTS.map((effect) => {
+        const checked = value === effect;
         return (
           <button
-            key={effect.id}
-            {...radioOptionProps(BACKGROUND_EFFECTS, value, onChange, effect.id)}
-            aria-label={`${effect.name} background`}
+            key={effect}
+            {...radioOptionProps(BACKGROUND_EFFECTS, value, onChange, effect)}
+            aria-label={m.option({ name: m.names[effect] })}
             className={cn(
               'flex flex-col overflow-hidden rounded-card border text-left focus-ring transition',
               checked
@@ -153,13 +155,13 @@ export function EffectPicker({
               className="h-16 w-full bg-surface-muted text-foreground"
               aria-hidden="true"
             >
-              <Preview effect={effect.id} />
+              <Preview effect={effect} />
             </svg>
             <span className="flex items-start justify-between gap-2 border-t border-border bg-surface px-3 py-2">
               <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">{effect.name}</span>
+                <span className="block truncate text-sm font-medium">{m.names[effect]}</span>
                 <span className="block truncate text-xs text-muted-foreground">
-                  {effect.description}
+                  {m.descriptions[effect]}
                 </span>
               </span>
               {checked && (

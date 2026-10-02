@@ -7,6 +7,8 @@ import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { useLogin } from '@/hooks/use-auth';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { appConfig, pageTitle } from '@/lib/app-config';
 import {
   describeAuthError,
@@ -23,6 +25,7 @@ const FIELDS = ['email', 'password'] as const;
 export function LoginPage() {
   const login = useLogin();
   const location = useLocation();
+  const m = useMessages(common);
   // Set by invitation links: prefill the invited email; keep the return path for Register too.
   const prefillEmail = (location.state as { email?: unknown } | null)?.email;
   const [values, setValues] = useState<LoginValues>({
@@ -40,30 +43,33 @@ export function LoginPage() {
     event.preventDefault();
     if (login.isPending) return;
 
-    const clientErrors = validateLogin(values);
+    const clientErrors = validateLogin(values, m.authValidation);
     setErrors(clientErrors);
     if (hasErrors(clientErrors)) return;
 
     login.mutate(values, {
-      onError: (error) => setErrors(serverFieldErrors(error, FIELDS)),
+      onError: (error) => setErrors(serverFieldErrors(error, FIELDS, m.errors)),
     });
   };
 
-  const formError = login.isError && !hasErrors(errors) ? describeAuthError(login.error) : null;
+  const formError =
+    login.isError && !hasErrors(errors) ? describeAuthError(login.error, m.authValidation) : null;
 
   return (
     <Card className="shadow-raised">
-      <title>{pageTitle('Sign in')}</title>
+      <title>{pageTitle(m.login.pageTitle)}</title>
       <CardHeader className="gap-1 pb-5">
-        <h1 className="text-xl font-semibold tracking-tight">Sign in to {appConfig.name}</h1>
-        <CardDescription>Welcome back. Enter your details to continue.</CardDescription>
+        <h1 className="text-xl font-semibold tracking-tight">
+          {m.login.title({ app: appConfig.name })}
+        </h1>
+        <CardDescription>{m.login.description}</CardDescription>
       </CardHeader>
 
       <CardContent>
         <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
           {formError && <Alert tone="danger">{formError}</Alert>}
 
-          <FormField label="Email" error={errors.email}>
+          <FormField label={m.login.email} error={errors.email}>
             {(control) => (
               <Input
                 {...control}
@@ -77,7 +83,7 @@ export function LoginPage() {
             )}
           </FormField>
 
-          <FormField label="Password" error={errors.password}>
+          <FormField label={m.login.password} error={errors.password}>
             {(control) => (
               <PasswordInput
                 {...control}
@@ -90,20 +96,20 @@ export function LoginPage() {
           </FormField>
 
           <Button type="submit" size="lg" className="mt-2 w-full" isLoading={login.isPending}>
-            {login.isPending ? 'Signing in…' : 'Sign in'}
+            {login.isPending ? m.login.submitting : m.login.submit}
           </Button>
         </form>
       </CardContent>
 
       <CardFooter className="justify-center">
         <span>
-          Don&apos;t have an account?{' '}
+          {m.login.noAccount}{' '}
           <Link
             to={paths.register}
             state={location.state}
             className="rounded-sm font-medium text-primary focus-ring hover:underline"
           >
-            Create one
+            {m.login.createOne}
           </Link>
         </span>
       </CardFooter>

@@ -28,7 +28,10 @@ import {
 import { ArchiveWarehouseDialog } from '@/components/warehouses/archive-warehouse-dialog';
 import { WarehouseFormDialog } from '@/components/warehouses/warehouse-form-dialog';
 import { useWarehouses, useWarehouseStatusChange } from '@/hooks/use-inventory';
-import { apiErrorMessage } from '@/lib/api-errors';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { stock } from '@/i18n/messages/stock';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
 import { cn } from '@/lib/cn';
 import { useCurrentOrganization } from '@/lib/organization-context';
@@ -39,6 +42,9 @@ type Editing = { mode: 'create' } | { mode: 'edit'; warehouse: Warehouse } | nul
 /** Warehouses of the current organization. Management actions follow the viewer's role. */
 export function WarehousesPage() {
   const { organization, can } = useCurrentOrganization();
+  const m = useMessages(stock).warehouses;
+  const f = useFormat();
+  const errorMessage = useApiErrorMessage();
   const warehouses = useWarehouses(organization.id);
   const statusChange = useWarehouseStatusChange(organization.id);
   const [editing, setEditing] = useState<Editing>(null);
@@ -54,7 +60,11 @@ export function WarehousesPage() {
       {
         onSuccess: () => {
           setArchiveTarget(null);
-          setNotice(`${warehouse.name} ${action === 'archive' ? 'archived' : 'restored'}.`);
+          setNotice(
+            action === 'archive'
+              ? m.archived({ name: warehouse.name })
+              : m.restored({ name: warehouse.name }),
+          );
         },
       },
     );
@@ -81,19 +91,15 @@ export function WarehousesPage() {
         }}
       >
         <Plus aria-hidden="true" />
-        Create warehouse
+        {m.create}
       </Button>
     </Can>
   );
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Warehouses · ${organization.name}`)}</title>
-      <PageHeader
-        title="Warehouses"
-        description="Where your stock is kept. Archived warehouses keep their history."
-        actions={addButton}
-      />
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
+      <PageHeader title={m.title} description={m.description} actions={addButton} />
 
       {notice && (
         <Alert tone="success" onDismiss={() => setNotice(null)}>
@@ -101,13 +107,13 @@ export function WarehousesPage() {
         </Alert>
       )}
       {statusChange.isError && !archiveTarget && (
-        <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
+        <Alert tone="danger">{errorMessage(statusChange.error)}</Alert>
       )}
 
-      {warehouses.isPending && <ListSkeleton label="Loading warehouses" />}
+      {warehouses.isPending && <ListSkeleton label={m.loading} />}
       {warehouses.isError && (
         <ErrorState
-          title="We couldn't load warehouses"
+          title={m.loadError}
           error={warehouses.error}
           onRetry={() => void warehouses.refetch()}
         />
@@ -115,12 +121,8 @@ export function WarehousesPage() {
       {warehouses.isSuccess && list.length === 0 && (
         <EmptyState
           icon={<WarehouseIcon className="size-5" aria-hidden="true" />}
-          title="No warehouses yet"
-          description={
-            can('WAREHOUSES_CREATE')
-              ? 'Create a warehouse to start tracking stock.'
-              : 'An owner or admin can create the first warehouse.'
-          }
+          title={m.emptyTitle}
+          description={can('WAREHOUSES_CREATE') ? m.emptyCanCreate : m.emptyAsk}
           action={addButton}
         />
       )}
@@ -130,14 +132,14 @@ export function WarehousesPage() {
           <Table className="hidden @4xl:table">
             <TableHeader>
               <tr>
-                <TableHead>Name</TableHead>
-                <TableHead>Code</TableHead>
-                <TableHead>Address</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead align="right">Products</TableHead>
-                <TableHead align="right">Units</TableHead>
+                <TableHead>{m.name}</TableHead>
+                <TableHead>{m.code}</TableHead>
+                <TableHead>{m.address}</TableHead>
+                <TableHead>{m.status}</TableHead>
+                <TableHead align="right">{m.products}</TableHead>
+                <TableHead align="right">{m.units}</TableHead>
                 <TableHead>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{m.actions}</span>
                 </TableHead>
               </tr>
             </TableHeader>
@@ -164,8 +166,8 @@ export function WarehousesPage() {
                   <TableCell>
                     <WarehouseStatusBadge isActive={warehouse.isActive} />
                   </TableCell>
-                  <TableCell align="right">{warehouse.productCount.toLocaleString()}</TableCell>
-                  <TableCell align="right">{warehouse.totalUnits.toLocaleString()}</TableCell>
+                  <TableCell align="right">{f.number(warehouse.productCount)}</TableCell>
+                  <TableCell align="right">{f.number(warehouse.totalUnits)}</TableCell>
                   <TableCell className="py-2">
                     <WarehouseRowActions
                       compact
@@ -183,7 +185,7 @@ export function WarehousesPage() {
             </TableBody>
           </Table>
 
-          <ul className="divide-y divide-border @4xl:hidden" aria-label="Warehouses">
+          <ul className="divide-y divide-border @4xl:hidden" aria-label={m.list}>
             {list.map((warehouse) => (
               <li key={warehouse.id} className="flex flex-col gap-3 p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -203,12 +205,12 @@ export function WarehousesPage() {
                 )}
                 <dl className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <dt className="text-xs text-muted-foreground">Products</dt>
-                    <dd className="tabular-nums">{warehouse.productCount.toLocaleString()}</dd>
+                    <dt className="text-xs text-muted-foreground">{m.products}</dt>
+                    <dd className="tabular-nums">{f.number(warehouse.productCount)}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">Units</dt>
-                    <dd className="tabular-nums">{warehouse.totalUnits.toLocaleString()}</dd>
+                    <dt className="text-xs text-muted-foreground">{m.units}</dt>
+                    <dd className="tabular-nums">{f.number(warehouse.totalUnits)}</dd>
                   </div>
                 </dl>
                 <WarehouseRowActions
@@ -267,28 +269,29 @@ function WarehouseRowActions({
   restore: (warehouse: Warehouse) => void;
 }) {
   const { organization, can } = useCurrentOrganization();
+  const m = useMessages(stock).warehouses;
   const size = compact ? 'icon-sm' : 'sm';
   return (
     <div className="flex flex-wrap items-center gap-1 @4xl:flex-nowrap @4xl:justify-end">
       <Link
         to={paths.warehouse(organization.id, warehouse.id)}
         className={buttonVariants({ variant: 'ghost', size })}
-        aria-label={`View ${warehouse.name}`}
-        title={compact ? 'View' : undefined}
+        aria-label={m.viewNamed({ name: warehouse.name })}
+        title={compact ? m.view : undefined}
       >
         <Eye aria-hidden="true" />
-        {!compact && 'View'}
+        {!compact && m.view}
       </Link>
       {manage && can('WAREHOUSES_UPDATE') && (
         <Button
           variant="ghost"
           size={size}
           onClick={() => edit(warehouse)}
-          aria-label={`Edit ${warehouse.name}`}
-          title={compact ? 'Edit' : undefined}
+          aria-label={m.editNamed({ name: warehouse.name })}
+          title={compact ? m.edit : undefined}
         >
           <Pencil aria-hidden="true" />
-          {!compact && 'Edit'}
+          {!compact && m.edit}
         </Button>
       )}
       {manage &&
@@ -298,11 +301,11 @@ function WarehouseRowActions({
             variant="ghost"
             size={size}
             onClick={() => archive(warehouse)}
-            aria-label={`Archive ${warehouse.name}`}
-            title={compact ? 'Archive' : undefined}
+            aria-label={m.archiveNamed({ name: warehouse.name })}
+            title={compact ? m.archive : undefined}
           >
             <Archive aria-hidden="true" />
-            {!compact && 'Archive'}
+            {!compact && m.archive}
           </Button>
         ) : (
           <Button
@@ -310,11 +313,11 @@ function WarehouseRowActions({
             size={size}
             isLoading={pending}
             onClick={() => restore(warehouse)}
-            aria-label={`Restore ${warehouse.name}`}
-            title={compact ? 'Restore' : undefined}
+            aria-label={m.restoreNamed({ name: warehouse.name })}
+            title={compact ? m.restore : undefined}
           >
             {!pending && <ArchiveRestore aria-hidden="true" />}
-            {!compact && 'Restore'}
+            {!compact && m.restore}
           </Button>
         ))}
     </div>

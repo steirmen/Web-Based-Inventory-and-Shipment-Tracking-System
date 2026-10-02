@@ -1,4 +1,5 @@
 import type {
+  ReportExportQuery,
   InventoryReportQuery,
   InventoryReportResponse,
   OrdersReportQuery,
@@ -65,8 +66,18 @@ export function getInventoryReport(
   );
 }
 
-/** The CSV of a report with the same filters and sort (no paging: the server caps the row count). */
-export function exportReport(organizationId: string, type: ReportType, query: ReportQuery) {
+/**
+ * The export of a report with the same filters and sort (no paging: the server
+ * caps the row count): an Excel workbook or a CSV file, with labels in `lang`.
+ */
+export function exportReport(
+  organizationId: string,
+  type: ReportType,
+  query: ReportQuery,
+  options: ReportExportQuery,
+) {
   const { page: _page, pageSize: _pageSize, ...filters } = query;
-  return apiDownload(`${reportPath(organizationId, type, '/export')}${toSearchParams(filters)}`);
+  return apiDownload(
+    `${reportPath(organizationId, type, '/export')}${toSearchParams({ ...filters, ...options })}`,
+  );
 }

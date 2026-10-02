@@ -4,9 +4,10 @@ import { type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import { ThemePicker } from '@/components/appearance/theme-picker';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { useAppearance } from '@/lib/appearance/appearance-context';
 import { GUEST_THEME_IDS } from '@/lib/appearance/guest';
-import { MODE_LABELS } from '@/lib/appearance/labels';
 import { cn } from '@/lib/cn';
 
 const MODE_ICONS = { light: <Sun aria-hidden="true" />, dark: <Moon aria-hidden="true" /> };
@@ -20,6 +21,7 @@ const MODE_ICONS = { light: <Sun aria-hidden="true" />, dark: <Moon aria-hidden=
  */
 export function GuestAppearanceControl() {
   const appearance = useAppearance();
+  const m = useMessages(common);
   const panelId = useId();
   const titleId = useId();
   const [open, setOpen] = useState(false);
@@ -67,7 +69,7 @@ export function GuestAppearanceControl() {
   };
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef}>
       <button
         ref={triggerRef}
         type="button"
@@ -79,7 +81,7 @@ export function GuestAppearanceControl() {
         className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'h-9 px-2.5')}
       >
         <Palette aria-hidden="true" />
-        <span className="sr-only sm:not-sr-only">Appearance</span>
+        <span className="sr-only sm:not-sr-only">{m.guestAppearance.title}</span>
       </button>
       {open && (
         <dialog
@@ -87,23 +89,20 @@ export function GuestAppearanceControl() {
           ref={panelRef}
           id={panelId}
           aria-labelledby={titleId}
-          className="absolute top-full right-0 left-auto z-50 m-0 mt-2 flex h-auto w-80 max-w-[calc(100vw-2rem)] animate-popover-in flex-col gap-4 rounded-card border border-border bg-surface p-4 text-foreground shadow-raised"
+          className="absolute top-full right-4 left-auto z-50 m-0 mt-2 flex h-auto w-80 max-w-[calc(100vw-2rem)] animate-popover-in flex-col gap-4 rounded-card border border-border bg-surface p-4 text-foreground shadow-raised sm:right-6"
         >
           <div className="flex flex-col gap-1">
             <h2 id={titleId} className="text-sm font-semibold">
-              Appearance
+              {m.guestAppearance.title}
             </h2>
-            <p className="text-xs text-muted-foreground">
-              Used on this device until you sign in. After signing in, your saved appearance
-              applies.
-            </p>
+            <p className="text-xs text-muted-foreground">{m.guestAppearance.description}</p>
           </div>
           <SegmentedControl
-            label="Mode"
+            label={m.guestAppearance.mode}
             value={current.mode}
             options={APPEARANCE_MODES.map((mode) => ({
               value: mode,
-              label: MODE_LABELS[mode],
+              label: m.modes[mode],
               icon: MODE_ICONS[mode],
             }))}
             onChange={(mode) => changeGuestAppearance({ mode })}

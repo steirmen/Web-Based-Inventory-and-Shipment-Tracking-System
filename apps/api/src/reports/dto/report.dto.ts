@@ -1,13 +1,18 @@
 import {
+  EXPORT_FORMATS,
+  type ExportFormat,
   INVENTORY_REPORT_SORT_FIELDS,
   type InventoryReportQuery,
   type InventoryReportSortField,
+  type Language,
+  LANGUAGES,
   ORDER_STATUSES,
   ORDERS_REPORT_SORT_FIELDS,
   type OrdersReportQuery,
   type OrdersReportSortField,
   type OrderStatus,
   REPORT_LIMITS as L,
+  type ReportExportQuery,
   SALES_REPORT_SORT_FIELDS,
   SALES_REPORT_STATUSES,
   type SalesReportQuery,
@@ -159,4 +164,33 @@ export class InventoryReportQueryDto implements InventoryReportQuery {
     message: `sortBy must be one of: ${INVENTORY_REPORT_SORT_FIELDS.join(', ')}.`,
   })
   sortBy?: InventoryReportSortField;
+}
+
+// --- Exports: the report's own query plus the file format and the label language -----
+
+const FORMAT = apply([
+  IsOptional(),
+  IsIn(EXPORT_FORMATS, { message: `format must be one of: ${EXPORT_FORMATS.join(', ')}.` }),
+]);
+const LANG = apply([
+  IsOptional(),
+  IsIn(LANGUAGES, { message: `lang must be one of: ${LANGUAGES.join(', ')}.` }),
+]);
+
+export class SalesReportExportQueryDto extends SalesReportQueryDto implements ReportExportQuery {
+  @FORMAT format?: ExportFormat;
+  @LANG lang?: Language;
+}
+
+export class OrdersReportExportQueryDto extends OrdersReportQueryDto implements ReportExportQuery {
+  @FORMAT format?: ExportFormat;
+  @LANG lang?: Language;
+}
+
+export class InventoryReportExportQueryDto
+  extends InventoryReportQueryDto
+  implements ReportExportQuery
+{
+  @FORMAT format?: ExportFormat;
+  @LANG lang?: Language;
 }

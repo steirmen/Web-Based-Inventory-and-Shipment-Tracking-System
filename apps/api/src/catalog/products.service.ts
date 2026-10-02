@@ -1,5 +1,6 @@
 import {
   CATALOG_LIMITS,
+  DEFAULT_CURRENCY,
   type ProductListResponse,
   type ProductResponse,
   type ProductSortField,
@@ -115,6 +116,7 @@ export class ProductsService {
             categoryId: input.categoryId ?? null,
             price: input.price,
             cost: input.cost,
+            currency: input.currency ?? DEFAULT_CURRENCY,
             minimumStock: input.minimumStock,
           },
           select: PRODUCT_SELECT,
@@ -125,7 +127,7 @@ export class ProductsService {
           action: ActivityAction.PRODUCT_CREATED,
           entityType: 'Product',
           entityId: product.id,
-          metadata: { name: product.name, sku: product.sku },
+          metadata: { name: product.name, sku: product.sku, currency: product.currency },
         });
         return { product: toProduct(product) };
       });
@@ -192,6 +194,11 @@ export class ProductsService {
             current.cost ? toMoney(current.cost) : null,
             toMoney(new Prisma.Decimal(input.cost)),
           );
+        }
+        // Changes future order lines only: existing lines keep their currency snapshot.
+        if (input.currency !== undefined && input.currency !== current.currency) {
+          data.currency = input.currency;
+          track('currency', current.currency, input.currency);
         }
         if (input.minimumStock !== undefined && input.minimumStock !== current.minimumStock) {
           data.minimumStock = input.minimumStock;

@@ -16,5 +16,6 @@ afterEach(() => {
   for (const key of Object.keys(document.documentElement.dataset)) {
     delete document.documentElement.dataset[key];
   }
+  document.documentElement.lang = 'en';
   localStorage.clear();
 });

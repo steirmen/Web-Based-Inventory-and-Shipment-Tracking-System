@@ -1,6 +1,8 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { CircleAlert, CircleCheck, Info, TriangleAlert, X, type LucideIcon } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { cn } from '@/lib/cn';
 
 const alertVariants = cva('flex gap-3 rounded-control border p-4 text-sm', {
@@ -49,6 +51,7 @@ export function Alert({
   ...props
 }: AlertProps) {
   const Icon = icons[tone ?? 'info'];
+  const dismissLabel = useMessages(common).actions.dismiss;
 
   return (
     <div
@@ -65,7 +68,7 @@ export function Alert({
         <button
           type="button"
           onClick={onDismiss}
-          aria-label="Dismiss"
+          aria-label={dismissLabel}
           className="-my-1 -mr-1.5 flex size-7 shrink-0 items-center justify-center rounded-control opacity-70 focus-ring transition-opacity duration-150 hover:opacity-100"
         >
           <X className="size-4" aria-hidden="true" />

@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { RangePicker } from '@/components/dashboard/range-picker';
+import { CurrencySwitch } from '@/components/dashboard/currency-switch';
 import { PageHeader } from '@/components/layout/page-header';
 import { OrderStatusBadge } from '@/components/orders/order-status-badge';
 import {
@@ -22,15 +23,12 @@ import { Select } from '@/components/ui/select';
 import { useCategories, useProduct } from '@/hooks/use-catalog';
 import { useWarehouses } from '@/hooks/use-inventory';
 import { useReportExport, useSalesReport } from '@/hooks/use-reports';
+import { useFormat } from '@/i18n/format';
+import { useLanguage, useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { insights } from '@/i18n/messages/insights';
 import { pageTitle } from '@/lib/app-config';
-import {
-  browserTimeZone,
-  formatCount,
-  formatDayRange,
-  writeDashboardParams,
-} from '@/lib/dashboard-params';
-import { formatDateTime } from '@/lib/format';
-import { formatMoney } from '@/lib/money';
+import { browserTimeZone, formatDayRange, writeDashboardParams } from '@/lib/dashboard-params';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import {
   hasSalesFilters,
@@ -40,7 +38,6 @@ import {
   toSalesQuery,
   writeSalesParams,
 } from '@/lib/report-params';
-import { ORDER_STATUS_LABELS } from '@/lib/sales-params';
 import { paths } from '@/routes/paths';
 
 /**
@@ -59,6 +56,11 @@ export function SalesReportPage() {
   const warehouses = useWarehouses(organization.id);
   const categories = useCategories(organization.id);
   const data = report.data;
+  const r = useMessages(insights);
+  const m = r.salesReport;
+  const c = useMessages(common);
+  const f = useFormat();
+  const language = useLanguage().language;
 
   const setParams = (changes: Partial<SalesReportParams>) => {
     exporter.reset();
@@ -85,15 +87,15 @@ export function SalesReportPage() {
   const columns: ReportColumn<SalesReportRow, SalesReportSortField>[] = [
     {
       key: 'date',
-      header: 'Date',
+      header: m.date,
       sort: 'date',
       defaultOrder: 'desc',
       className: 'whitespace-nowrap text-muted-foreground',
-      cell: (row) => formatDateTime(row.date),
+      cell: (row) => f.dateTime(row.date),
     },
     {
       key: 'order',
-      header: 'Order',
+      header: m.order,
       sort: 'orderNumber',
       cell: (row) => (
         <Link
@@ -106,7 +108,7 @@ export function SalesReportPage() {
     },
     {
       key: 'customer',
-      header: 'Customer',
+      header: m.customer,
       sort: 'customer',
       className: 'max-w-56',
       cell: (row) =>
@@ -120,31 +122,31 @@ export function SalesReportPage() {
             )}
           </span>
         ) : (
-          <span className="text-muted-foreground">No customer</span>
+          <span className="text-muted-foreground">{r.reports.noCustomer}</span>
         ),
     },
     {
       key: 'warehouse',
-      header: 'Warehouse',
+      header: m.warehouse,
       cell: (row) => <span className="font-mono text-xs">{row.warehouse.code}</span>,
     },
-    { key: 'status', header: 'Status', cell: (row) => <OrderStatusBadge status={row.status} /> },
+    { key: 'status', header: m.status, cell: (row) => <OrderStatusBadge status={row.status} /> },
     {
       key: 'units',
-      header: 'Units',
+      header: m.units,
       sort: 'units',
       defaultOrder: 'desc',
       align: 'right',
-      cell: (row) => formatCount(row.units),
+      cell: (row) => f.number(row.units),
     },
     {
       key: 'revenue',
-      header: 'Revenue',
+      header: m.revenue,
       sort: 'revenue',
       defaultOrder: 'desc',
       align: 'right',
-      className: 'font-medium',
-      cell: (row) => formatMoney(row.revenue),
+      className: 'font-medium whitespace-nowrap',
+      cell: (row) => f.money(row.revenue, row.currency),
     },
   ];
 
@@ -152,14 +154,21 @@ export function SalesReportPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Sales report · ${organization.name}`)}</title>
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
       <PageHeader
-        eyebrow="Reports"
-        title="Sales report"
-        description="Realized sales: orders that are processing, shipped, or completed, with units and revenue at the prices on the order."
+        eyebrow={r.reports.eyebrow}
+        title={m.title}
+        description={m.description}
         actions={
           <ExportButton
-            onExport={() => exporter.mutate(query)}
+            onExport={(format) =>
+              exporter.mutate({
+                // Exactly the rows shown: the report's currency when the server chose it.
+                query: data && !query.currency ? { ...query, currency: data.currency } : query,
+                format,
+                lang: language,
+              })
+            }
             pending={exporter.isPending}
             error={exporter.error}
             disabled={!data || data.pagination.totalItems === 0}
@@ -171,13 +180,21 @@ export function SalesReportPage() {
         periodSearch={writeDashboardParams(params.period).toString()}
       />
 
-      <search className="flex flex-col gap-3" aria-label="Sales report filters">
+      <search className="flex flex-col gap-3" aria-label={m.filters}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <p className="text-sm text-muted-foreground">
             {data
-              ? `${formatDayRange(data.period.from, data.period.to)} (${data.period.timeZone})`
-              : 'Date range'}
+              ? `${formatDayRange(data.period.from, data.period.to, f.locale)} (${data.period.timeZone})`
+              : r.reports.dateRange}
           </p>
+          {data && (
+            <CurrencySwitch
+              label={r.reports.currency}
+              value={data.currency}
+              currencies={data.currencies}
+              onChange={(currency) => setParams({ period: { ...params.period, currency } })}
+            />
+          )}
           <RangePicker
             key={writeDashboardParams(params.period).toString()}
             value={params.period}
@@ -188,10 +205,10 @@ export function SalesReportPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
           <ReportSearch
             value={params.search}
-            placeholder="Order, customer, or product…"
+            placeholder={m.searchPlaceholder}
             onSearch={onSearch}
           />
-          <FormField label="Status">
+          <FormField label={r.reports.status}>
             {(control) => (
               <Select
                 {...control}
@@ -200,33 +217,33 @@ export function SalesReportPage() {
                   setParams({ status: event.target.value as SalesReportParams['status'] })
                 }
               >
-                <option value="">All realized</option>
+                <option value="">{m.allRealized}</option>
                 {SALES_REPORT_STATUSES.map((status) => (
                   <option key={status} value={status}>
-                    {ORDER_STATUS_LABELS[status]}
+                    {c.orderStatus[status]}
                   </option>
                 ))}
               </Select>
             )}
           </FormField>
-          <FormField label="Warehouse">
+          <FormField label={r.reports.warehouse}>
             {(control) => (
               <Select
                 {...control}
                 value={params.warehouseId}
                 onChange={(event) => setParams({ warehouseId: event.target.value })}
               >
-                <option value="">All warehouses</option>
+                <option value="">{r.reports.allWarehouses}</option>
                 {warehouses.data?.warehouses.map((warehouse) => (
                   <option key={warehouse.id} value={warehouse.id}>
                     {warehouse.name}
-                    {warehouse.isActive ? '' : ' (archived)'}
+                    {warehouse.isActive ? '' : r.reports.archivedSuffix}
                   </option>
                 ))}
               </Select>
             )}
           </FormField>
-          <FormField label="Customer">
+          <FormField label={r.reports.customer}>
             {(control) => (
               <ReportCustomerFilter
                 control={control}
@@ -235,14 +252,14 @@ export function SalesReportPage() {
               />
             )}
           </FormField>
-          <FormField label="Category">
+          <FormField label={r.reports.category}>
             {(control) => (
               <Select
                 {...control}
                 value={params.categoryId}
                 onChange={(event) => setParams({ categoryId: event.target.value })}
               >
-                <option value="">All categories</option>
+                <option value="">{r.reports.allCategories}</option>
                 {categories.data?.categories.map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -256,9 +273,9 @@ export function SalesReportPage() {
           {data && data.pagination.totalItems > 0 ? (
             <ReportSummary
               items={[
-                { label: 'Orders', value: formatCount(data.totals.orders) },
-                { label: 'Units', value: formatCount(data.totals.units) },
-                { label: 'Revenue', value: formatMoney(data.totals.revenue) },
+                { label: m.orders, value: f.number(data.totals.orders) },
+                { label: m.units, value: f.number(data.totals.units) },
+                { label: m.revenue, value: f.money(data.totals.revenue, data.currency) },
               ]}
             />
           ) : (
@@ -275,25 +292,23 @@ export function SalesReportPage() {
           </div>
         </div>
         {(params.productId || params.categoryId) && (
-          <p className="text-xs text-muted-foreground">
-            Units and revenue count only the lines of the selected product or category.
-          </p>
+          <p className="text-xs text-muted-foreground">{m.linesOnly}</p>
         )}
       </search>
 
       <ReportResults
-        label="sales report"
+        label={m.noun}
         query={report}
         totalItems={data?.pagination.totalItems}
         filtered={filtered}
-        emptyTitle="No sales in this period."
-        emptyDescription="Orders appear here once they are processed (their stock deducted). Try a longer date range."
+        emptyTitle={m.empty}
+        emptyDescription={m.emptyText}
         emptyAction={
           <Link
             to={paths.orders(organization.id)}
             className="text-sm font-medium text-primary hover:underline"
           >
-            View orders
+            {r.reports.viewOrders}
           </Link>
         }
         onClearFilters={clearFilters}
@@ -304,7 +319,7 @@ export function SalesReportPage() {
       >
         {data && (
           <ReportTable
-            caption="Realized sales"
+            caption={m.caption}
             columns={columns}
             rows={data.items}
             rowKey={(row) => row.orderId}
@@ -321,15 +336,16 @@ export function SalesReportPage() {
 /** The product filter (set from the dashboard's top products), with the product's name. */
 function ProductFilterChip({ productId, onClear }: { productId: string; onClear: () => void }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(insights).salesReport;
   const product = useProduct(organization.id, productId);
   return (
     <Badge tone="primary" className="gap-2 py-1">
-      Product: {product.data?.product.name ?? '…'}
+      {m.productChip({ name: product.data?.product.name ?? '…' })}
       <button
         type="button"
         onClick={onClear}
         className="rounded-full focus-ring"
-        aria-label="Remove the product filter"
+        aria-label={m.removeProduct}
       >
         <X className="size-3" aria-hidden="true" />
       </button>

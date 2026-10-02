@@ -26,16 +26,17 @@ import {
 } from '@/components/ui/table';
 import { useWarehouses } from '@/hooks/use-inventory';
 import { useCustomer, useOrders } from '@/hooks/use-sales';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { sales } from '@/i18n/messages/sales';
 import { pageTitle } from '@/lib/app-config';
 import { cn } from '@/lib/cn';
-import { formatDate } from '@/lib/format';
 import { browserTimeZone } from '@/lib/local-days';
-import { formatMoney } from '@/lib/money';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import {
   hasOrderFilters,
   ORDER_SORT_OPTIONS,
-  ORDER_STATUS_LABELS,
   type OrderParams,
   readOrderParams,
   toOrderQuery,
@@ -52,6 +53,8 @@ const SEARCH_DEBOUNCE_MS = 300;
  */
 export function OrdersPage() {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(sales).orders;
+  const c = useMessages(common);
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readOrderParams(searchParams);
   const invalidRange = Boolean(params.from && params.to && params.from > params.to);
@@ -88,33 +91,29 @@ export function OrdersPage() {
     <Can permission="ORDERS_CREATE">
       <Link to={paths.orderNew(organization.id)} className={buttonVariants()}>
         <Plus aria-hidden="true" />
-        New order
+        {m.new}
       </Link>
     </Can>
   );
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Orders · ${organization.name}`)}</title>
-      <PageHeader
-        title="Orders"
-        description="Sales orders from draft to completion. Stock is deducted when an order is processed."
-        actions={newOrder}
-      />
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
+      <PageHeader title={m.title} description={m.description} actions={newOrder} />
 
       <search className="flex flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
-          <FormField label="Search">
+          <FormField label={m.search}>
             {(control) => (
               <SearchInput
                 {...control}
-                placeholder="Order number or customer…"
+                placeholder={m.searchPlaceholder}
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
               />
             )}
           </FormField>
-          <FormField label="Status">
+          <FormField label={m.status}>
             {(control) => (
               <Select
                 {...control}
@@ -123,33 +122,33 @@ export function OrdersPage() {
                   setParams({ status: event.target.value as OrderParams['status'] })
                 }
               >
-                <option value="">All statuses</option>
+                <option value="">{m.allStatuses}</option>
                 {ORDER_STATUSES.map((status) => (
                   <option key={status} value={status}>
-                    {ORDER_STATUS_LABELS[status]}
+                    {c.orderStatus[status]}
                   </option>
                 ))}
               </Select>
             )}
           </FormField>
-          <FormField label="Warehouse">
+          <FormField label={m.warehouse}>
             {(control) => (
               <Select
                 {...control}
                 value={params.warehouseId}
                 onChange={(event) => setParams({ warehouseId: event.target.value })}
               >
-                <option value="">All warehouses</option>
+                <option value="">{m.allWarehouses}</option>
                 {warehouses.data?.warehouses.map((warehouse) => (
                   <option key={warehouse.id} value={warehouse.id}>
                     {warehouse.name}
-                    {warehouse.isActive ? '' : ' (archived)'}
+                    {warehouse.isActive ? '' : m.archivedSuffix}
                   </option>
                 ))}
               </Select>
             )}
           </FormField>
-          <FormField label="Sort">
+          <FormField label={m.sort}>
             {(control) => (
               <Select
                 {...control}
@@ -157,8 +156,8 @@ export function OrdersPage() {
                 onChange={(event) => setParams({ sort: event.target.value as OrderParams['sort'] })}
               >
                 {ORDER_SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+                  <option key={option} value={option}>
+                    {m.sortOptions[option]}
                   </option>
                 ))}
               </Select>
@@ -166,7 +165,7 @@ export function OrdersPage() {
           </FormField>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <FormField label="Created from">
+          <FormField label={m.from}>
             {(control) => (
               <Input
                 {...control}
@@ -178,13 +177,13 @@ export function OrdersPage() {
             )}
           </FormField>
           <FormField
-            label="Created to"
+            label={m.to}
             hint={
               params.from || params.to
-                ? `Days in ${params.timeZone || browserTimeZone()}.`
+                ? m.daysIn({ zone: params.timeZone || browserTimeZone() })
                 : undefined
             }
-            error={invalidRange ? 'Must not be before “from”.' : undefined}
+            error={invalidRange ? m.invalidRange : undefined}
           >
             {(control) => (
               <Input
@@ -205,21 +204,21 @@ export function OrdersPage() {
             />
           )}
           {orders.isFetching && !orders.isPending && (
-            <Spinner size="sm" label="Updating results" className="text-muted-foreground" />
+            <Spinner size="sm" label={m.updating} className="text-muted-foreground" />
           )}
           {filtered && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               <X aria-hidden="true" />
-              Clear filters
+              {c.actions.clearFilters}
             </Button>
           )}
         </div>
       </search>
 
-      {orders.isPending && <ListSkeleton label="Loading orders" />}
+      {orders.isPending && <ListSkeleton label={m.loading} />}
       {orders.isError && (
         <ErrorState
-          title="We couldn't load orders"
+          title={m.loadError}
           error={orders.error}
           onRetry={() => void orders.refetch()}
         />
@@ -228,12 +227,12 @@ export function OrdersPage() {
       {data && data.pagination.totalItems === 0 && (
         <EmptyState
           icon={<ClipboardList className="size-5" aria-hidden="true" />}
-          title={filtered ? 'No orders match your filters.' : 'No orders yet'}
-          description={filtered ? undefined : 'Create a draft order to start selling.'}
+          title={filtered ? m.noMatches : m.emptyTitle}
+          description={filtered ? undefined : m.emptyText}
           action={
             filtered ? (
               <Button variant="secondary" onClick={clearFilters}>
-                Clear filters
+                {c.actions.clearFilters}
               </Button>
             ) : (
               newOrder
@@ -261,10 +260,10 @@ export function OrdersPage() {
 
       {data && data.items.length === 0 && data.pagination.totalItems > 0 && (
         <EmptyState
-          title="This page is empty."
+          title={m.pageEmpty}
           action={
             <Button variant="secondary" onClick={() => setParams({ page: 1 })}>
-              Go to the first page
+              {m.firstPage}
             </Button>
           }
         />
@@ -276,15 +275,16 @@ export function OrdersPage() {
 /** The customer filter (set from a customer's page), with its name. */
 function CustomerFilterChip({ customerId, onClear }: { customerId: string; onClear: () => void }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(sales).orders;
   const customer = useCustomer(organization.id, customerId);
   return (
     <Badge tone="primary" className="gap-2 py-1">
-      Customer: {customer.data?.customer.name ?? '…'}
+      {m.customerChip({ name: customer.data?.customer.name ?? '…' })}
       <button
         type="button"
         onClick={onClear}
         className="rounded-full focus-ring"
-        aria-label="Remove the customer filter"
+        aria-label={m.removeCustomerFilter}
       >
         <X className="size-3" aria-hidden="true" />
       </button>
@@ -292,22 +292,24 @@ function CustomerFilterChip({ customerId, onClear }: { customerId: string; onCle
   );
 }
 
-const customerName = (order: OrderListItem) =>
-  order.customer ? (order.customer.companyName ?? order.customer.name) : 'No customer';
+const customerName = (order: OrderListItem, none: string) =>
+  order.customer ? (order.customer.companyName ?? order.customer.name) : none;
 
 function OrderTable({ items }: { items: OrderListItem[] }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(sales).orders;
+  const f = useFormat();
   return (
     <Table className="hidden @3xl:table">
       <TableHeader>
         <tr>
-          <TableHead>Order</TableHead>
-          <TableHead>Customer</TableHead>
-          <TableHead>Warehouse</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead align="right">Lines</TableHead>
-          <TableHead align="right">Total</TableHead>
-          <TableHead>Created</TableHead>
+          <TableHead>{m.order}</TableHead>
+          <TableHead>{m.customer}</TableHead>
+          <TableHead>{m.warehouse}</TableHead>
+          <TableHead>{m.status}</TableHead>
+          <TableHead align="right">{m.lines}</TableHead>
+          <TableHead align="right">{m.total}</TableHead>
+          <TableHead>{m.created}</TableHead>
         </tr>
       </TableHeader>
       <TableBody>
@@ -322,7 +324,7 @@ function OrderTable({ items }: { items: OrderListItem[] }) {
               </Link>
             </TableCell>
             <TableCell className="max-w-56 truncate">
-              {customerName(order)}
+              {customerName(order, m.noCustomer)}
               {order.customer?.companyName && (
                 <span className="block truncate text-xs text-muted-foreground">
                   {order.customer.name}
@@ -333,12 +335,12 @@ function OrderTable({ items }: { items: OrderListItem[] }) {
             <TableCell>
               <OrderStatusBadge status={order.status} />
             </TableCell>
-            <TableCell align="right">{order.itemCount}</TableCell>
-            <TableCell align="right" className="font-medium">
-              {formatMoney(order.total)}
+            <TableCell align="right">{f.number(order.itemCount)}</TableCell>
+            <TableCell align="right" className="font-medium whitespace-nowrap">
+              {f.money(order.total, order.currency)}
             </TableCell>
             <TableCell className="whitespace-nowrap text-muted-foreground">
-              {formatDate(order.createdAt)}
+              {f.date(order.createdAt)}
             </TableCell>
           </TableRow>
         ))}
@@ -349,8 +351,10 @@ function OrderTable({ items }: { items: OrderListItem[] }) {
 
 function OrderCards({ items }: { items: OrderListItem[] }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(sales).orders;
+  const f = useFormat();
   return (
-    <ul className="divide-y divide-border @3xl:hidden" aria-label="Orders">
+    <ul className="divide-y divide-border @3xl:hidden" aria-label={m.list}>
       {items.map((order) => (
         <li key={order.id} className="flex flex-col gap-2 p-4">
           <div className="flex items-start justify-between gap-3">
@@ -361,22 +365,22 @@ function OrderCards({ items }: { items: OrderListItem[] }) {
               >
                 {order.orderNumber}
               </Link>
-              <p className="truncate text-sm">{customerName(order)}</p>
+              <p className="truncate text-sm">{customerName(order, m.noCustomer)}</p>
             </div>
             <OrderStatusBadge status={order.status} />
           </div>
           <dl className="grid grid-cols-3 gap-3 text-sm">
             <div>
-              <dt className="text-xs text-muted-foreground">Warehouse</dt>
+              <dt className="text-xs text-muted-foreground">{m.warehouse}</dt>
               <dd className="font-mono text-xs">{order.warehouse.code}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Total</dt>
-              <dd className="font-medium tabular-nums">{formatMoney(order.total)}</dd>
+              <dt className="text-xs text-muted-foreground">{m.total}</dt>
+              <dd className="font-medium tabular-nums">{f.money(order.total, order.currency)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Created</dt>
-              <dd>{formatDate(order.createdAt)}</dd>
+              <dt className="text-xs text-muted-foreground">{m.created}</dt>
+              <dd>{f.date(order.createdAt)}</dd>
             </div>
           </dl>
         </li>

@@ -30,6 +30,8 @@ describe('GET /organizations/:id/dashboard/summary — access', () => {
     expect(Object.keys(response.body).sort()).toEqual(
       [
         'comparisonPeriod',
+        'currencies',
+        'currency',
         'generatedAt',
         'kpis',
         'orderStatus',

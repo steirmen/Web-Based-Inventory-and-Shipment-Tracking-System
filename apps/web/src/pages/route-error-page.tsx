@@ -2,16 +2,16 @@ import { isRouteErrorResponse, Link, useRouteError } from 'react-router';
 import { Alert } from '@/components/ui/alert';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { pageTitle } from '@/lib/app-config';
 import { paths } from '@/routes/paths';
 
 /** A readable explanation of a routing/rendering failure — never a stack trace. */
-function errorMessage(error: unknown): string {
+function errorMessage(error: unknown, m: { chunk: string; crash: string }): string {
   if (isRouteErrorResponse(error)) return `${error.status} ${error.statusText}`;
-  if (isChunkLoadError(error)) {
-    return 'This page could not be loaded. Check your connection, then reload the app.';
-  }
-  return 'Something on this page stopped working. Reloading usually fixes it.';
+  if (isChunkLoadError(error)) return m.chunk;
+  return m.crash;
 }
 
 /**
@@ -26,26 +26,27 @@ function errorMessage(error: unknown): string {
  */
 export function RouteErrorPage({ inShell = false }: { inShell?: boolean }) {
   const error = useRouteError();
+  const m = useMessages(common).routeError;
 
   const card = (
     <Card className="w-full max-w-md">
-      <title>{pageTitle('Something went wrong')}</title>
+      <title>{pageTitle(m.title)}</title>
       <CardHeader>
-        <CardTitle>{inShell ? 'This page could not be shown' : 'Something went wrong'}</CardTitle>
+        <CardTitle>{inShell ? m.pageTitle : m.title}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <Alert tone="danger">{errorMessage(error)}</Alert>
+        <Alert tone="danger">{errorMessage(error, m)}</Alert>
         <div className="flex flex-wrap gap-2">
           {/* Full page load on purpose: resets any broken client state. */}
           <a
             href={inShell ? window.location.href : paths.home}
             className={buttonVariants({ variant: 'secondary' })}
           >
-            Reload the page
+            {m.reload}
           </a>
           {inShell && (
             <Link to={paths.home} className={buttonVariants({ variant: 'ghost' })}>
-              Go to the start page
+              {m.home}
             </Link>
           )}
         </div>

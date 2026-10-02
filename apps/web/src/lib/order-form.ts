@@ -1,12 +1,15 @@
 import {
   type CreateOrderRequest,
+  type Currency,
   type Order,
   type OrderCustomerRef,
   ORDER_LIMITS,
   type UpdateOrderRequest,
 } from '@app/shared';
-import { apiErrorMessage, hasErrorCode } from './api-errors';
 import { ApiError } from '@/api/http-client';
+import type { Translation } from '@/i18n/define';
+import type { sales } from '@/i18n/messages/sales';
+import { hasErrorCode } from './api-errors';
 import type { FieldErrors } from './auth-form';
 import { lineTotal, sumMoney } from './order-money';
 
@@ -22,6 +25,8 @@ export interface OrderLineDraft {
   sku: string;
   /** Snapshot price for saved lines; the current product price for new ones. */
   unitPrice: string;
+  /** Currency of the price (every line of an order has the same one). */
+  currency: Currency;
   /** As typed. */
   quantity: string;
   /** Already saved on the order (its price is a snapshot and won't change). */
@@ -65,6 +70,7 @@ export function orderFormState(order: Order | null): OrderFormState {
         name: item.productName,
         sku: item.sku,
         unitPrice: item.unitPrice,
+        currency: item.currency,
         quantity: String(item.quantity),
         saved: true,
         archived: item.productStatus !== 'ACTIVE',
@@ -72,26 +78,29 @@ export function orderFormState(order: Order | null): OrderFormState {
   };
 }
 
-export function validateOrderForm(state: OrderFormState): OrderFormErrors {
+type BuilderMessages = Translation<typeof sales.en>['builder'];
+
+/** The order's currency: the currency of its lines (all the same), null without lines. */
+export const orderCurrency = (state: OrderFormState): Currency | null =>
+  state.lines[0]?.currency ?? null;
+
+export function validateOrderForm(
+  state: OrderFormState,
+  m: BuilderMessages,
+  formatNumber: (value: number) => string = (value) => value.toLocaleString('en-US'),
+): OrderFormErrors {
   const lines: Record<string, string> = {};
   for (const line of state.lines) {
     if (parseQuantity(line.quantity) === null) {
-      lines[line.productId] =
-        `Enter a whole number from 1 to ${ORDER_LIMITS.quantityMax.toLocaleString()}.`;
+      lines[line.productId] = m.quantityRange({ max: formatNumber(ORDER_LIMITS.quantityMax) });
     }
   }
   return {
     fields: {
-      customerId: state.customer ? undefined : 'Choose a customer.',
-      warehouseId: state.warehouseId ? undefined : 'Choose a warehouse.',
-      items:
-        state.lines.length > ORDER_LIMITS.itemsMax
-          ? `An order can have at most ${ORDER_LIMITS.itemsMax} lines.`
-          : undefined,
-      notes:
-        state.notes.trim().length > ORDER_LIMITS.notesMaxLength
-          ? `Use at most ${ORDER_LIMITS.notesMaxLength} characters.`
-          : undefined,
+      customerId: state.customer ? undefined : m.chooseCustomer,
+      warehouseId: state.warehouseId ? undefined : m.warehouseRequired,
+      items: state.lines.length > ORDER_LIMITS.itemsMax ? m.tooManyLines : undefined,
+      notes: state.notes.trim().length > ORDER_LIMITS.notesMaxLength ? m.notesTooLong : undefined,
     },
     lines,
   };
@@ -150,27 +159,34 @@ const FIELD_FOR_CODE: Partial<Record<string, OrderField>> = {
   ORDER_PRODUCT_NOT_FOUND: 'items',
   ORDER_PRODUCT_INACTIVE: 'items',
   ORDER_TOTAL_LIMIT: 'items',
+  ORDER_CURRENCY_MISMATCH: 'items',
 };
 
 /** Where a failed save belongs: a field, a line (by product id), or the form as a whole. */
 export function mapOrderError(
   error: unknown,
   lines: OrderLineDraft[],
+  errorMessage: (error: unknown) => string,
+  fieldError: (params: { message: string }) => string,
+  invalidValue: string,
 ): { errors: OrderFormErrors; form: unknown } {
   const errors: OrderFormErrors = { fields: {}, lines: {} };
   if (!(error instanceof ApiError) || !error.code) return { errors, form: error };
   const field = FIELD_FOR_CODE[error.code];
   if (field) {
-    errors.fields[field] = apiErrorMessage(error);
+    errors.fields[field] = errorMessage(error);
     return { errors, form: null };
   }
   if (hasErrorCode(error, 'VALIDATION_ERROR')) {
     for (const detail of error.details ?? []) {
       const match = /^items\.(\d+)\./.exec(detail.field);
       const line = match ? lines[Number(match[1])] : undefined;
-      if (line) errors.lines[line.productId] = detail.messages[0] ?? 'Invalid value.';
+      const message = detail.messages[0]
+        ? fieldError({ message: detail.messages[0] })
+        : invalidValue;
+      if (line) errors.lines[line.productId] = message;
       else if (['customerId', 'warehouseId', 'notes', 'items'].includes(detail.field)) {
-        errors.fields[detail.field as OrderField] = detail.messages[0];
+        errors.fields[detail.field as OrderField] = message;
       }
     }
     if (hasOrderErrors(errors)) return { errors, form: null };

@@ -5,6 +5,8 @@ import {
   WAREHOUSE_CODE_PATTERN,
   type Warehouse,
 } from '@app/shared';
+import type { Translation } from '@/i18n/define';
+import type { stock } from '@/i18n/messages/stock';
 import type { FieldErrors } from './auth-form';
 
 /** Client-side checks for the warehouse form; the API remains authoritative. */
@@ -29,29 +31,28 @@ export const normalizeWarehouseCode = (value: string) => value.trim().toUpperCas
 export function validateWarehouse(
   values: WarehouseFormValues,
   options: { isNew: boolean },
+  m: Translation<typeof stock.en>['warehouseForm'],
 ): FieldErrors<WarehouseField> {
   const name = collapse(values.name);
   const code = normalizeWarehouseCode(values.code);
   return {
     name: !name
-      ? 'Enter a warehouse name.'
+      ? m.nameRequired
       : name.length > L.warehouseNameMaxLength
-        ? `Use at most ${L.warehouseNameMaxLength} characters.`
+        ? m.nameTooLong
         : undefined,
     // The code can't change after creation, so it's only checked for new warehouses.
     code: !options.isNew
       ? undefined
       : !code
-        ? 'Enter a short code, e.g. MAIN.'
+        ? m.codeRequired
         : code.length > L.warehouseCodeMaxLength
-          ? `Use at most ${L.warehouseCodeMaxLength} characters.`
+          ? m.codeTooLong
           : !WAREHOUSE_CODE_PATTERN.test(code)
-            ? 'Use letters, numbers, - and _ (starting with a letter or number).'
+            ? m.codePattern
             : undefined,
     address:
-      values.address.trim().length > L.warehouseAddressMaxLength
-        ? `Use at most ${L.warehouseAddressMaxLength} characters.`
-        : undefined,
+      values.address.trim().length > L.warehouseAddressMaxLength ? m.addressTooLong : undefined,
   };
 }
 

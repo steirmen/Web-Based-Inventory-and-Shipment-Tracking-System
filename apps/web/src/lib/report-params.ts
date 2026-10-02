@@ -291,12 +291,6 @@ export const hasInventoryReportFilters = (params: InventoryReportParams) =>
 
 // --- Shared -----------------------------------------------------------------------------
 
-export const REPORT_TITLES: Record<ReportType, string> = {
-  sales: 'Sales',
-  orders: 'Orders',
-  inventory: 'Inventory',
-};
-
 export function reportPath(organizationId: string, type: ReportType, search = ''): string {
   return `${paths.report(organizationId, type)}${search ? `?${search}` : ''}`;
 }

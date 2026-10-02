@@ -6,7 +6,10 @@ import type { FieldControlProps } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useCustomerSearch } from '@/hooks/use-sales';
-import { apiErrorMessage } from '@/lib/api-errors';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { sales } from '@/i18n/messages/sales';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { cn } from '@/lib/cn';
 import { useCurrentOrganization } from '@/lib/organization-context';
 
@@ -32,7 +35,7 @@ export function CustomerPicker({
   selected,
   onChange,
   includeArchived = false,
-  placeholder = 'Search by name, company, email…',
+  placeholder,
 }: {
   /** Label/description wiring from `FormField` (applied to the search field). */
   control: FieldControlProps;
@@ -42,6 +45,9 @@ export function CustomerPicker({
   placeholder?: string;
 }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(sales).picker;
+  const f = useFormat();
+  const errorMessage = useApiErrorMessage();
   const resultsId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -118,24 +124,24 @@ export function CustomerPicker({
       <div className="flex min-h-9 items-center gap-2 rounded-control border border-border-strong bg-surface px-3 py-1 shadow-card">
         <span className="min-w-0 flex-1 truncate text-sm">
           {describe(selected)}
-          {selected.isActive ? '' : ' (archived)'}
+          {selected.isActive ? '' : m.archivedSuffix}
         </span>
         {/* The field's label, hint, and error belong to this button while a customer is chosen. */}
         <Button
           variant="ghost"
           size="sm"
           id={control.id}
-          aria-label={`Change customer (${describe(selected)})`}
+          aria-label={m.changeNamed({ name: describe(selected) })}
           aria-describedby={control['aria-describedby']}
           aria-invalid={control['aria-invalid']}
           onClick={startEditing}
         >
-          Change
+          {m.change}
         </Button>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Remove the customer"
+          aria-label={m.remove}
           onClick={() => {
             onChange(null);
             startEditing();
@@ -169,7 +175,7 @@ export function CustomerPicker({
         aria-expanded={open}
         aria-controls={resultsId}
         autoComplete="off"
-        placeholder={placeholder}
+        placeholder={placeholder ?? m.placeholder}
         className="pl-9"
         maxLength={100}
         value={input}
@@ -186,13 +192,13 @@ export function CustomerPicker({
           className="absolute z-30 mt-1 flex max-h-80 w-full flex-col overflow-hidden rounded-control border border-border bg-surface shadow-raised"
         >
           {items.length > 0 && (
-            <ul ref={listRef} aria-label="Matching customers" className="overflow-y-auto py-1">
+            <ul ref={listRef} aria-label={m.matching} className="overflow-y-auto py-1">
               {items.map((customer, index) => {
                 const isSelected = selected?.id === customer.id;
                 const details = [
                   customer.companyName,
                   customer.email,
-                  customer.isActive ? null : 'Archived',
+                  customer.isActive ? null : m.archived,
                 ].filter(Boolean);
                 return (
                   <li key={customer.id}>
@@ -230,25 +236,25 @@ export function CustomerPicker({
           <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground first:border-t-0">
             {results.isPending ? (
               <span className="flex items-center gap-2">
-                <Spinner size="sm" label={null} /> Loading customers…
+                <Spinner size="sm" label={null} /> {m.loading}
               </span>
             ) : results.isError ? (
               <span className="flex flex-wrap items-center gap-2" role="alert">
-                {apiErrorMessage(results.error)}
+                {errorMessage(results.error)}
                 <Button variant="ghost" size="sm" onClick={() => void results.refetch()}>
-                  Try again
+                  {m.tryAgain}
                 </Button>
               </span>
             ) : items.length === 0 ? (
               <output>
                 {search
-                  ? `No ${status === 'ACTIVE' ? 'active ' : ''}customers match “${search}”.`
-                  : `No ${status === 'ACTIVE' ? 'active ' : ''}customers yet.`}
+                  ? m.noMatches({ term: search, activeOnly: status === 'ACTIVE' })
+                  : m.none({ activeOnly: status === 'ACTIVE' })}
               </output>
             ) : (
               <span className="flex flex-wrap items-center justify-between gap-2">
                 <output>
-                  Showing {items.length} of {total}
+                  {m.showing({ shown: f.number(items.length), total: f.number(total) })}
                 </output>
                 {results.hasNextPage && (
                   <Button
@@ -257,7 +263,7 @@ export function CustomerPicker({
                     onClick={() => void results.fetchNextPage()}
                     isLoading={results.isFetchingNextPage}
                   >
-                    Load more
+                    {m.loadMore}
                   </Button>
                 )}
               </span>

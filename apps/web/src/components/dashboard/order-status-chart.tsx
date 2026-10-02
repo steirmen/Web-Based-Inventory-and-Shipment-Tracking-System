@@ -3,8 +3,11 @@ import { Link } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { percentOf } from '@/lib/chart-math';
 import { cn } from '@/lib/cn';
-import { formatCount, ordersInPeriodPath } from '@/lib/dashboard-params';
-import { ORDER_STATUS_LABELS } from '@/lib/sales-params';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { insights } from '@/i18n/messages/insights';
+import { ordersInPeriodPath } from '@/lib/dashboard-params';
 
 /** Bar fill per status: the same semantic tones as the order status badges. */
 const BAR_TONES: Record<OrderStatus, string> = {
@@ -33,19 +36,20 @@ export function OrderStatusChart({
 }) {
   const total = statuses.reduce((sum, entry) => sum + entry.count, 0);
   const largest = Math.max(1, ...statuses.map((entry) => entry.count));
+  const m = useMessages(insights).statusChart;
+  const c = useMessages(common);
+  const f = useFormat();
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Orders by status</CardTitle>
+        <CardTitle>{m.title}</CardTitle>
         <CardDescription>
-          {total === 0
-            ? 'No orders were created in this period.'
-            : `${formatCount(total)} ${total === 1 ? 'order' : 'orders'} created in this period.`}
+          {total === 0 ? m.none : m.created({ count: total, formatted: f.number(total) })}
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ul className="flex flex-col gap-3" aria-label="Orders by status">
+        <ul className="flex flex-col gap-3" aria-label={m.title}>
           {statuses.map(({ status, count }) => {
             const share = percentOf(count, total);
             return (
@@ -53,16 +57,21 @@ export function OrderStatusChart({
                 <Link
                   to={ordersInPeriodPath(organizationId, status, period)}
                   className="group flex flex-col gap-1.5 rounded-control focus-ring"
-                  aria-label={`${ORDER_STATUS_LABELS[status]}: ${formatCount(count)} ${count === 1 ? 'order' : 'orders'}, ${share}%. View these orders`}
+                  aria-label={m.link({
+                    status: c.orderStatus[status],
+                    count,
+                    formatted: f.number(count),
+                    share: f.number(share),
+                  })}
                 >
                   <span className="flex items-baseline justify-between gap-3 text-sm">
                     <span className="font-medium text-foreground group-hover:underline">
-                      {ORDER_STATUS_LABELS[status]}
+                      {c.orderStatus[status]}
                     </span>
                     <span className="text-muted-foreground tabular-nums">
-                      <span className="font-medium text-foreground">{formatCount(count)}</span>
+                      <span className="font-medium text-foreground">{f.number(count)}</span>
                       {' · '}
-                      {share}%
+                      {f.percent(share)}
                     </span>
                   </span>
                   <span

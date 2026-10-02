@@ -8,7 +8,10 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { useCreateOrganization, useOrganizations } from '@/hooks/use-organizations';
-import { apiErrorMessage, hasErrorCode } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { workspace } from '@/i18n/messages/workspace';
+import { hasErrorCode, useApiErrorMessage } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
 import { type FieldErrors, hasErrors, serverFieldErrors } from '@/lib/auth-form';
 import { type OrganizationValues, slugify, validateOrganization } from '@/lib/organization-form';
@@ -24,6 +27,10 @@ export function OnboardingPage() {
   const [values, setValues] = useState<OrganizationValues>({ name: '', slug: '' });
   const [slugEdited, setSlugEdited] = useState(false);
   const [errors, setErrors] = useState<FieldErrors<keyof OrganizationValues>>({});
+  const w = useMessages(workspace);
+  const m = w.onboarding;
+  const errorMessages = useMessages(common).errors;
+  const errorMessage = useApiErrorMessage();
 
   const isFirstWorkspace = organizations.data?.organizations.length === 0;
 
@@ -47,7 +54,7 @@ export function OnboardingPage() {
     event.preventDefault();
     if (create.isPending) return;
 
-    const clientErrors = validateOrganization(values);
+    const clientErrors = validateOrganization(values, w.validation);
     setErrors(clientErrors);
     if (hasErrors(clientErrors)) return;
 
@@ -59,55 +66,49 @@ export function OnboardingPage() {
         },
         onError: (error) => {
           if (hasErrorCode(error, 'ORGANIZATION_SLUG_TAKEN')) {
-            setErrors({ slug: 'This slug is already taken. Try another one.' });
+            setErrors({ slug: m.slugTaken });
           } else {
-            setErrors(serverFieldErrors(error, FIELDS));
+            setErrors(serverFieldErrors(error, FIELDS, errorMessages));
           }
         },
       },
     );
   };
 
-  const formError = create.isError && !hasErrors(errors) ? apiErrorMessage(create.error) : null;
+  const formError = create.isError && !hasErrors(errors) ? errorMessage(create.error) : null;
 
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-6 py-2 sm:py-6">
-      <title>{pageTitle('Create workspace')}</title>
+      <title>{pageTitle(m.pageTitle)}</title>
       <Card className="shadow-raised">
         <CardHeader className="gap-1 pb-5">
           <div className="mb-3 flex size-10 items-center justify-center rounded-control bg-primary-soft text-primary-soft-foreground">
             <Building2 className="size-5" aria-hidden="true" />
           </div>
           <h1 className="text-xl font-semibold tracking-tight">
-            {isFirstWorkspace ? 'Create your workspace' : 'Create a new workspace'}
+            {isFirstWorkspace ? m.firstTitle : m.title}
           </h1>
-          <CardDescription>
-            A workspace holds your business&apos;s data and team. You&apos;ll be its owner.
-          </CardDescription>
+          <CardDescription>{m.description}</CardDescription>
         </CardHeader>
         <CardContent>
           <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
             {formError && <Alert tone="danger">{formError}</Alert>}
 
-            <FormField label="Organization name" error={errors.name}>
+            <FormField label={m.name} error={errors.name}>
               {(control) => (
                 <Input
                   {...control}
                   name="name"
                   autoComplete="organization"
                   maxLength={ORGANIZATION_LIMITS.nameMaxLength}
-                  placeholder="Acme Supplies"
+                  placeholder={m.namePlaceholder}
                   value={values.name}
                   onChange={onNameChange}
                 />
               )}
             </FormField>
 
-            <FormField
-              label="Organization slug"
-              error={errors.slug}
-              hint="Lowercase letters, numbers, and hyphens. It can't be changed later."
-            >
+            <FormField label={m.slug} error={errors.slug} hint={m.slugHint}>
               {(control) => (
                 <Input
                   {...control}
@@ -125,7 +126,7 @@ export function OnboardingPage() {
             </FormField>
 
             <Button type="submit" size="lg" className="mt-2 w-full" isLoading={create.isPending}>
-              {create.isPending ? 'Creating workspace…' : 'Create workspace'}
+              {create.isPending ? m.submitting : m.submit}
             </Button>
           </form>
         </CardContent>

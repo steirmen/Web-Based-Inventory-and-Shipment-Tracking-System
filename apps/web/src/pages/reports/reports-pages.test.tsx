@@ -24,7 +24,7 @@ import {
 } from '@/test/report-fixtures';
 import { customerPage, riverside } from '@/test/sales-fixtures';
 import { renderApp } from '@/test/render-app';
-import { formatMoney } from '@/lib/money';
+import { money } from '@/test/format';
 
 const REPORTS = `${ORG_API}/reports`;
 
@@ -81,9 +81,9 @@ describe('SalesReportPage', () => {
       `${ORG_APP}/orders/0198c0de-0000-7000-8000-0000000000d1`,
     );
     expect(within(first!).getByText('Acme, Inc.')).toBeVisible();
-    expect(within(first!).getByText(formatMoney('55.00'))).toBeVisible();
+    expect(within(first!).getByText(money('55.00'))).toBeVisible();
     expect(within(second!).getByText('No customer')).toBeVisible();
-    expect(screen.getByText(formatMoney('134.98'))).toBeVisible();
+    expect(screen.getByText(money('134.98'))).toBeVisible();
     expect(requestsTo(fetchMock, `${REPORTS}/sales`)[0]).toEqual({
       range: 'LAST_30_DAYS',
       timeZone: TIME_ZONE,
@@ -277,7 +277,8 @@ describe('CSV export', () => {
     );
     await screen.findByRole('table', { name: 'Realized sales' });
 
-    await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    await user.click(screen.getByRole('menuitem', { name: 'CSV (.csv)' }));
 
     await waitFor(() => expect(saved).toHaveLength(1));
     expect(saved[0]!.name).toBe('sales-report_2025-09-01_2025-09-30.csv');
@@ -288,6 +289,46 @@ describe('CSV export', () => {
         status: 'SHIPPED',
         sortBy: 'units',
         sortOrder: 'asc',
+        // The report's own currency, so the file holds exactly the rows shown.
+        currency: 'TRY',
+        format: 'csv',
+        lang: 'en',
+      },
+    ]);
+  });
+
+  it('exports an Excel workbook in the interface language', async () => {
+    const { fetchMock, user } = await openReport(
+      '/orders',
+      {
+        [`GET ${REPORTS}/orders/export`]: () =>
+          new Response(new Uint8Array([0x50, 0x4b, 0x03, 0x04]), {
+            headers: {
+              'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              'Content-Disposition':
+                'attachment; filename="siparis-raporu_2025-09-01_2025-09-30.xlsx"',
+            },
+          }),
+      },
+      'Orders report',
+    );
+    await screen.findByRole('table', { name: 'Orders' });
+    await user.click(screen.getByRole('radio', { name: 'Türkçe' }));
+    await screen.findByRole('heading', { name: 'Sipariş raporu' });
+
+    await user.click(screen.getByRole('button', { name: 'Dışa aktar' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Excel (.xlsx)' }));
+
+    await waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0]!.name).toBe('siparis-raporu_2025-09-01_2025-09-30.xlsx');
+    expect(requestsTo(fetchMock, `${REPORTS}/orders/export`)).toEqual([
+      {
+        range: 'LAST_30_DAYS',
+        timeZone: TIME_ZONE,
+        sortBy: 'createdAt',
+        sortOrder: 'desc',
+        format: 'xlsx',
+        lang: 'tr',
       },
     ]);
   });
@@ -306,7 +347,8 @@ describe('CSV export', () => {
     );
     await screen.findByRole('table', { name: 'Orders' });
 
-    await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    await user.click(screen.getByRole('menuitem', { name: 'CSV (.csv)' }));
 
     expect(await screen.findByText(/the maximum is 10,000\. Narrow the filters/)).toBeVisible();
     expect(saved).toHaveLength(0);
@@ -319,7 +361,7 @@ describe('CSV export', () => {
       'Inventory report',
     );
     expect(await screen.findByText('No stock recorded yet.')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Export' })).toBeDisabled();
   });
 });
 
@@ -442,7 +484,7 @@ describe('dashboard → reports', () => {
 
     expect(await screen.findByRole('link', { name: 'Sales report' })).toHaveAttribute(
       'href',
-      `${ORG_APP}/reports/sales?range=THIS_YEAR`,
+      `${ORG_APP}/reports/sales?range=THIS_YEAR&currency=TRY`,
     );
   });
 });

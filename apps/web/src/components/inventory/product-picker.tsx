@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import type { FieldControlProps } from '@/components/ui/form-field';
 import { Select } from '@/components/ui/select';
 import { SearchInput } from '@/components/ui/search-input';
+import type { Currency } from '@app/shared';
 import { useProducts } from '@/hooks/use-catalog';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { stock } from '@/i18n/messages/stock';
 import { useCurrentOrganization } from '@/lib/organization-context';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -15,6 +19,8 @@ export interface ProductChoice {
   sku: string;
   /** Current price (decimal string), when chosen from the product search. */
   price?: string;
+  /** Currency of the price. */
+  currency?: Currency;
 }
 
 /**
@@ -26,14 +32,23 @@ export function ProductPicker({
   value,
   selected,
   onChange,
+  showPrice = false,
 }: {
   control: FieldControlProps;
   value: string;
   /** The chosen product, kept selectable even when a new search no longer matches it. */
   selected: ProductChoice | null;
   onChange: (product: ProductChoice | null) => void;
+  /** Show each product's price in its currency (the order builder). */
+  showPrice?: boolean;
 }) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(stock).productPicker;
+  const f = useFormat();
+  const label = (product: ProductChoice) =>
+    showPrice && product.price
+      ? `${product.name} (${product.sku}) · ${f.money(product.price, product.currency ?? null)}`
+      : `${product.name} (${product.sku})`;
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
 
@@ -56,8 +71,8 @@ export function ProductPicker({
   return (
     <div className="flex flex-col gap-2">
       <SearchInput
-        aria-label="Search products by name or SKU"
-        placeholder="Search by name or SKU…"
+        aria-label={m.search}
+        placeholder={m.placeholder}
         value={input}
         onChange={(event) => setInput(event.target.value)}
       />
@@ -73,26 +88,20 @@ export function ProductPicker({
         }
       >
         <option value="">
-          {products.isPending
-            ? 'Loading products…'
-            : items.length === 0
-              ? 'No active products match'
-              : 'Choose a product'}
+          {products.isPending ? m.loading : items.length === 0 ? m.noMatches : m.choose}
         </option>
         {selected && !items.some((product) => product.id === selected.id) && (
-          <option value={selected.id}>
-            {selected.name} ({selected.sku})
-          </option>
+          <option value={selected.id}>{label(selected)}</option>
         )}
         {items.map((product) => (
           <option key={product.id} value={product.id}>
-            {product.name} ({product.sku})
+            {label(product)}
           </option>
         ))}
       </Select>
       {total > items.length && (
         <p className="text-xs text-muted-foreground">
-          Showing the first {items.length} of {total} matches. Refine the search to find others.
+          {m.showingFirst({ shown: f.number(items.length), total: f.number(total) })}
         </p>
       )}
     </div>

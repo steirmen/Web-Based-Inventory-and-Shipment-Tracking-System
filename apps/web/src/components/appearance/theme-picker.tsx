@@ -1,8 +1,10 @@
 import { type AppearanceConfig, THEME_IDS, type ThemeId } from '@app/shared';
 import { Check, Palette } from 'lucide-react';
 import { radioOptionProps } from '@/components/ui/use-radio-group';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { cn } from '@/lib/cn';
-import { THEMES, themePreview } from '@/lib/appearance/themes';
+import { themePreview } from '@/lib/appearance/themes';
 
 /**
  * Theme cards: each one is a miniature of the real interface in that theme
@@ -22,10 +24,11 @@ export function ThemePicker({
   themes?: readonly ThemeId[];
   compact?: boolean;
 }) {
+  const m = useMessages(common).themes;
   return (
     <div
       role="radiogroup"
-      aria-label="Theme"
+      aria-label={m.label}
       className={cn(
         'grid',
         compact
@@ -33,14 +36,14 @@ export function ThemePicker({
           : 'grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6',
       )}
     >
-      {THEMES.filter((theme) => themes.includes(theme.id)).map((theme) => {
-        const colors = themePreview(theme.id, config);
-        const checked = config.theme === theme.id;
+      {THEME_IDS.filter((id) => themes.includes(id)).map((id) => {
+        const colors = themePreview(id, config);
+        const checked = config.theme === id;
         return (
           <button
-            key={theme.id}
-            {...radioOptionProps(themes, config.theme, onChange, theme.id)}
-            aria-label={`${theme.name} theme`}
+            key={id}
+            {...radioOptionProps(themes, config.theme, onChange, id)}
+            aria-label={m.option({ name: m.names[id] })}
             className={cn(
               'group relative flex flex-col overflow-hidden rounded-card border text-left focus-ring transition',
               checked
@@ -73,7 +76,7 @@ export function ThemePicker({
                   style={{ background: colors.accent }}
                 />
               </span>
-              {theme.id === 'custom' && (
+              {id === 'custom' && (
                 <Palette
                   className="absolute top-2 left-2 size-4"
                   style={{ color: colors.accent }}
@@ -88,11 +91,11 @@ export function ThemePicker({
             >
               <span className="min-w-0">
                 <span className={cn('block truncate font-medium', compact ? 'text-xs' : 'text-sm')}>
-                  {theme.name}
+                  {m.names[id]}
                 </span>
                 {!compact && (
                   <span className="block truncate text-xs text-muted-foreground">
-                    {theme.description}
+                    {m.descriptions[id]}
                   </span>
                 )}
               </span>

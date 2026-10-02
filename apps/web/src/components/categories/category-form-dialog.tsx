@@ -7,7 +7,10 @@ import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateCategory, useUpdateCategory } from '@/hooks/use-catalog';
-import { apiErrorMessage, hasErrorCode } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { catalog } from '@/i18n/messages/catalog';
+import { common } from '@/i18n/messages/common';
+import { hasErrorCode, useApiErrorMessage } from '@/lib/api-errors';
 import { type FieldErrors, hasErrors, serverFieldErrors } from '@/lib/auth-form';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import {
@@ -33,15 +36,14 @@ export function CategoryFormDialog({
   onClose: () => void;
   onSaved: (message: string) => void;
 }) {
+  const m = useMessages(catalog).categoryForm;
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title={category ? 'Edit category' : 'New category'}
+      title={category ? m.editTitle : m.newTitle}
       size="md"
-      description={
-        category ? undefined : 'Group related products, e.g. "Office supplies" or "Packaging".'
-      }
+      description={category ? undefined : m.newDescription}
     >
       {/* Re-mounted per opening so the form starts from the category's current values. */}
       {open && (
@@ -66,6 +68,10 @@ function CategoryForm({
   onSaved: (message: string) => void;
 }) {
   const { organization } = useCurrentOrganization();
+  const catalogMessages = useMessages(catalog);
+  const m = catalogMessages.categoryForm;
+  const c = useMessages(common);
+  const errorMessage = useApiErrorMessage();
   const create = useCreateCategory(organization.id);
   const update = useUpdateCategory(organization.id);
   const mutation = category ? update : create;
@@ -83,10 +89,10 @@ function CategoryForm({
 
   const onError = (error: unknown) => {
     if (hasErrorCode(error, 'CATEGORY_NAME_TAKEN')) {
-      setErrors({ name: apiErrorMessage(error) });
+      setErrors({ name: errorMessage(error) });
       return;
     }
-    const fields = serverFieldErrors(error, CATEGORY_FIELDS);
+    const fields = serverFieldErrors(error, CATEGORY_FIELDS, c.errors);
     setErrors(fields);
     setFormError(hasErrors(fields) ? null : error);
   };
@@ -94,7 +100,7 @@ function CategoryForm({
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (mutation.isPending) return;
-    const validation = validateCategory(values);
+    const validation = validateCategory(values, catalogMessages.validation);
     setErrors(validation);
     setFormError(null);
     if (hasErrors(validation)) return;
@@ -103,11 +109,11 @@ function CategoryForm({
     if (category) {
       update.mutate(
         { categoryId: category.id, body },
-        { onSuccess: () => onSaved('Category saved.'), onError },
+        { onSuccess: () => onSaved(m.saved), onError },
       );
     } else {
       create.mutate(body, {
-        onSuccess: ({ category: created }) => onSaved(`${created.name} created.`),
+        onSuccess: ({ category: created }) => onSaved(m.created({ name: created.name })),
         onError,
       });
     }
@@ -115,8 +121,8 @@ function CategoryForm({
 
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-4">
-      {formError !== null && <Alert tone="danger">{apiErrorMessage(formError)}</Alert>}
-      <FormField label="Name" error={errors.name}>
+      {formError !== null && <Alert tone="danger">{errorMessage(formError)}</Alert>}
+      <FormField label={m.name} error={errors.name}>
         {(control) => (
           <Input
             {...control}
@@ -129,7 +135,7 @@ function CategoryForm({
           />
         )}
       </FormField>
-      <FormField label="Description" error={errors.description} hint="Optional.">
+      <FormField label={m.description} error={errors.description} hint={m.optional}>
         {(control) => (
           <Textarea
             {...control}
@@ -143,10 +149,10 @@ function CategoryForm({
       </FormField>
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button variant="secondary" onClick={onCancel} disabled={mutation.isPending}>
-          Cancel
+          {m.cancel}
         </Button>
         <Button type="submit" isLoading={mutation.isPending}>
-          {category ? 'Save changes' : 'Create category'}
+          {category ? m.save : m.create}
         </Button>
       </div>
     </form>

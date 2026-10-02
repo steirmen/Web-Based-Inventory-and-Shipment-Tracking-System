@@ -2,7 +2,7 @@
 
 A business operations SaaS platform for small and medium-sized businesses: inventory, orders, customers, and reporting.
 
-> **Status: Phase 9 (UI/UX polish and frontend performance).** The repository contains the technical foundation, the multi-tenant PostgreSQL domain schema, email/password **authentication** with database-backed sessions, **multi-tenant workspaces** (organization creation and switching, role-based access control for OWNER / ADMIN / STAFF, team management, invitation links, ownership transfer), the **product catalog** (categories and products with search, filters, sorting, pagination, and archive/restore), **warehouses & inventory** (warehouses with archive/restore, stock per product and warehouse with low-stock states, stock operations, and an immutable stock movement history), **customers & orders** (sales orders whose fulfillment deducts stock), **personal appearance settings**, the **dashboard** (the workspace overview: organization-scoped KPIs, sales and order charts, top products, recent orders, and stock summaries), and **reports** (sales, orders, and inventory with filters, sorting, pagination, and CSV export). The interface uses one design system throughout (workspace sidebar, consistent tables, forms, dialogs, and feedback; responsive down to 375px), and each page is downloaded on demand.
+> **Status: Phase 10.1 (export, product UX, currency, and localization).** The repository contains the technical foundation, the multi-tenant PostgreSQL domain schema, email/password **authentication** with database-backed sessions, **multi-tenant workspaces** (organization creation and switching, role-based access control for OWNER / ADMIN / STAFF, team management, invitation links, ownership transfer), the **product catalog** (categories and products with search, filters, sorting, pagination, and archive/restore), **warehouses & inventory** (warehouses with archive/restore, stock per product and warehouse with low-stock states, stock operations, and an immutable stock movement history), **customers & orders** (sales orders whose fulfillment deducts stock), **personal appearance settings**, the **dashboard** (the workspace overview: organization-scoped KPIs, sales and order charts, top products, recent orders, and stock summaries), and **reports** (sales, orders, and inventory with filters, sorting, pagination, and Excel or CSV export). The whole interface is available in **English and Turkish**, and products are priced in **Turkish lira, euro, or US dollar**. The interface uses one design system throughout (workspace sidebar, consistent tables, forms, dialogs, and feedback; responsive down to 375px), and each page is downloaded on demand.
 
 ## Tech stack
 
@@ -101,7 +101,8 @@ Details: [docs/organizations-rbac.md](docs/organizations-rbac.md).
 
 Each workspace has its own catalog under **Products** and **Categories** (`/org/:id/products`, `/org/:id/categories`).
 
-- **Products** have a name, a SKU (unique within the workspace), an optional description and category, a price and a cost (exact decimals, sent as strings such as `"19.99"`), and a minimum stock level.
+- **Products** have a name, a SKU (unique within the workspace), an optional description and category, a price and a cost (exact decimals, sent as strings such as `"19.99"`) in one currency (TRY, EUR, or USD; default TRY), and a minimum stock level.
+- **Choosing a category** is a search-as-you-type field over the workspace's categories; members who may create categories can add a new one right there ("Create “Garden”"), and an existing name is never duplicated (case-insensitive).
 - **The list** is searched, filtered (category, status), sorted, and paginated on the server. The current view is kept in the URL, so reloads and shared links show the same results.
 - **Archive instead of delete.** Products are never deleted. Archiving (with confirmation) keeps them for history, and they can be restored. Archived products can't be edited until restored.
 - **Categories** show how many products (active and archived) use them. A category that is in use can't be deleted: move its products first.
@@ -133,6 +134,7 @@ Stock operations are not idempotent: resending a request records it again (the U
 
 - Status workflow: Draft → Confirmed → Processing → Shipped → Completed; Draft and Confirmed orders can be cancelled.
 - **Processing** deducts stock: one SALE stock movement per line, all or nothing. If any line is short, nothing is deducted and the order stays Confirmed.
+- **One currency per order:** the first line sets it; a product priced in another currency can't be added (no exchange-rate conversion). See [docs/currency.md](docs/currency.md).
 - Shipping, completing, and cancelling never change stock. Staff can create, edit, and confirm orders; owners and admins also process, ship, complete, and cancel them.
 
 Details: [docs/customers-orders.md](docs/customers-orders.md).
@@ -149,6 +151,10 @@ Each user can change how Nexora looks for them under **Appearance** (palette ico
 - **Personal, not per workspace.** Your appearance is stored on the server with your account, so it follows you across workspaces, reloads, and devices. Other users never see it.
 
 Only the presentation changes: navigation, pages, and workflows are the same for everyone. Details: [docs/personalization-appearance.md](docs/personalization-appearance.md).
+
+## Language
+
+The **TR | EN** switch at the top right (and on the sign-in pages) changes the whole interface between English (the default) and Turkish at once, without a reload: your page, filters, and unsaved input stay. Signed in, the choice is saved with your account; signed out, it is remembered on the device. Numbers, dates, and money follow the language (`₺1,250.50` / `₺1.250,50`); names and other data you entered are never translated. Details: [docs/localization.md](docs/localization.md).
 
 ## Dashboard (workspace overview)
 
@@ -167,13 +173,13 @@ Every member (owner, admin, staff) can read it; it never changes data. Details: 
 
 ## Reports
 
-Under **Reports** (`/org/:id/reports`) every member can open three reports and download them as CSV:
+Under **Reports** (`/org/:id/reports`) every member can open three reports and download them as **Excel (.xlsx)** or CSV:
 
 - **Sales**: realized sales (processing, shipped, and completed orders) with units and revenue at the prices on the order, filterable by date range, status, warehouse, customer, category, product, and a search across order numbers, customers, and products.
 - **Orders**: every order created in the period with its status and total, filterable by date range, status, warehouse, customer, and search.
 - **Inventory**: current stock per product and warehouse with its stock status (in stock, low stock, out of stock), filterable by warehouse, category, status, and search; archived products and warehouses on request.
 
-Filters, sorting, and pages run on the server and are kept in the URL. **Export CSV** downloads exactly the filtered report (up to 10,000 rows; narrow the filters for larger exports). Exported cells that look like spreadsheet formulas are neutralized. Reports use the same definitions as the dashboard, so the numbers agree. Details: [docs/dashboard-reporting.md](docs/dashboard-reporting.md#reports).
+Filters, sorting, and pages run on the server and are kept in the URL. **Export** downloads exactly the filtered report (up to 10,000 rows; narrow the filters for larger exports) as an Excel workbook, which opens with proper columns in every Excel language (a plain CSV opened by double-click lands in one column under Turkish regional settings), or as a standard CSV; labels follow the interface language. Exported cells that look like spreadsheet formulas are neutralized. Money figures show one currency at a time; amounts in different currencies are never added together. Reports use the same definitions as the dashboard, so the numbers agree. Details: [docs/dashboard-reporting.md](docs/dashboard-reporting.md#reports).
 
 ## Commands
 
@@ -229,6 +235,9 @@ docs/           Architecture, design system, local setup
 - [Customers & orders](docs/customers-orders.md)
 - [Personalization & appearance](docs/personalization-appearance.md)
 - [Dashboard & reporting](docs/dashboard-reporting.md)
+- [Report exports (Excel, CSV)](docs/export.md)
+- [Currency](docs/currency.md)
+- [Localization (EN/TR)](docs/localization.md)
 - [Timestamps & time zones](docs/timezone.md)
 - [Security](docs/security.md)
 - [Testing & quality gate](docs/testing.md)

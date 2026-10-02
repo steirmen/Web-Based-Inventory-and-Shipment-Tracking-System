@@ -25,10 +25,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useCategories, useProducts, useProductStatusChange } from '@/hooks/use-catalog';
-import { apiErrorMessage } from '@/lib/api-errors';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { catalog } from '@/i18n/messages/catalog';
+import { common } from '@/i18n/messages/common';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
 import { cn } from '@/lib/cn';
-import { formatMoney } from '@/lib/money';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import {
   hasActiveFilters,
@@ -48,6 +51,9 @@ const SEARCH_DEBOUNCE_MS = 300;
  */
 export function ProductsPage() {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(catalog).products;
+  const c = useMessages(common);
+  const errorMessage = useApiErrorMessage();
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readProductListParams(searchParams);
   const products = useProducts(organization.id, toProductListQuery(params));
@@ -65,7 +71,9 @@ export function ProductsPage() {
         onSuccess: () => {
           setArchiveTarget(null);
           setNotice(
-            action === 'archive' ? `${product.name} archived.` : `${product.name} restored.`,
+            action === 'archive'
+              ? m.archived({ name: product.name })
+              : m.restored({ name: product.name }),
           );
         },
       },
@@ -119,15 +127,15 @@ export function ProductsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Products · ${organization.name}`)}</title>
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
       <PageHeader
-        title="Products"
-        description="Everything your business sells, with prices and reorder levels."
+        title={m.title}
+        description={m.description}
         actions={
           <Can permission="PRODUCTS_CREATE">
             <Link to={paths.productNew(organization.id)} className={buttonVariants()}>
               <Plus aria-hidden="true" />
-              Add product
+              {m.add}
             </Link>
           </Can>
         }
@@ -137,19 +145,19 @@ export function ProductsPage() {
         <SearchInput
           wrapperClassName="lg:max-w-sm lg:flex-1"
 
-          aria-label="Search products"
-          placeholder="Search products by name or SKU…"
+          aria-label={m.search}
+          placeholder={m.searchPlaceholder}
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:flex lg:flex-none">
           <Select
-            aria-label="Category"
+            aria-label={m.category}
             wrapperClassName="lg:w-44"
             value={params.categoryId}
             onChange={(event) => setParams({ categoryId: event.target.value })}
           >
-            <option value="">All categories</option>
+            <option value="">{m.allCategories}</option>
             {categories.data?.categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -157,19 +165,19 @@ export function ProductsPage() {
             ))}
           </Select>
           <Select
-            aria-label="Status"
+            aria-label={m.status}
             wrapperClassName="lg:w-36"
             value={params.status}
             onChange={(event) =>
               setParams({ status: event.target.value as ProductListParams['status'] })
             }
           >
-            <option value="">All statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="ARCHIVED">Archived</option>
+            <option value="">{m.allStatuses}</option>
+            <option value="ACTIVE">{c.status.active}</option>
+            <option value="ARCHIVED">{c.status.archived}</option>
           </Select>
           <Select
-            aria-label="Sort"
+            aria-label={m.sort}
             wrapperClassName="lg:w-52"
             value={params.sort}
             onChange={(event) =>
@@ -177,20 +185,20 @@ export function ProductsPage() {
             }
           >
             {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+              <option key={option} value={option}>
+                {m.sortOptions[option]}
               </option>
             ))}
           </Select>
         </div>
         <div className="flex items-center gap-2 lg:ml-auto">
           {products.isFetching && !products.isPending && (
-            <Spinner size="sm" label="Updating results" className="text-muted-foreground" />
+            <Spinner size="sm" label={m.updating} className="text-muted-foreground" />
           )}
           {filtered && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               <X aria-hidden="true" />
-              Clear filters
+              {c.actions.clearFilters}
             </Button>
           )}
         </div>
@@ -202,14 +210,14 @@ export function ProductsPage() {
         </Alert>
       )}
       {statusChange.isError && !archiveTarget && (
-        <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
+        <Alert tone="danger">{errorMessage(statusChange.error)}</Alert>
       )}
 
-      {products.isPending && <ListSkeleton label="Loading products" />}
+      {products.isPending && <ListSkeleton label={m.loading} />}
 
       {products.isError && (
         <ErrorState
-          title="We couldn't load products"
+          title={m.loadError}
           error={products.error}
           onRetry={() => void products.refetch()}
         />
@@ -218,13 +226,13 @@ export function ProductsPage() {
       {data && data.pagination.totalItems === 0 && !filtered && (
         <EmptyState
           icon={<PackageSearch className="size-5" aria-hidden="true" />}
-          title="No products yet"
-          description="Create your first product."
+          title={m.emptyTitle}
+          description={m.emptyText}
           action={
             <Can permission="PRODUCTS_CREATE">
               <Link to={paths.productNew(organization.id)} className={buttonVariants()}>
                 <Plus aria-hidden="true" />
-                Add product
+                {m.add}
               </Link>
             </Can>
           }
@@ -234,10 +242,10 @@ export function ProductsPage() {
       {data && data.pagination.totalItems === 0 && filtered && (
         <EmptyState
           icon={<Search className="size-5" aria-hidden="true" />}
-          title="No products match your filters."
+          title={m.noMatches}
           action={
             <Button variant="secondary" onClick={clearFilters}>
-              Clear filters
+              {c.actions.clearFilters}
             </Button>
           }
         />
@@ -273,10 +281,10 @@ export function ProductsPage() {
 
       {data && data.items.length === 0 && data.pagination.totalItems > 0 && (
         <EmptyState
-          title="This page is empty."
+          title={m.pageEmpty}
           action={
             <Button variant="secondary" onClick={() => setParams({ page: 1 })}>
-              Go to the first page
+              {m.firstPage}
             </Button>
           }
         />
@@ -294,21 +302,25 @@ interface TableProps {
 /** A table on large screens; stacked cards below `lg`, so nothing scrolls sideways. */
 function ProductTable({ items, pendingId, onStatusChange }: TableProps) {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(catalog).products;
+  const f = useFormat();
 
   return (
     <>
       <Table className="hidden @4xl:table">
         <TableHeader>
           <tr>
-            <TableHead>Product</TableHead>
-            <TableHead>SKU</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead align="right">Price</TableHead>
-            <TableHead align="right">Cost</TableHead>
-            <TableHead align="right">Min.&nbsp;stock</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>{m.columns.product}</TableHead>
+            <TableHead>{m.columns.sku}</TableHead>
+            <TableHead>{m.columns.category}</TableHead>
+            <TableHead align="right">{m.columns.price}</TableHead>
+            <TableHead align="right">{m.columns.cost}</TableHead>
+            <TableHead align="right" className="whitespace-nowrap">
+              {m.columns.minimumStock}
+            </TableHead>
+            <TableHead>{m.columns.status}</TableHead>
             <TableHead align="right">
-              <span className="sr-only">Actions</span>
+              <span className="sr-only">{m.columns.actions}</span>
             </TableHead>
           </tr>
         </TableHeader>
@@ -331,12 +343,12 @@ function ProductTable({ items, pendingId, onStatusChange }: TableProps) {
                 {product.category?.name ?? <span className="text-subtle-foreground">—</span>}
               </TableCell>
               <TableCell align="right" className="whitespace-nowrap">
-                {formatMoney(product.price)}
+                {f.money(product.price, product.currency)}
               </TableCell>
               <TableCell align="right" className="whitespace-nowrap">
-                {formatMoney(product.cost)}
+                {f.money(product.cost, product.currency)}
               </TableCell>
-              <TableCell align="right">{product.minimumStock}</TableCell>
+              <TableCell align="right">{f.number(product.minimumStock)}</TableCell>
               <TableCell>
                 <ProductStatusBadge status={product.status} />
               </TableCell>
@@ -353,7 +365,7 @@ function ProductTable({ items, pendingId, onStatusChange }: TableProps) {
         </TableBody>
       </Table>
 
-      <ul className="divide-y divide-border @4xl:hidden" aria-label="Products">
+      <ul className="divide-y divide-border @4xl:hidden" aria-label={m.list}>
         {items.map((product) => (
           <li key={product.id} className="flex flex-col gap-3 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -370,20 +382,20 @@ function ProductTable({ items, pendingId, onStatusChange }: TableProps) {
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
               <div>
-                <dt className="text-xs text-muted-foreground">Category</dt>
+                <dt className="text-xs text-muted-foreground">{m.columns.category}</dt>
                 <dd className="truncate">{product.category?.name ?? '—'}</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">Price</dt>
-                <dd className="tabular-nums">{formatMoney(product.price)}</dd>
+                <dt className="text-xs text-muted-foreground">{m.columns.price}</dt>
+                <dd className="tabular-nums">{f.money(product.price, product.currency)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">Cost</dt>
-                <dd className="tabular-nums">{formatMoney(product.cost)}</dd>
+                <dt className="text-xs text-muted-foreground">{m.columns.cost}</dt>
+                <dd className="tabular-nums">{f.money(product.cost, product.currency)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">Min. stock</dt>
-                <dd className="tabular-nums">{product.minimumStock}</dd>
+                <dt className="text-xs text-muted-foreground">{m.columns.minimumStock}</dt>
+                <dd className="tabular-nums">{f.number(product.minimumStock)}</dd>
               </div>
             </dl>
             <ProductActions

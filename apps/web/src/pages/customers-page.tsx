@@ -24,7 +24,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useCustomers, useCustomerStatusChange } from '@/hooks/use-sales';
-import { apiErrorMessage } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { sales } from '@/i18n/messages/sales';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { pageTitle } from '@/lib/app-config';
 import { cn } from '@/lib/cn';
 import { useCurrentOrganization } from '@/lib/organization-context';
@@ -47,6 +50,9 @@ type Editing = { mode: 'create' } | { mode: 'edit'; customer: Customer } | null;
  */
 export function CustomersPage() {
   const { organization } = useCurrentOrganization();
+  const m = useMessages(sales).customers;
+  const c = useMessages(common);
+  const errorMessage = useApiErrorMessage();
   const [searchParams, setSearchParams] = useSearchParams();
   const params = readCustomerParams(searchParams);
   const customers = useCustomers(organization.id, toCustomerQuery(params));
@@ -78,7 +84,11 @@ export function CustomersPage() {
       {
         onSuccess: () => {
           setArchiveTarget(null);
-          setNotice(`${customer.name} ${action === 'archive' ? 'archived' : 'restored'}.`);
+          setNotice(
+            action === 'archive'
+              ? m.archivedNotice({ name: customer.name })
+              : m.restoredNotice({ name: customer.name }),
+          );
         },
       },
     );
@@ -111,63 +121,59 @@ export function CustomersPage() {
         }}
       >
         <Plus aria-hidden="true" />
-        Add customer
+        {m.add}
       </Button>
     </Can>
   );
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Customers · ${organization.name}`)}</title>
-      <PageHeader
-        title="Customers"
-        description="People and businesses you sell to. Archived customers stay on their orders."
-        actions={addButton}
-      />
+      <title>{pageTitle(`${m.title} · ${organization.name}`)}</title>
+      <PageHeader title={m.title} description={m.description} actions={addButton} />
 
       <search className="flex flex-col gap-3 md:flex-row md:items-center">
         <SearchInput
           wrapperClassName="md:max-w-sm md:flex-1"
 
-          aria-label="Search customers"
-          placeholder="Name, company, email, or phone…"
+          aria-label={m.search}
+          placeholder={m.searchPlaceholder}
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:flex md:flex-none">
           <Select
-            aria-label="Status"
+            aria-label={m.status}
             wrapperClassName="md:w-40"
             value={params.status}
             onChange={(event) =>
               setParams({ status: event.target.value as CustomerParams['status'] })
             }
           >
-            <option value="ACTIVE">Active</option>
-            <option value="ARCHIVED">Archived</option>
-            <option value="ALL">All customers</option>
+            <option value="ACTIVE">{m.active}</option>
+            <option value="ARCHIVED">{m.archived}</option>
+            <option value="ALL">{m.all}</option>
           </Select>
           <Select
-            aria-label="Sort"
+            aria-label={m.sort}
             wrapperClassName="md:w-48"
             value={params.sort}
             onChange={(event) => setParams({ sort: event.target.value as CustomerParams['sort'] })}
           >
             {CUSTOMER_SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+              <option key={option} value={option}>
+                {m.sortOptions[option]}
               </option>
             ))}
           </Select>
         </div>
         <div className="flex items-center gap-2 md:ml-auto">
           {customers.isFetching && !customers.isPending && (
-            <Spinner size="sm" label="Updating results" className="text-muted-foreground" />
+            <Spinner size="sm" label={m.updating} className="text-muted-foreground" />
           )}
           {filtered && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               <X aria-hidden="true" />
-              Clear filters
+              {c.actions.clearFilters}
             </Button>
           )}
         </div>
@@ -179,13 +185,13 @@ export function CustomersPage() {
         </Alert>
       )}
       {statusChange.isError && !archiveTarget && (
-        <Alert tone="danger">{apiErrorMessage(statusChange.error)}</Alert>
+        <Alert tone="danger">{errorMessage(statusChange.error)}</Alert>
       )}
 
-      {customers.isPending && <ListSkeleton label="Loading customers" />}
+      {customers.isPending && <ListSkeleton label={m.loading} />}
       {customers.isError && (
         <ErrorState
-          title="We couldn't load customers"
+          title={m.loadError}
           error={customers.error}
           onRetry={() => void customers.refetch()}
         />
@@ -194,12 +200,12 @@ export function CustomersPage() {
       {data && data.pagination.totalItems === 0 && (
         <EmptyState
           icon={<Users className="size-5" aria-hidden="true" />}
-          title={filtered ? 'No customers match your filters.' : 'No customers yet'}
-          description={filtered ? undefined : 'Add the people and businesses you sell to.'}
+          title={filtered ? m.noMatches : m.emptyTitle}
+          description={filtered ? undefined : m.emptyText}
           action={
             filtered ? (
               <Button variant="secondary" onClick={clearFilters}>
-                Clear filters
+                {c.actions.clearFilters}
               </Button>
             ) : (
               addButton
@@ -214,13 +220,13 @@ export function CustomersPage() {
             <Table className="hidden @4xl:table">
               <TableHeader>
                 <tr>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Company</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead align="right">Orders</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>{m.name}</TableHead>
+                  <TableHead>{m.company}</TableHead>
+                  <TableHead>{m.contact}</TableHead>
+                  <TableHead align="right">{m.orders}</TableHead>
+                  <TableHead>{m.status}</TableHead>
                   <TableHead>
-                    <span className="sr-only">Actions</span>
+                    <span className="sr-only">{m.actions}</span>
                   </TableHead>
                 </tr>
               </TableHeader>
@@ -255,7 +261,7 @@ export function CustomersPage() {
                 ))}
               </TableBody>
             </Table>
-            <ul className="divide-y divide-border @4xl:hidden" aria-label="Customers">
+            <ul className="divide-y divide-border @4xl:hidden" aria-label={m.list}>
               {data.items.map((customer) => (
                 <li key={customer.id} className="flex flex-col gap-2 p-4">
                   <div className="flex items-start justify-between gap-3">
@@ -275,11 +281,10 @@ export function CustomersPage() {
                     <ActiveBadge isActive={customer.isActive} />
                   </div>
                   <p className="truncate text-sm text-muted-foreground">
-                    {[customer.email, customer.phone].filter(Boolean).join(' · ') ||
-                      'No contact details'}
+                    {[customer.email, customer.phone].filter(Boolean).join(' · ') || m.noContact}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {customer.orderCount} {customer.orderCount === 1 ? 'order' : 'orders'}
+                    {m.orderCount({ count: customer.orderCount })}
                   </p>
                   <CustomerActions customer={customer} actions={actions} />
                 </li>
@@ -331,6 +336,7 @@ function CustomerActions({
   compact?: boolean;
 }) {
   const { can } = useCurrentOrganization();
+  const m = useMessages(sales).customers;
   const size = compact ? 'icon-sm' : 'sm';
   return (
     <div className="flex flex-wrap items-center gap-1 @4xl:flex-nowrap @4xl:justify-end">
@@ -339,11 +345,11 @@ function CustomerActions({
           variant="ghost"
           size={size}
           onClick={() => actions.edit(customer)}
-          aria-label={`Edit ${customer.name}`}
-          title={compact ? 'Edit' : undefined}
+          aria-label={m.editNamed({ name: customer.name })}
+          title={compact ? m.edit : undefined}
         >
           <Pencil aria-hidden="true" />
-          {!compact && 'Edit'}
+          {!compact && m.edit}
         </Button>
       )}
       {can('CUSTOMERS_ARCHIVE') &&
@@ -352,22 +358,22 @@ function CustomerActions({
             variant="ghost"
             size={size}
             onClick={() => actions.archive(customer)}
-            aria-label={`Archive ${customer.name}`}
-            title={compact ? 'Archive' : undefined}
+            aria-label={m.archiveNamed({ name: customer.name })}
+            title={compact ? m.archive : undefined}
           >
             <Archive aria-hidden="true" />
-            {!compact && 'Archive'}
+            {!compact && m.archive}
           </Button>
         ) : (
           <Button
             variant="ghost"
             size={size}
             onClick={() => actions.restore(customer)}
-            aria-label={`Restore ${customer.name}`}
-            title={compact ? 'Restore' : undefined}
+            aria-label={m.restoreNamed({ name: customer.name })}
+            title={compact ? m.restore : undefined}
           >
             <ArchiveRestore aria-hidden="true" />
-            {!compact && 'Restore'}
+            {!compact && m.restore}
           </Button>
         ))}
     </div>

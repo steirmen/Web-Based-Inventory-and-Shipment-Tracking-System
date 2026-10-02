@@ -1,3 +1,5 @@
+import type { Language } from './i18n.js';
+
 /** Input limits shared by API validation and client-side form validation. */
 export const AUTH_LIMITS = {
   nameMaxLength: 200,
@@ -11,6 +13,8 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
+  /** The user's interface language; null until they choose one (the device language applies). */
+  language: Language | null;
 }
 
 /** Response body of `POST /auth/register`, `POST /auth/login`, and `GET /auth/me`. */

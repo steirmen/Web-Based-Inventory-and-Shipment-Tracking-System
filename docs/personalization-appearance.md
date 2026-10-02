@@ -22,7 +22,7 @@ Why no layout reconfiguration: Nexora is a shared business tool. Teammates, supp
 
 ## Settings model
 
-All identifiers are stable, lowercase, and defined once in [`packages/shared/src/appearance.ts`](../packages/shared/src/appearance.ts); display names live only in the web app (`lib/appearance/labels.ts`, `lib/appearance/themes.ts`) and are never persisted.
+All identifiers are stable, lowercase, and defined once in [`packages/shared/src/appearance.ts`](../packages/shared/src/appearance.ts); display names live only in the web app's dictionary (theme names in `i18n/messages/common.ts`, everything else in `i18n/messages/appearance.ts`, English and Turkish; see [localization.md](localization.md)) and are never persisted.
 
 | Field                | Values                                                                                                           | Default       |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------- |
@@ -218,4 +218,4 @@ Effects are decorative and drawn by **one** `<canvas>` (`BackgroundEffectLayer`,
 
 1. Add the id to `THEME_IDS` or `BACKGROUND_EFFECTS` in `packages/shared/src/appearance.ts`.
 2. Add a migration that replaces the CHECK constraints of both tables (`user_appearances_*_check`, `appearance_profiles_*_check`).
-3. Theme: add its spec to `PRESETS` and its card to `THEMES` in `lib/appearance/themes.ts` (the contrast tests cover it automatically). Effect: add a scene in `lib/appearance/effects.ts`, a label in `labels.ts`, and a preview in `effect-picker.tsx`.
+3. Theme: add its spec to `PRESETS` in `lib/appearance/themes.ts` and its name and description to `common.themes` in both languages (the contrast tests cover it automatically). Effect: add a scene in `lib/appearance/effects.ts`, its name and description to `appearance.effects`, and a preview in `effect-picker.tsx`.

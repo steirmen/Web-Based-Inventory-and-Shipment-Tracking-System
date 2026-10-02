@@ -3,8 +3,11 @@
  *
  * Money is always a decimal STRING with two fraction digits ("99.99", "0.00"),
  * matching the database NUMERIC(12,2) columns exactly. Never convert it to a
- * binary floating-point number for storage or arithmetic.
+ * binary floating-point number for storage or arithmetic. Every product has
+ * one currency for its price and cost (docs/currency.md).
  */
+
+import type { Currency } from './currency.js';
 
 export const PRODUCT_STATUSES = ['ACTIVE', 'ARCHIVED'] as const;
 export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
@@ -20,6 +23,8 @@ export const CATALOG_LIMITS = {
   searchMaxLength: 100,
   pageSizeDefault: 20,
   pageSizeMax: 100,
+  /** Results of a category search (`GET …/categories?search=`). */
+  categorySearchMax: 20,
 } as const;
 
 /**
@@ -45,6 +50,15 @@ export interface Category {
 
 export interface CategoryListResponse {
   categories: Category[];
+}
+
+/** `GET …/categories` query. Without `search`: every category, newest first. */
+export interface CategoryListQuery {
+  /**
+   * Case-insensitive match on the name: at most `categorySearchMax` results,
+   * exact (case-insensitive) matches first, then by name.
+   */
+  search?: string;
 }
 
 export interface CategoryResponse {
@@ -74,6 +88,8 @@ export interface Product {
   price: string;
   /** Decimal string; null only for legacy records created without a cost. */
   cost: string | null;
+  /** The currency of both price and cost. */
+  currency: Currency;
   minimumStock: number;
   status: ProductStatus;
   category: ProductCategoryRef | null;
@@ -140,6 +156,8 @@ export interface CreateProductRequest {
   price: string;
   /** Decimal string (MONEY_PATTERN). */
   cost: string;
+  /** Currency of price and cost. Default DEFAULT_CURRENCY (TRY). */
+  currency?: Currency;
   minimumStock: number;
 }
 

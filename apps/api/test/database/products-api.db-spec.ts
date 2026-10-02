@@ -65,6 +65,7 @@ describe('POST /organizations/:id/products', () => {
         description: 'Two-button mouse',
         price: '0.10',
         cost: '1234567890.99',
+        currency: 'TRY',
         minimumStock: 10,
         status: 'ACTIVE',
         category: { id: category.id, name: 'Electronics' },
@@ -152,6 +153,39 @@ describe('POST /organizations/:id/products', () => {
     expect(response.body.code).toBe('VALIDATION_ERROR');
     expect(response.body.details.map((d: { field: string }) => d.field)).toContain(field);
   });
+
+  it('stores the currency of price and cost (TRY by default) as an ISO code', async () => {
+    const team = await createTeam();
+
+    const euro = await create(
+      team.organization.id,
+      team.staff,
+      validProduct({ sku: 'EUR-1', currency: 'EUR', price: '120.00', cost: '70.00' }),
+    ).expect(201);
+    const lira = await create(team.organization.id, team.staff, validProduct({ sku: 'TRY-1' }));
+
+    expect(euro.body.product).toMatchObject({ currency: 'EUR', price: '120.00', cost: '70.00' });
+    expect(lira.status).toBe(201);
+    expect(lira.body.product.currency).toBe('TRY');
+    const log = await prisma.activityLog.findFirstOrThrow({
+      where: { action: 'PRODUCT_CREATED', entityId: euro.body.product.id },
+    });
+    expect(log.metadata).toMatchObject({ currency: 'EUR' });
+  });
+
+  it.each(['BTC', 'ABC', 'eur', '€', '<script>alert(1)</script>', '', 42, null])(
+    'rejects the currency %j',
+    async (currency) => {
+      const team = await createTeam();
+      const response = await create(
+        team.organization.id,
+        team.owner,
+        validProduct({ currency }),
+      ).expect(400);
+      expect(response.body.details.map((d: { field: string }) => d.field)).toContain('currency');
+      expect(await prisma.product.count()).toBe(0);
+    },
+  );
 
   it('rejects an organizationId in the body (never trusted)', async () => {
     const a = await createTeam('org-a');
@@ -352,6 +386,29 @@ describe('PATCH /organizations/:id/products/:productId', () => {
       .expect(409);
 
     expect(response.body.code).toBe('PRODUCT_ARCHIVED');
+  });
+});
+
+describe('PATCH …/products/:productId currency', () => {
+  it('changes the currency of price and cost, logs it, and validates it', async () => {
+    const team = await createTeam();
+    const product = await createProduct(team.organization.id, { price: '10.00', cost: '4.00' });
+    const patch = (body: object) =>
+      api()
+        .patch(`${base(team.organization.id)}/${product.id}`)
+        .set('Cookie', team.staff.cookie)
+        .send(body);
+
+    const changed = await patch({ currency: 'USD' }).expect(200);
+    await patch({ currency: 'XYZ' }).expect(400);
+    await patch({ currency: null }).expect(400);
+
+    expect(changed.body.product).toMatchObject({ currency: 'USD', price: '10.00', cost: '4.00' });
+    const log = await prisma.activityLog.findFirstOrThrow({ where: { action: 'PRODUCT_UPDATED' } });
+    expect(log.metadata).toMatchObject({ changes: { currency: { from: 'TRY', to: 'USD' } } });
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).currency).toBe(
+      'USD',
+    );
   });
 });
 

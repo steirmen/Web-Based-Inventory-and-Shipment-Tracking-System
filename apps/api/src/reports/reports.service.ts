@@ -1,12 +1,15 @@
 import {
+  CURRENCIES,
+  type Currency,
   type DashboardSelectedPeriod,
   type InventoryReportResponse,
   type InventoryReportRow,
   type InventoryReportSortField,
+  type Language,
+  type MoneyAmount,
   type OrdersReportResponse,
   type OrdersReportRow,
   type OrdersReportSortField,
-  type OrderStatus,
   type ProductStatus,
   REPORT_LIMITS,
   type SalesReportResponse,
@@ -14,46 +17,30 @@ import {
   type SalesReportSortField,
   type SalesReportStatus,
   type SortOrder,
-  type StockStatus,
 } from '@app/shared';
 import { Injectable } from '@nestjs/common';
 import { escapeLikePattern } from '../common/validation/like-pattern.js';
-import { formatLocalDateTime } from '../common/time/local-days.js';
+import {
+  availableCurrencies,
+  chooseCurrency,
+  type CurrencyCounts,
+} from '../dashboard/currency-choice.js';
 import { resolveDashboardPeriods } from '../dashboard/dashboard-period.js';
 import { REALIZED_ORDER_SQL } from '../dashboard/sales-semantics.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { STOCK_STATUS_SQL, stockStatus } from '../inventory/inventory-mappers.js';
-import { type CsvColumn, toCsv } from './csv.js';
 import type {
   InventoryReportQueryDto,
   OrdersReportQueryDto,
   SalesReportQueryDto,
 } from './dto/report.dto.js';
+import { EXPORT_LABELS } from './export/export-labels.js';
+import type { ExportTable } from './export/export-table.js';
 import { reportExportTooLarge, reportFilterNotFound } from './reports-errors.js';
 
 const L = REPORT_LIMITS;
 const Decimal = Prisma.Decimal;
-
-export interface CsvFile {
-  filename: string;
-  csv: string;
-}
-
-/** Human-readable values for CSV files (the web app shows the same words). */
-const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  DRAFT: 'Draft',
-  CONFIRMED: 'Confirmed',
-  PROCESSING: 'Processing',
-  SHIPPED: 'Shipped',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
-};
-const STOCK_STATUS_LABELS: Record<StockStatus, string> = {
-  IN_STOCK: 'In stock',
-  LOW_STOCK: 'Low stock',
-  OUT_OF_STOCK: 'Out of stock',
-};
 
 const direction = (order: SortOrder | undefined, fallback: SortOrder) =>
   Prisma.raw((order ?? fallback) === 'desc' ? 'DESC' : 'ASC');
@@ -105,6 +92,7 @@ interface SalesRow {
   warehouseActive: boolean;
   units: bigint;
   revenue: string;
+  currency: Currency;
 }
 
 function toSalesRow(row: SalesRow): SalesReportRow {
@@ -124,6 +112,7 @@ function toSalesRow(row: SalesRow): SalesReportRow {
     },
     units: Number(row.units),
     revenue: money(row.revenue),
+    currency: row.currency,
   };
 }
 
@@ -134,6 +123,7 @@ const ORDER_REPORT_SELECT = {
   orderNumber: true,
   status: true,
   total: true,
+  currency: true,
   createdAt: true,
   customer: { select: { id: true, name: true, companyName: true } },
   warehouse: { select: { id: true, name: true, code: true, isActive: true } },
@@ -170,6 +160,7 @@ function toOrdersRow(row: OrderReportRecord): OrdersReportRow {
     warehouse: row.warehouse,
     itemCount: row._count.items,
     total: money(row.total),
+    currency: row.currency,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -259,12 +250,33 @@ export class ReportsService {
     return resolveDashboardPeriods(query, now).current;
   }
 
+  /**
+   * The sales report's currency: the requested one, else the currency with
+   * the most orders matching the other filters (the dashboard's rule).
+   */
+  private async salesCurrency(
+    organizationId: string,
+    query: SalesReportQueryDto,
+    period: DashboardSelectedPeriod,
+  ): Promise<{ currency: Currency; currencies: Currency[] }> {
+    const from = this.salesFrom(organizationId, query, period, null);
+    const rows = await this.prisma.$queryRaw<{ currency: Currency; orders: number }[]>`
+      SELECT o.currency::text AS currency, COUNT(*)::int AS orders
+      ${from}
+      GROUP BY o.currency`;
+    const counts: CurrencyCounts = new Map(rows.map((row) => [row.currency, row.orders]));
+    const currency = chooseCurrency(query.currency, counts);
+    return { currency, currencies: availableCurrencies(currency, counts) };
+  }
+
   // --- Sales -------------------------------------------------------------------------------
 
   private salesFrom(
     organizationId: string,
     query: SalesReportQueryDto,
     period: DashboardSelectedPeriod,
+    /** Only orders in this currency (null: every currency, to list the currencies). */
+    currency: Currency | null,
   ) {
     const lineFilters: Prisma.Sql[] = [];
     if (query.productId) lineFilters.push(Prisma.sql`AND oi.product_id = ${query.productId}::uuid`);
@@ -282,6 +294,7 @@ export class ReportsService {
       Prisma.sql`o.created_at < ${new Date(period.end)}::timestamptz`,
       REALIZED_ORDER_SQL,
     ];
+    if (currency) conditions.push(Prisma.sql`o.currency = ${currency}::currency`);
     if (query.status) conditions.push(Prisma.sql`o.status = ${query.status}::order_status`);
     if (query.warehouseId) conditions.push(Prisma.sql`o.warehouse_id = ${query.warehouseId}::uuid`);
     if (query.customerId) conditions.push(Prisma.sql`o.customer_id = ${query.customerId}::uuid`);
@@ -323,7 +336,7 @@ export class ReportsService {
              c.id AS "customerId", c.name AS "customerName", c.company_name AS "customerCompany",
              w.id AS "warehouseId", w.name AS "warehouseName", w.code AS "warehouseCode",
              w.is_active AS "warehouseActive",
-             line.units AS units, line.revenue::text AS revenue
+             line.units AS units, line.revenue::text AS revenue, o.currency::text AS currency
       ${from}
       ORDER BY ${SALES_SORT[sortBy]} ${dir} NULLS LAST, o.created_at DESC, o.id ASC
       LIMIT ${limit} OFFSET ${offset}`;
@@ -337,7 +350,8 @@ export class ReportsService {
     const period = this.period(query, now);
     await this.assertFilters(organizationId, query);
     const { page, pageSize, skip } = paging(query);
-    const from = this.salesFrom(organizationId, query, period);
+    const { currency, currencies } = await this.salesCurrency(organizationId, query, period);
+    const from = this.salesFrom(organizationId, query, period, currency);
 
     const [totals, rows] = await this.prisma.$transaction(
       [
@@ -352,43 +366,54 @@ export class ReportsService {
     const total = totals[0]!;
     return {
       period,
+      currency,
+      currencies,
       items: rows.map(toSalesRow),
       pagination: pagination(page, pageSize, total.orders),
       totals: { orders: total.orders, units: Number(total.units), revenue: money(total.revenue) },
     };
   }
 
-  async salesCsv(
+  /** Every row of the sales report (same filters, currency, and order), for CSV or Excel. */
+  async salesExport(
     organizationId: string,
     query: SalesReportQueryDto,
+    lang: Language,
     now: Date = new Date(),
-  ): Promise<CsvFile> {
+  ): Promise<ExportTable<SalesReportRow>> {
     const period = this.period(query, now);
     await this.assertFilters(organizationId, query);
-    const from = this.salesFrom(organizationId, query, period);
+    const { currency } = await this.salesCurrency(organizationId, query, period);
+    const from = this.salesFrom(organizationId, query, period, currency);
     const rows = await this.salesSelect(from, query, L.exportMaxRows + 1, 0);
     await this.assertExportSize(
       rows.length,
       () => this.prisma.$queryRaw<{ count: number }[]>`SELECT COUNT(*)::int AS count ${from}`,
     );
 
-    const columns: CsvColumn<SalesReportRow>[] = [
-      {
-        header: `Date (${period.timeZone})`,
-        value: (row) => formatLocalDateTime(new Date(row.date), period.timeZone),
-      },
-      { header: 'Order number', value: (row) => row.orderNumber },
-      { header: 'Status', value: (row) => ORDER_STATUS_LABELS[row.status] },
-      { header: 'Customer', value: (row) => row.customer?.name },
-      { header: 'Company', value: (row) => row.customer?.companyName },
-      { header: 'Warehouse code', value: (row) => row.warehouse.code },
-      { header: 'Warehouse', value: (row) => row.warehouse.name },
-      { header: 'Units', value: (row) => row.units },
-      { header: 'Revenue', value: (row) => row.revenue },
-    ];
+    const t = EXPORT_LABELS[lang];
     return {
-      filename: `sales-report_${period.from}_${period.to}.csv`,
-      csv: toCsv(columns, rows.map(toSalesRow)),
+      filename: `${t.file.sales}_${period.from}_${period.to}_${currency}`,
+      sheetName: t.sheet.sales,
+      timeZone: period.timeZone,
+      rows: rows.map(toSalesRow),
+      columns: [
+        { kind: 'datetime', header: t.column.date(period.timeZone), value: (row) => row.date },
+        { kind: 'text', header: t.column.orderNumber, value: (row) => row.orderNumber },
+        { kind: 'text', header: t.column.status, value: (row) => t.orderStatus[row.status] },
+        { kind: 'text', header: t.column.customer, value: (row) => row.customer?.name },
+        { kind: 'text', header: t.column.company, value: (row) => row.customer?.companyName },
+        { kind: 'text', header: t.column.warehouseCode, value: (row) => row.warehouse.code },
+        { kind: 'text', header: t.column.warehouse, value: (row) => row.warehouse.name },
+        { kind: 'integer', header: t.column.units, value: (row) => row.units },
+        {
+          kind: 'money',
+          header: t.column.revenue,
+          value: (row) => row.revenue,
+          currency: (row) => row.currency,
+        },
+        { kind: 'text', header: t.column.currency, value: (row) => row.currency },
+      ],
     };
   }
 
@@ -404,6 +429,7 @@ export class ReportsService {
       organizationId,
       createdAt: { gte: new Date(period.start), lt: new Date(period.end) },
       ...(query.status ? { status: query.status } : {}),
+      ...(query.currency ? { currency: query.currency } : {}),
       ...(query.customerId ? { customerId: query.customerId } : {}),
       ...(query.warehouseId ? { warehouseId: query.warehouseId } : {}),
       ...(search
@@ -428,9 +454,11 @@ export class ReportsService {
     const { page, pageSize, skip } = paging(query);
     const where = this.ordersWhere(organizationId, query, period);
 
-    const [aggregate, rows] = await this.prisma.$transaction(
+    const [count, sums, rows] = await this.prisma.$transaction(
       [
-        this.prisma.order.aggregate({ where, _count: { _all: true }, _sum: { total: true } }),
+        this.prisma.order.count({ where }),
+        // Totals per currency: amounts in different currencies are never added together.
+        this.prisma.order.groupBy({ by: ['currency'], where, _sum: { total: true } }),
         this.prisma.order.findMany({
           where,
           orderBy: ordersOrderBy(query.sortBy ?? 'createdAt', query.sortOrder ?? 'desc'),
@@ -441,19 +469,25 @@ export class ReportsService {
       ],
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
+    const values: MoneyAmount[] = CURRENCIES.flatMap((currency) => {
+      const sum = sums.find((row) => row.currency === currency);
+      return sum ? [{ currency, amount: money(sum._sum.total) }] : [];
+    });
     return {
       period,
       items: rows.map(toOrdersRow),
-      pagination: pagination(page, pageSize, aggregate._count._all),
-      totals: { orders: aggregate._count._all, value: money(aggregate._sum.total) },
+      pagination: pagination(page, pageSize, count),
+      totals: { orders: count, values },
     };
   }
 
-  async ordersCsv(
+  /** Every row of the orders report (same filters and order), for CSV or Excel. */
+  async ordersExport(
     organizationId: string,
     query: OrdersReportQueryDto,
+    lang: Language,
     now: Date = new Date(),
-  ): Promise<CsvFile> {
+  ): Promise<ExportTable<OrdersReportRow>> {
     const period = this.period(query, now);
     await this.assertFilters(organizationId, query);
     const where = this.ordersWhere(organizationId, query, period);
@@ -467,23 +501,33 @@ export class ReportsService {
       { count: await this.prisma.order.count({ where }) },
     ]);
 
-    const columns: CsvColumn<OrdersReportRow>[] = [
-      { header: 'Order number', value: (row) => row.orderNumber },
-      { header: 'Status', value: (row) => ORDER_STATUS_LABELS[row.status] },
-      { header: 'Customer', value: (row) => row.customer?.name },
-      { header: 'Company', value: (row) => row.customer?.companyName },
-      { header: 'Warehouse code', value: (row) => row.warehouse.code },
-      { header: 'Warehouse', value: (row) => row.warehouse.name },
-      { header: 'Items', value: (row) => row.itemCount },
-      { header: 'Total', value: (row) => row.total },
-      {
-        header: `Created (${period.timeZone})`,
-        value: (row) => formatLocalDateTime(new Date(row.createdAt), period.timeZone),
-      },
-    ];
+    const t = EXPORT_LABELS[lang];
     return {
-      filename: `orders-report_${period.from}_${period.to}.csv`,
-      csv: toCsv(columns, rows.map(toOrdersRow)),
+      filename: `${t.file.orders}_${period.from}_${period.to}`,
+      sheetName: t.sheet.orders,
+      timeZone: period.timeZone,
+      rows: rows.map(toOrdersRow),
+      columns: [
+        { kind: 'text', header: t.column.orderNumber, value: (row) => row.orderNumber },
+        { kind: 'text', header: t.column.status, value: (row) => t.orderStatus[row.status] },
+        { kind: 'text', header: t.column.customer, value: (row) => row.customer?.name },
+        { kind: 'text', header: t.column.company, value: (row) => row.customer?.companyName },
+        { kind: 'text', header: t.column.warehouseCode, value: (row) => row.warehouse.code },
+        { kind: 'text', header: t.column.warehouse, value: (row) => row.warehouse.name },
+        { kind: 'integer', header: t.column.items, value: (row) => row.itemCount },
+        {
+          kind: 'money',
+          header: t.column.total,
+          value: (row) => row.total,
+          currency: (row) => row.currency,
+        },
+        { kind: 'text', header: t.column.currency, value: (row) => row.currency },
+        {
+          kind: 'datetime',
+          header: t.column.created(period.timeZone),
+          value: (row) => row.createdAt,
+        },
+      ],
     };
   }
 
@@ -561,11 +605,13 @@ export class ReportsService {
     };
   }
 
-  async inventoryCsv(
+  /** Every row of the inventory report (same filters and order), for CSV or Excel. */
+  async inventoryExport(
     organizationId: string,
     query: InventoryReportQueryDto,
+    lang: Language,
     now: Date = new Date(),
-  ): Promise<CsvFile> {
+  ): Promise<ExportTable<InventoryReportRow>> {
     await this.assertFilters(organizationId, query);
     const from = this.inventoryFrom(organizationId, query);
     const rows = await this.inventorySelect(from, query, L.exportMaxRows + 1, 0);
@@ -574,27 +620,32 @@ export class ReportsService {
       () => this.prisma.$queryRaw<{ count: number }[]>`SELECT COUNT(*)::int AS count ${from}`,
     );
 
-    const columns: CsvColumn<InventoryReportRow>[] = [
-      { header: 'Product', value: (row) => row.product.name },
-      { header: 'SKU', value: (row) => row.product.sku },
-      { header: 'Category', value: (row) => row.category?.name },
-      { header: 'Warehouse code', value: (row) => row.warehouse.code },
-      { header: 'Warehouse', value: (row) => row.warehouse.name },
-      { header: 'Quantity', value: (row) => row.quantity },
-      { header: 'Minimum stock', value: (row) => row.minimumStock },
-      { header: 'Status', value: (row) => STOCK_STATUS_LABELS[row.status] },
-      {
-        header: 'Product status',
-        value: (row) => (row.product.status === 'ACTIVE' ? 'Active' : 'Archived'),
-      },
-      {
-        header: 'Warehouse status',
-        value: (row) => (row.warehouse.isActive ? 'Active' : 'Archived'),
-      },
-    ];
+    const t = EXPORT_LABELS[lang];
     return {
-      filename: `inventory-report_${now.toISOString().slice(0, 10)}.csv`,
-      csv: toCsv(columns, rows.map(toInventoryRow)),
+      filename: `${t.file.inventory}_${now.toISOString().slice(0, 10)}`,
+      sheetName: t.sheet.inventory,
+      timeZone: 'UTC',
+      rows: rows.map(toInventoryRow),
+      columns: [
+        { kind: 'text', header: t.column.product, value: (row) => row.product.name },
+        { kind: 'text', header: t.column.sku, value: (row) => row.product.sku },
+        { kind: 'text', header: t.column.category, value: (row) => row.category?.name },
+        { kind: 'text', header: t.column.warehouseCode, value: (row) => row.warehouse.code },
+        { kind: 'text', header: t.column.warehouse, value: (row) => row.warehouse.name },
+        { kind: 'integer', header: t.column.quantity, value: (row) => row.quantity },
+        { kind: 'integer', header: t.column.minimumStock, value: (row) => row.minimumStock },
+        { kind: 'text', header: t.column.stockStatus, value: (row) => t.stockStatus[row.status] },
+        {
+          kind: 'text',
+          header: t.column.productStatus,
+          value: (row) => (row.product.status === 'ACTIVE' ? t.active : t.archived),
+        },
+        {
+          kind: 'text',
+          header: t.column.warehouseStatus,
+          value: (row) => (row.warehouse.isActive ? t.active : t.archived),
+        },
+      ],
     };
   }
 

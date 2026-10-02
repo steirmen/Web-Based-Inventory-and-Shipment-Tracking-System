@@ -3,7 +3,8 @@ import { Link, useMatch } from 'react-router';
 import { Menu, menuItemClass, MenuSeparator } from '@/components/ui/menu';
 import { Spinner } from '@/components/ui/spinner';
 import { useOrganizations } from '@/hooks/use-organizations';
-import { ROLE_LABELS } from '@/lib/organization-form';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { paths, routePatterns } from '@/routes/paths';
 
 /** Square initial of a workspace (decorative: the name is always next to it). */
@@ -28,6 +29,8 @@ export function WorkspaceMark({ name, className }: { name: string; className?: s
  */
 export function OrganizationSwitcher() {
   const organizations = useOrganizations();
+  const common_ = useMessages(common);
+  const m = common_.shell;
   const match = useMatch({ path: routePatterns.organization, end: false });
   const currentId = match?.params.organizationId;
 
@@ -36,7 +39,7 @@ export function OrganizationSwitcher() {
 
   return (
     <Menu
-      label="Switch workspace"
+      label={m.switchWorkspace}
       className="w-72"
       trigger={(props) => (
         <button
@@ -48,7 +51,7 @@ export function OrganizationSwitcher() {
           ) : (
             <LayoutGrid className="size-4 shrink-0 text-subtle-foreground" aria-hidden="true" />
           )}
-          <span className="truncate">{current?.name ?? 'Workspaces'}</span>
+          <span className="truncate">{current?.name ?? m.workspaces}</span>
           <ChevronsUpDown className="size-4 shrink-0 text-subtle-foreground" aria-hidden="true" />
         </button>
       )}
@@ -56,15 +59,15 @@ export function OrganizationSwitcher() {
       {(close) => (
         <>
           <p className="px-2.5 pt-1 pb-1.5 text-xs font-medium text-subtle-foreground">
-            Your workspaces
+            {m.yourWorkspaces}
           </p>
           {organizations.isPending && (
             <div className="flex justify-center py-3 text-muted-foreground">
-              <Spinner size="sm" label="Loading workspaces" />
+              <Spinner size="sm" label={m.loadingWorkspaces} />
             </div>
           )}
           {organizations.isError && (
-            <p className="px-2.5 py-2 text-sm text-danger">Couldn&apos;t load workspaces.</p>
+            <p className="px-2.5 py-2 text-sm text-danger">{m.workspacesFailed}</p>
           )}
           <div className="max-h-72 overflow-y-auto">
             {list.map((organization) => {
@@ -85,10 +88,10 @@ export function OrganizationSwitcher() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{organization.name}</span>
                     <span className="block text-xs text-muted-foreground">
-                      {ROLE_LABELS[organization.role]}
+                      {common_.roles[organization.role]}
                     </span>
                   </span>
-                  {isCurrent && <Check className="text-primary" aria-label="Current workspace" />}
+                  {isCurrent && <Check className="text-primary" aria-label={m.currentWorkspace} />}
                 </Link>
               );
             })}
@@ -96,11 +99,11 @@ export function OrganizationSwitcher() {
           <MenuSeparator />
           <Link role="menuitem" to={paths.organizations} onClick={close} className={menuItemClass}>
             <LayoutGrid className="text-subtle-foreground" aria-hidden="true" />
-            All workspaces
+            {m.allWorkspaces}
           </Link>
           <Link role="menuitem" to={paths.onboarding} onClick={close} className={menuItemClass}>
             <Plus className="text-subtle-foreground" aria-hidden="true" />
-            Create workspace
+            {m.createWorkspace}
           </Link>
         </>
       )}

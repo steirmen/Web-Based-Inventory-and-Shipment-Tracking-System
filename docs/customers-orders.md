@@ -30,6 +30,8 @@ An order belongs to one **customer** (required when creating; `null` only for le
 
 Each line stores `productNameSnapshot`, `skuSnapshot`, and `unitPrice`, copied from the product **when the line is added**. Renaming, re-pricing, or archiving a product never changes an existing order. When a draft is edited, lines of products already on the order keep their snapshot (only the quantity changes); new products are priced at their current price.
 
+**Currency (Phase 10.1):** each line also snapshots the product's `currency`. An order has **one currency**: the first line sets `orders.currency`, adding a product in another currency is `422 ORDER_CURRENCY_MISMATCH` (names the product and both currencies), emptying a draft resets it to `null`, and database triggers refuse a mismatch even from direct SQL. No exchange-rate conversion. See [currency.md](currency.md).
+
 Totals are exact decimals (`orders/order-totals.ts`): `lineTotal = unitPrice × quantity`, `subtotal = Σ lineTotal`, `total = subtotal`. There are no taxes, discounts, or shipping costs. A total that doesn't fit `NUMERIC(14,2)` is `422 ORDER_TOTAL_LIMIT`. Money is a decimal string in the API and the web app (never a float).
 
 ### Status workflow
@@ -124,7 +126,7 @@ Errors use the standard format (`statusCode`, `code`, `message`, optional `detai
 
 - **Customers** (`/org/:organizationId/customers`): server-side search, status filter (active, archived, all), sort, paging; create and edit in a dialog; archive with a confirmation dialog, restore directly. The customer detail page shows contact data and the customer's orders.
 - **Orders** (`/org/:organizationId/orders`): search, status, warehouse, created-from/to (local days, with the zone shown in the hint), and sort, all in the URL. The overview's status bars link here with the same period and time zone.
-- **New / edit order** (`…/orders/new`, `…/orders/:orderId/edit`, drafts only): the order builder with a customer picker, warehouse select, product search and add, quantities, line totals, and available stock per line.
+- **New / edit order** (`…/orders/new`, `…/orders/:orderId/edit`, drafts only): the order builder with a customer picker, warehouse select, product search and add (with each product's price and currency), quantities, line totals, and available stock per line. A product in another currency than the order's is refused inline, before saving.
 - **Customer picker** (`components/customers/customer-picker.tsx`): searches on the server (name, company, email, phone), opens with the first 20 customers by name, and loads 20 more on demand, so customers beyond the first 100 are reachable. It has loading, error-with-retry, and "no matches" states, keyboard support (↓ into results, ↑/↓, Enter, Escape), and asks only the current workspace. Orders use active customers only; report filters pass `includeArchived`.
 - **Order detail**: lines with snapshots, totals, and history, plus the actions the status and the viewer's permissions allow. Every action is confirmed in a dialog; processing shows the stock each line takes and, if it fails, the server's per-line shortage. A failed action keeps its dialog open with the reason, even when the refreshed order no longer offers any action (e.g. it was cancelled meanwhile). Lists and stock are refreshed after every action (nothing optimistic).
 

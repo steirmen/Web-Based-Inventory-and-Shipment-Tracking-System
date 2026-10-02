@@ -3,6 +3,8 @@ import { Archive, ArchiveRestore, Eye, Pencil } from 'lucide-react';
 import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
+import { useMessages } from '@/i18n/i18n-context';
+import { catalog } from '@/i18n/messages/catalog';
 import { useCurrentOrganization } from '@/lib/organization-context';
 import { paths } from '@/routes/paths';
 
@@ -23,6 +25,7 @@ export function ProductActions({
   compact?: boolean;
 }) {
   const { organization, can } = useCurrentOrganization();
+  const m = useMessages(catalog).actions;
   const size = compact ? 'icon-sm' : 'sm';
   const linkClass = buttonVariants({ variant: 'ghost', size });
 
@@ -31,21 +34,21 @@ export function ProductActions({
       <Link
         to={paths.product(organization.id, product.id)}
         className={linkClass}
-        aria-label={`View ${product.name}`}
-        title={compact ? 'View' : undefined}
+        aria-label={m.viewNamed({ name: product.name })}
+        title={compact ? m.view : undefined}
       >
         <Eye aria-hidden="true" />
-        {!compact && 'View'}
+        {!compact && m.view}
       </Link>
       {product.status === 'ACTIVE' && can('PRODUCTS_UPDATE') && (
         <Link
           to={paths.productEdit(organization.id, product.id)}
           className={linkClass}
-          aria-label={`Edit ${product.name}`}
-          title={compact ? 'Edit' : undefined}
+          aria-label={m.editNamed({ name: product.name })}
+          title={compact ? m.edit : undefined}
         >
           <Pencil aria-hidden="true" />
-          {!compact && 'Edit'}
+          {!compact && m.edit}
         </Link>
       )}
       {can('PRODUCTS_ARCHIVE') &&
@@ -55,11 +58,11 @@ export function ProductActions({
             size={size}
             isLoading={pending}
             onClick={() => onStatusChange('archive')}
-            aria-label={`Archive ${product.name}`}
-            title={compact ? 'Archive' : undefined}
+            aria-label={m.archiveNamed({ name: product.name })}
+            title={compact ? m.archive : undefined}
           >
             {!pending && <Archive aria-hidden="true" />}
-            {!compact && 'Archive'}
+            {!compact && m.archive}
           </Button>
         ) : (
           <Button
@@ -67,11 +70,11 @@ export function ProductActions({
             size={size}
             isLoading={pending}
             onClick={() => onStatusChange('restore')}
-            aria-label={`Restore ${product.name}`}
-            title={compact ? 'Restore' : undefined}
+            aria-label={m.restoreNamed({ name: product.name })}
+            title={compact ? m.restore : undefined}
           >
             {!pending && <ArchiveRestore aria-hidden="true" />}
-            {!compact && 'Restore'}
+            {!compact && m.restore}
           </Button>
         ))}
     </div>

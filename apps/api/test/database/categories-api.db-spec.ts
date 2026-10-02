@@ -72,6 +72,70 @@ describe('GET /organizations/:id/categories', () => {
 
     expect(response.body.code).toBe('ORGANIZATION_NOT_FOUND');
   });
+
+  it('searches names case-insensitively in this organization only, exact match first', async () => {
+    const a = await createTeam('org-a');
+    const b = await createTeam('org-b');
+    for (const name of ['Office Supplies', 'Electronics', 'Electronic Parts', 'Ofis', 'ELEC']) {
+      await prisma.category.create({ data: { organizationId: a.organization.id, name } });
+    }
+    await prisma.category.create({
+      data: { organizationId: b.organization.id, name: 'Electro B' },
+    });
+    const search = async (term: string, who: TeamMember = a.staff) =>
+      (
+        await api()
+          .get(url(a.organization.id))
+          .query({ search: term })
+          .set('Cookie', who.cookie)
+          .expect(200)
+      ).body.categories.map((category: { name: string }) => category.name);
+
+    expect(await search('elec')).toEqual(['ELEC', 'Electronic Parts', 'Electronics']);
+    expect(await search('electronics')).toEqual(['Electronics']);
+    expect(await search('OFF')).toEqual(['Office Supplies']);
+    expect(await search('%')).toEqual([]);
+    expect(await search('_')).toEqual([]);
+    expect(await search('Electro B')).toEqual([]);
+  });
+
+  it('treats % and _ literally in the duplicate-name check', async () => {
+    const team = await createTeam();
+    await prisma.category.create({ data: { organizationId: team.organization.id, name: 'Paper' } });
+
+    await createCategory(team.organization.id, team.owner, { name: '%' }).expect(201);
+    await createCategory(team.organization.id, team.owner, { name: 'P_per' }).expect(201);
+    const duplicate = await createCategory(team.organization.id, team.owner, {
+      name: 'p_PER',
+    }).expect(409);
+
+    expect(duplicate.body.code).toBe('CATEGORY_NAME_TAKEN');
+  });
+
+  it('caps search results and validates the search length', async () => {
+    const team = await createTeam();
+    await prisma.category.createMany({
+      data: Array.from({ length: 30 }, (_, index) => ({
+        organizationId: team.organization.id,
+        name: `Group ${String(index).padStart(2, '0')}`,
+      })),
+    });
+    const capped = await api()
+      .get(url(team.organization.id))
+      .query({ search: 'group' })
+      .set('Cookie', team.owner.cookie)
+      .expect(200);
+    const all = await api().get(url(team.organization.id)).set('Cookie', team.owner.cookie);
+    await api()
+      .get(url(team.organization.id))
+      .query({ search: 'x'.repeat(101) })
+      .set('Cookie', team.owner.cookie)
+      .expect(400);
+
+    expect(capped.body.categories).toHaveLength(20);
+    expect(capped.body.categories[0].name).toBe('Group 00');
+    expect(all.body.categories).toHaveLength(30);
+  });
 });
 
 describe('POST /organizations/:id/categories', () => {

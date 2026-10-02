@@ -22,23 +22,24 @@ export interface ProductListParams {
   page: number;
 }
 
-type SortValue = `${ProductSortField}:${SortOrder}`;
+export type SortValue = `${ProductSortField}:${SortOrder}`;
 
 export const DEFAULT_SORT: SortValue = 'createdAt:desc';
 
-export const SORT_OPTIONS: { value: SortValue; label: string }[] = [
-  { value: 'createdAt:desc', label: 'Newest first' },
-  { value: 'createdAt:asc', label: 'Oldest first' },
-  { value: 'updatedAt:desc', label: 'Recently updated' },
-  { value: 'name:asc', label: 'Name (A–Z)' },
-  { value: 'name:desc', label: 'Name (Z–A)' },
-  { value: 'sku:asc', label: 'SKU (A–Z)' },
-  { value: 'price:asc', label: 'Price (low to high)' },
-  { value: 'price:desc', label: 'Price (high to low)' },
-  { value: 'cost:asc', label: 'Cost (low to high)' },
-  { value: 'cost:desc', label: 'Cost (high to low)' },
-  { value: 'minimumStock:desc', label: 'Minimum stock (high to low)' },
-];
+/** The sort options, in menu order (labels: `catalog.products.sortOptions`). */
+export const SORT_OPTIONS = [
+  'createdAt:desc',
+  'createdAt:asc',
+  'updatedAt:desc',
+  'name:asc',
+  'name:desc',
+  'sku:asc',
+  'price:asc',
+  'price:desc',
+  'cost:asc',
+  'cost:desc',
+  'minimumStock:desc',
+] as const satisfies readonly SortValue[];
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

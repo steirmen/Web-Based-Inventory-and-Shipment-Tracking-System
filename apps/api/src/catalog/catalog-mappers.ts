@@ -1,4 +1,4 @@
-import type { Category, Product, ProductListItem, ProductStatus } from '@app/shared';
+import type { Category, Currency, Product, ProductListItem, ProductStatus } from '@app/shared';
 import type { Prisma } from '../generated/prisma/client.js';
 
 /**
@@ -45,6 +45,7 @@ export const PRODUCT_LIST_SELECT = {
   sku: true,
   price: true,
   cost: true,
+  currency: true,
   minimumStock: true,
   status: true,
   createdAt: true,
@@ -60,6 +61,7 @@ interface ProductListRecord {
   sku: string;
   price: Prisma.Decimal;
   cost: Prisma.Decimal | null;
+  currency: Currency;
   minimumStock: number;
   status: ProductStatus;
   createdAt: Date;
@@ -74,6 +76,7 @@ export function toProductListItem(record: ProductListRecord): ProductListItem {
     sku: record.sku,
     price: toMoney(record.price),
     cost: record.cost ? toMoney(record.cost) : null,
+    currency: record.currency,
     minimumStock: record.minimumStock,
     status: record.status,
     category: record.category,

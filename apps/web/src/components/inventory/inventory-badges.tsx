@@ -1,14 +1,16 @@
 import type { StockMovementType, StockStatus } from '@app/shared';
 import { Badge } from '@/components/ui/badge';
-import { MOVEMENT_TYPE_LABELS, STOCK_STATUS_LABELS } from '@/lib/inventory-params';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 
 export function WarehouseStatusBadge({ isActive }: { isActive: boolean }) {
+  const m = useMessages(common).status;
   return isActive ? (
     <Badge tone="success" dot>
-      Active
+      {m.active}
     </Badge>
   ) : (
-    <Badge tone="neutral">Archived</Badge>
+    <Badge tone="neutral">{m.archived}</Badge>
   );
 }
 
@@ -19,9 +21,10 @@ const STOCK_TONES = {
 } as const satisfies Record<StockStatus, string>;
 
 export function StockStatusBadge({ status }: { status: StockStatus }) {
+  const m = useMessages(common);
   return (
     <Badge tone={STOCK_TONES[status]} dot>
-      {STOCK_STATUS_LABELS[status]}
+      {m.stockStatus[status]}
     </Badge>
   );
 }
@@ -36,5 +39,6 @@ const MOVEMENT_TONES = {
 } as const satisfies Record<StockMovementType, string>;
 
 export function MovementTypeBadge({ type }: { type: StockMovementType }) {
-  return <Badge tone={MOVEMENT_TONES[type]}>{MOVEMENT_TYPE_LABELS[type]}</Badge>;
+  const m = useMessages(common);
+  return <Badge tone={MOVEMENT_TONES[type]}>{m.movementType[type]}</Badge>;
 }

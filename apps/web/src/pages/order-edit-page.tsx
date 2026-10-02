@@ -5,9 +5,11 @@ import { EmptyState, ErrorState, DetailSkeleton } from '@/components/layout/page
 import { OrderBuilder } from '@/components/orders/order-builder';
 import { useOrder } from '@/hooks/use-sales';
 import { hasErrorCode } from '@/lib/api-errors';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
+import { sales } from '@/i18n/messages/sales';
 import { pageTitle } from '@/lib/app-config';
 import { useCurrentOrganization } from '@/lib/organization-context';
-import { ORDER_STATUS_LABELS } from '@/lib/sales-params';
 import { paths } from '@/routes/paths';
 
 /** Edits a DRAFT. Other statuses explain why they can't be edited. */
@@ -15,19 +17,21 @@ export function OrderEditPage() {
   const { organization, can } = useCurrentOrganization();
   const { orderId = '' } = useParams();
   const query = useOrder(organization.id, orderId);
+  const m = useMessages(sales).order;
+  const c = useMessages(common);
 
-  const back = <BackLink to={paths.order(organization.id, orderId)} label="Back to order" />;
+  const back = <BackLink to={paths.order(organization.id, orderId)} label={m.backToOrder} />;
 
-  if (query.isPending) return <DetailSkeleton label="Loading order" />;
+  if (query.isPending) return <DetailSkeleton label={m.loading} />;
   if (query.isError) {
     return (
       <div className="flex flex-col gap-6">
         {back}
         {hasErrorCode(query.error, 'ORDER_NOT_FOUND') ? (
-          <EmptyState title="This order doesn't exist in this workspace." />
+          <EmptyState title={m.notFoundText} />
         ) : (
           <ErrorState
-            title="We couldn't load this order"
+            title={m.loadError}
             error={query.error}
             onRetry={() => void query.refetch()}
           />
@@ -41,17 +45,22 @@ export function OrderEditPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <title>{pageTitle(`Edit ${order.orderNumber} · ${organization.name}`)}</title>
+      <title>
+        {pageTitle(`${m.editTitle({ number: order.orderNumber })} · ${organization.name}`)}
+      </title>
       {back}
-      <PageHeader title={`Edit ${order.orderNumber}`} description="Only drafts can be edited." />
+      <PageHeader
+        title={m.editTitle({ number: order.orderNumber })}
+        description={m.editDescription}
+      />
       {editable ? (
         <OrderBuilder key={order.id} order={order} />
       ) : (
         <EmptyState
           title={
             order.status === 'DRAFT'
-              ? "You don't have permission to edit orders."
-              : `This order is ${ORDER_STATUS_LABELS[order.status].toLowerCase()} and can no longer be edited.`
+              ? m.noEditPermission
+              : m.notEditable({ status: c.orderStatus[order.status] })
           }
         />
       )}

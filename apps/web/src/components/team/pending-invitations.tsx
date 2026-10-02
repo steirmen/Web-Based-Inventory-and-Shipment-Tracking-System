@@ -6,35 +6,35 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useInvitations, useRevokeInvitation } from '@/hooks/use-organizations';
-import { apiErrorMessage } from '@/lib/api-errors';
-import { formatDate } from '@/lib/format';
+import { useFormat } from '@/i18n/format';
+import { useMessages } from '@/i18n/i18n-context';
+import { workspace } from '@/i18n/messages/workspace';
+import { useApiErrorMessage } from '@/lib/api-errors';
 import { useCurrentOrganization } from '@/lib/organization-context';
 
 export function PendingInvitations() {
   const { organization, can } = useCurrentOrganization();
   const query = useInvitations(organization.id, { enabled: can('MEMBERS_INVITE') });
   const pending = query.data?.invitations.filter((invitation) => invitation.status === 'PENDING');
+  const m = useMessages(workspace).pending;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Pending invitations</CardTitle>
-        <CardDescription>Invitations that haven&apos;t been accepted yet.</CardDescription>
+        <CardTitle>{m.title}</CardTitle>
+        <CardDescription>{m.description}</CardDescription>
       </CardHeader>
       <CardContent>
-        {query.isPending && <LoadingState label="Loading invitations" className="min-h-24" />}
+        {query.isPending && <LoadingState label={m.loading} className="min-h-24" />}
         {query.isError && (
           <ErrorState
-            title="We couldn't load invitations"
+            title={m.loadError}
             error={query.error}
             onRetry={() => void query.refetch()}
           />
         )}
         {pending?.length === 0 && (
-          <EmptyState
-            icon={<MailPlus className="size-5" aria-hidden="true" />}
-            title="No pending invitations"
-          />
+          <EmptyState icon={<MailPlus className="size-5" aria-hidden="true" />} title={m.empty} />
         )}
         {pending && pending.length > 0 && (
           <ul className="divide-y divide-border rounded-control border border-border">
@@ -51,6 +51,9 @@ export function PendingInvitations() {
 function InvitationRow({ invitation }: { invitation: Invitation }) {
   const { organization, canManage } = useCurrentOrganization();
   const revoke = useRevokeInvitation(organization.id);
+  const m = useMessages(workspace).pending;
+  const f = useFormat();
+  const errorMessage = useApiErrorMessage();
 
   return (
     <li className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
@@ -60,12 +63,12 @@ function InvitationRow({ invitation }: { invitation: Invitation }) {
           <RoleBadge role={invitation.role} />
         </div>
         <p className="text-xs text-muted-foreground">
-          Expires {formatDate(invitation.expiresAt)}
-          {invitation.invitedBy && ` · Invited by ${invitation.invitedBy.name}`}
+          {m.expires({ date: f.date(invitation.expiresAt) })}
+          {invitation.invitedBy && m.invitedBy({ name: invitation.invitedBy.name })}
         </p>
         {revoke.isError && (
           <Alert tone="danger" className="mt-2">
-            {apiErrorMessage(revoke.error)}
+            {errorMessage(revoke.error)}
           </Alert>
         )}
       </div>
@@ -76,9 +79,9 @@ function InvitationRow({ invitation }: { invitation: Invitation }) {
           className="self-start sm:self-center"
           onClick={() => revoke.mutate(invitation.id)}
           isLoading={revoke.isPending}
-          aria-label={`Revoke invitation for ${invitation.email}`}
+          aria-label={m.revokeFor({ email: invitation.email })}
         >
-          Revoke
+          {m.revoke}
         </Button>
       )}
     </li>

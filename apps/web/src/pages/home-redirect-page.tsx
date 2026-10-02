@@ -1,6 +1,8 @@
 import { Navigate } from 'react-router';
 import { ErrorState, LoadingState } from '@/components/layout/page-state';
 import { useOrganizations } from '@/hooks/use-organizations';
+import { useMessages } from '@/i18n/i18n-context';
+import { common } from '@/i18n/messages/common';
 import { readLastOrganizationId } from '@/lib/last-organization';
 import { paths } from '@/routes/paths';
 
@@ -10,14 +12,15 @@ import { paths } from '@/routes/paths';
  */
 export function HomeRedirectPage() {
   const query = useOrganizations();
+  const m = useMessages(common).shell;
 
   if (query.isPending) {
-    return <LoadingState label="Loading your workspaces" className="min-h-64" />;
+    return <LoadingState label={m.loadingYourWorkspaces} className="min-h-64" />;
   }
   if (query.isError) {
     return (
       <ErrorState
-        title="We couldn't load your workspaces"
+        title={m.workspacesLoadError}
         error={query.error}
         onRetry={() => void query.refetch()}
         className="mx-auto max-w-lg py-12"

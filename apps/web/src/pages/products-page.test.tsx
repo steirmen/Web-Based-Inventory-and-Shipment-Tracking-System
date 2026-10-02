@@ -1,7 +1,7 @@
 import type { MemberRole, ProductListItem, ProductListResponse } from '@app/shared';
 import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { formatMoney } from '@/lib/money';
+import { money } from '@/test/format';
 import {
   apiError,
   json,
@@ -24,6 +24,7 @@ const product = (overrides: Partial<ProductListItem>): ProductListItem => ({
   sku: 'OFF-PEN',
   price: '1234.50',
   cost: '0.40',
+  currency: 'TRY',
   minimumStock: 20,
   status: 'ACTIVE',
   category: office,
@@ -106,7 +107,7 @@ describe('ProductsPage', () => {
     );
     expect(within(penRow).getByText('OFF-PEN')).toBeInTheDocument();
     expect(within(penRow).getByText('Office')).toBeInTheDocument();
-    expect(within(penRow).getByText(formatMoney('1234.50'))).toBeInTheDocument();
+    expect(within(penRow).getByText(money('1234.50'))).toBeInTheDocument();
     expect(within(penRow).getByText('Active')).toBeInTheDocument();
     expect(within(padRow).getByText('Archived')).toBeInTheDocument();
     expect(within(padRow).getByText('—', { selector: 'td' })).toBeInTheDocument(); // unknown cost

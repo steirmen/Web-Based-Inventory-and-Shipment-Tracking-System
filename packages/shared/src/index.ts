@@ -1,4 +1,8 @@
 export { AUTH_LIMITS } from './auth.js';
+export { CURRENCIES, DEFAULT_CURRENCY, isCurrency } from './currency.js';
+export type { Currency, MoneyAmount } from './currency.js';
+export { DEFAULT_LANGUAGE, isLanguage, LANGUAGE_LOCALES, LANGUAGES } from './i18n.js';
+export type { Language, PreferencesResponse, UpdatePreferencesRequest } from './i18n.js';
 export type { AuthUser, AuthUserResponse, LoginRequest, RegisterRequest } from './auth.js';
 export { API_ERROR_CODES } from './errors.js';
 export type { ApiErrorBody, ApiErrorCode, ApiFieldError } from './errors.js';
@@ -46,6 +50,7 @@ export {
 } from './catalog.js';
 export type {
   Category,
+  CategoryListQuery,
   CategoryListResponse,
   CategoryResponse,
   CreateCategoryRequest,
@@ -195,6 +200,7 @@ export type {
   DashboardWarehouseSummary,
 } from './dashboard.js';
 export {
+  EXPORT_FORMATS,
   INVENTORY_REPORT_SORT_FIELDS,
   ORDERS_REPORT_SORT_FIELDS,
   REPORT_LIMITS,
@@ -211,7 +217,9 @@ export type {
   OrdersReportResponse,
   OrdersReportRow,
   OrdersReportSortField,
+  ExportFormat,
   ReportCustomerRef,
+  ReportExportQuery,
   ReportPagination,
   ReportPeriodQuery,
   ReportType,

@@ -46,6 +46,7 @@ describe('POST …/orders (create draft)', () => {
         subtotal: '75.48',
         total: '75.48',
         notes: null,
+        currency: 'TRY',
       });
       expect(created.items).toEqual([
         {
@@ -54,6 +55,7 @@ describe('POST …/orders (create draft)', () => {
           productName: 'Ballpoint Pen',
           sku: 'PEN',
           unitPrice: '8.50',
+          currency: 'TRY',
           quantity: 3,
           lineTotal: '25.50',
           productStatus: 'ACTIVE',
@@ -80,6 +82,7 @@ describe('POST …/orders (create draft)', () => {
         warehouseId: main.id,
         itemCount: 2,
         total: '75.48',
+        currency: 'TRY',
       });
       // Drafts never affect stock.
       expect(await quantityOf(main.id, pen.id)).toBe(10);
@@ -297,6 +300,120 @@ describe('PATCH …/orders/:id (edit draft)', () => {
     });
     expect(status.body.code).toBe('ORDER_STATUS_INVALID');
     expect(await orderStatusOf(draft.id)).toBe('DRAFT');
+  });
+});
+
+describe('one currency per order', () => {
+  async function currencySetup() {
+    const f = await setup();
+    const chair = await createProduct(f.org, {
+      name: 'Chair',
+      sku: 'CHAIR',
+      price: '249.00',
+      currency: 'EUR',
+    });
+    const desk = await createProduct(f.org, {
+      name: 'Desk',
+      sku: 'DESK',
+      price: '499.00',
+      currency: 'EUR',
+    });
+    return { ...f, chair, desk };
+  }
+
+  it('takes the currency of the first line, snapshots it per line, and lists it', async () => {
+    const { order, chair, desk, api, base, team } = await currencySetup();
+
+    const created = (
+      await order([
+        { productId: chair.id, quantity: 2 },
+        { productId: desk.id, quantity: 1 },
+      ]).expect(201)
+    ).body.order;
+    const listed = await api().get(`${base}/orders`).set('Cookie', team.owner.cookie).expect(200);
+
+    expect(created).toMatchObject({ currency: 'EUR', total: '997.00' });
+    expect(created.items.map((item: { currency: string }) => item.currency)).toEqual([
+      'EUR',
+      'EUR',
+    ]);
+    expect(listed.body.items[0]).toMatchObject({ currency: 'EUR', total: '997.00' });
+  });
+
+  it('refuses a line in another currency, on create and on edit, changing nothing', async () => {
+    const { order, chair, pen, api, base, team, org } = await currencySetup();
+
+    const mixed = await order([
+      { productId: chair.id, quantity: 1 },
+      { productId: pen.id, quantity: 1 },
+    ]).expect(422);
+    const draft = (await order([{ productId: chair.id, quantity: 1 }]).expect(201)).body.order;
+    const added = await api()
+      .patch(`${base}/orders/${draft.id}`)
+      .set('Cookie', team.owner.cookie)
+      .send({
+        items: [
+          { productId: chair.id, quantity: 3 },
+          { productId: pen.id, quantity: 1 },
+        ],
+      })
+      .expect(422);
+
+    for (const response of [mixed, added]) {
+      expect(response.body).toMatchObject({
+        code: 'ORDER_CURRENCY_MISMATCH',
+        message:
+          "Ballpoint Pen (PEN) is priced in TRY, but this order is in EUR. An order can't mix currencies.",
+      });
+    }
+    // Nothing changed: one order (the draft), still one EUR line of quantity 1.
+    expect(await prisma.order.count({ where: { organizationId: org } })).toBe(1);
+    const lines = await prisma.orderItem.findMany({ where: { orderId: draft.id } });
+    expect(lines.map((line) => [line.quantity, line.currency])).toEqual([[1, 'EUR']]);
+  });
+
+  it('lets a draft switch currency only by replacing all of its lines', async () => {
+    const { order, chair, pen, api, base, team } = await currencySetup();
+    const draft = (await order([{ productId: chair.id, quantity: 1 }]).expect(201)).body.order;
+    const patch = (items: object[]) =>
+      api().patch(`${base}/orders/${draft.id}`).set('Cookie', team.owner.cookie).send({ items });
+
+    const emptied = (await patch([]).expect(200)).body.order;
+    const switched = (await patch([{ productId: pen.id, quantity: 2 }]).expect(200)).body.order;
+    const replaced = (await patch([{ productId: chair.id, quantity: 1 }]).expect(200)).body.order;
+
+    expect(emptied).toMatchObject({ currency: null, total: '0.00' });
+    expect(switched).toMatchObject({ currency: 'TRY', total: '17.00' });
+    expect(replaced).toMatchObject({ currency: 'EUR', total: '249.00' });
+  });
+
+  it('keeps the historical currency of lines after the product changes currency', async () => {
+    const { order, pen, mouse, api, base, team } = await currencySetup();
+    const draft = (await order([{ productId: pen.id, quantity: 2 }]).expect(201)).body.order;
+
+    await api()
+      .patch(`${base}/products/${pen.id}`)
+      .set('Cookie', team.owner.cookie)
+      .send({ currency: 'USD', price: '3.00' })
+      .expect(200);
+    const reloaded = await api()
+      .get(`${base}/orders/${draft.id}`)
+      .set('Cookie', team.owner.cookie)
+      .expect(200);
+
+    expect(reloaded.body.order).toMatchObject({ currency: 'TRY', total: '17.00' });
+    expect(reloaded.body.order.items[0]).toMatchObject({ unitPrice: '8.50', currency: 'TRY' });
+    // The pen's line can stay (its snapshot is TRY), but as a NEW line the (now USD) pen no
+    // longer fits this TRY order.
+    const patch = (items: object[]) =>
+      api().patch(`${base}/orders/${draft.id}`).set('Cookie', team.owner.cookie).send({ items });
+    await patch([{ productId: pen.id, quantity: 3 }]).expect(200);
+    await patch([{ productId: mouse.id, quantity: 1 }]).expect(200);
+    const readded = await patch([
+      { productId: mouse.id, quantity: 1 },
+      { productId: pen.id, quantity: 1 },
+    ]).expect(422);
+    expect(readded.body.code).toBe('ORDER_CURRENCY_MISMATCH');
   });
 });
 
@@ -542,6 +659,7 @@ describe('GET …/orders', () => {
       warehouse: { id: east.id, name: 'East', code: 'EAST', isActive: true },
       itemCount: 1,
       total: '85.00',
+      currency: 'TRY',
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
     });
