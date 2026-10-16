@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig, loadEnv } from 'vite';
+import type { IncomingMessage } from 'node:http';
+import { defineConfig, loadEnv, type ProxyOptions } from 'vite';
 
 const envDir = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -35,13 +36,15 @@ function inlineScriptHash(): string {
  * theme engine writes CSS variables), but no inline <style> or <script>.
  */
 function contentSecurityPolicy(apiBaseUrl: string): string {
+  // A relative base URL ("/api", proxied) is this origin: 'self' already covers it.
+  const apiOrigin = apiBaseUrl.startsWith('/') ? '' : ` ${new URL(apiBaseUrl).origin}`;
   return [
     "default-src 'self'",
     `script-src 'self' ${inlineScriptHash()}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",
-    `connect-src 'self' ${new URL(apiBaseUrl).origin}`,
+    `connect-src 'self'${apiOrigin}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -49,9 +52,48 @@ function contentSecurityPolicy(apiBaseUrl: string): string {
   ].join('; ');
 }
 
+const WEB_PORT = 5173;
+/** The web origin the API allows (API_CORS_ORIGINS in .env.example). */
+const WEB_ORIGIN = `http://localhost:${WEB_PORT}`;
+
+/** True when the browser's Origin is the host this server was reached at (a same-origin request). */
+function isSameOrigin(request: IncomingMessage): boolean {
+  const { origin, host } = request.headers;
+  if (!origin || !host) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Local demo through a tunnel (docs/local-development.md#sharing-a-local-demo):
+ * with VITE_API_BASE_URL=/api the browser calls this server, which forwards
+ * `/api/*` to the API without the prefix (the API's routes are unchanged).
+ * A same-origin request reached through a tunnel carries the tunnel's random
+ * Origin, which the API's CSRF/CORS allow-list doesn't know; for same-origin
+ * requests ONLY, the Origin is replaced with the dev origin the API allows.
+ * Cross-site requests keep their Origin, so the API still refuses them.
+ */
+function apiProxy(target: string): Record<string, ProxyOptions> {
+  return {
+    '^/api(/|$)': {
+      target,
+      rewrite: (path) => path.replace(/^\/api(?=\/|$)/, '') || '/',
+      configure: (proxy) => {
+        proxy.on('proxyReq', (proxyRequest, request) => {
+          if (isSameOrigin(request)) proxyRequest.setHeader('origin', WEB_ORIGIN);
+        });
+      },
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, envDir, 'VITE_');
+  const env = loadEnv(mode, envDir, ['VITE_', 'API_PORT']);
+  const proxy = apiProxy(`http://localhost:${env.API_PORT || 3000}`);
   return {
     plugins: [react(), tailwindcss()],
     // Read VITE_* variables from the shared repository-root .env file.
@@ -62,14 +104,18 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: 5173,
+      port: WEB_PORT,
       // The API's CORS allow-list expects this exact origin, so never fall back to another port.
       strictPort: true,
       headers: BASE_HEADERS,
+      proxy,
+      // Cloudflare Quick Tunnel hosts (https://<random>.trycloudflare.com); others stay blocked.
+      allowedHosts: ['.trycloudflare.com'],
     },
     preview: {
       port: 4173,
       strictPort: true,
+      proxy,
       headers: {
         ...BASE_HEADERS,
         'Content-Security-Policy': contentSecurityPolicy(

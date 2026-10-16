@@ -189,6 +189,7 @@ Read [docs/database-design.md](docs/database-design.md) before changing the sche
 - TypeScript is pinned to `~6.0`: Nest CLI and the Vite toolchain rely on the TS 6 compiler API (TS 7 is the native port).
 - Root `package.json` `overrides` pin patched versions of `mysql2` and `deepmerge-ts` (transitive dependencies of the Prisma CLI) to clear security advisories. Re-check them when upgrading Prisma.
 - Vite runs on a fixed port (`strictPort`) because the API's CORS allow-list (`API_CORS_ORIGINS`) expects `http://localhost:5173`.
+- The browser calls the API at `/api` (`VITE_API_BASE_URL=/api`): Vite dev/preview proxy `/api/*` to the API without the prefix, and rewrite only same-origin Origins to `http://localhost:5173` so a Cloudflare Quick Tunnel works (docs/local-development.md#sharing-a-local-demo). Never add `/api` to API routes, and never widen `API_CORS_ORIGINS` for tunnels.
 - After editing `.env`, restart both dev servers (Vite only reads env at startup).
 - On Windows, a refused connection to `localhost` can take about 2 seconds to fail, so the health-check page may show loading briefly when the API is down.
 - Prisma 7 errors: the raw PostgreSQL error is in `error.meta.driverAdapterError.cause` (`originalCode` SQLSTATE, `originalMessage` with the constraint name). CHECK violations are Prisma `P2039`; `ON DELETE RESTRICT` violations are SQLSTATE `23001` (not `23503`).

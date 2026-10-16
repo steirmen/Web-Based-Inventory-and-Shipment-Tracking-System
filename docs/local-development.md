@@ -77,6 +77,24 @@ Always use `http://localhost:5173`, not `127.0.0.1`, so the session cookie is sh
 
 See [database-design.md](database-design.md) for the model, tenancy rules, delete strategy, and constraints.
 
+## Sharing a local demo
+
+The web app calls the API through `/api` (`VITE_API_BASE_URL=/api`): Vite (dev and preview) forwards `/api/*` to `http://localhost:$API_PORT` without the prefix, so the API's routes are unchanged and the whole app is one origin. That lets you show your local app to others with one [Cloudflare Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) URL — local demos only, not a deployment.
+
+```bash
+npm run dev
+cloudflared tunnel --url http://localhost:5173
+```
+
+Open the printed `https://<random>.trycloudflare.com` URL. What keeps it safe:
+
+- Only the web server is exposed. The API (:3000) and PostgreSQL stay on localhost; the API is reached only through the proxy.
+- Vite accepts the `*.trycloudflare.com` host (`server.allowedHosts`); other unknown hosts stay blocked.
+- The API's CSRF/CORS allow-list is unchanged. The proxy replaces the Origin of **same-origin** requests (Origin host = the host the page was loaded from) with `http://localhost:5173`, which the API allows; requests from any other site keep their Origin and are still refused (`403 CSRF_ORIGIN_REJECTED`).
+- The session cookie is host-only, HttpOnly, `SameSite=Lax` on the tunnel host.
+- Everyone behind the tunnel shares one client IP for the API (the proxy), so the login rate limit (10/minute) is shared.
+- Anyone with the URL can reach the sign-in page while the tunnel runs; stop it (Ctrl+C) when the demo is over, and use demo accounts.
+
 ## Troubleshooting
 
 | Symptom                                                | Likely cause / fix                                                                                                                                                             |

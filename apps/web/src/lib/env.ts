@@ -8,7 +8,10 @@ export class ConfigurationError extends Error {
   override name = 'ConfigurationError';
 }
 
-/** Base URL of the backend API, without a trailing slash. */
+/**
+ * Base URL of the backend API, without a trailing slash: `/api` (same origin,
+ * forwarded by the web server's proxy; see vite.config.ts) or an absolute URL.
+ */
 export function getApiBaseUrl(): string {
   const value = import.meta.env.VITE_API_BASE_URL?.trim();
 
